@@ -20,6 +20,29 @@ if (isset($pdo) && $pdo instanceof PDO && function_exists('get_store_settings'))
         // Optional letterhead details must not block stock review.
     }
 }
+$movementWeeks = $movementPeriod['weeks'];
+$weeklyTotals = array_fill(0, count($movementWeeks), 0);
+$coverageCounts = ['complete' => 0, 'partial' => 0, 'unavailable' => 0, 'unknown' => 0];
+foreach ($riskRows as $row) {
+    foreach ($row['weekly_sales'] ?? [] as $week => $units) {
+        $weeklyTotals[$week] += (int)$units;
+    }
+    $coverage = array_column($row['sales_periods'], 'coverage');
+    $key = in_array('unknown', $coverage, true) ? 'unknown'
+        : (array_diff($coverage, ['complete']) === [] ? 'complete'
+        : (array_diff($coverage, ['unavailable']) === [] ? 'unavailable' : 'partial'));
+    $coverageCounts[$key]++;
+}
+$topMovers = $riskRows;
+usort($topMovers, static fn(array $a, array $b): int => $b['total_sales'] <=> $a['total_sales']);
+$topMovers = array_slice($topMovers, 0, 5);
+$movementChartData = [
+    'weekly' => ['labels' => array_column($movementWeeks, 'label'), 'values' => $weeklyTotals],
+    'top' => ['labels' => array_map(static fn(array $row): string => $row['product_name'], $topMovers),
+        'values' => array_map(static fn(array $row): int => (int)$row['total_sales'], $topMovers)],
+    'coverage' => ['labels' => ['Complete', 'Partial', 'History unavailable', 'Coverage unknown'],
+        'values' => array_values($coverageCounts)],
+];
 ?>
 <div class="stock-risk" id="stock-risk">
     <?php if ($riskError !== ''): ?>
@@ -30,16 +53,29 @@ if (isset($pdo) && $pdo instanceof PDO && function_exists('get_store_settings'))
             <div><h2>Stock Movement</h2><p class="sr-caption sr-period-label"><?= htmlspecialchars($movementPeriod['review_label']) ?> · 90-day review <span class="info-tooltip"><button class="info-tooltip-trigger" type="button" aria-label="About the review period" aria-describedby="movement-period-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="tooltip-box" id="movement-period-help" role="tooltip"><?= htmlspecialchars($movementPeriod['review_label']) ?>. Three consecutive 30-day periods ending yesterday in Philippine time. Today's sales are excluded.</span></span></p></div>
             <button type="button" class="btn btn-primary" id="movement-report"><i class="bi bi-printer" aria-hidden="true"></i>Generate Report</button>
         </header>
+        <script type="application/json" id="movement-chart-data"><?= json_encode($movementChartData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?></script>
+        <div class="sr-cards">
+            <div class="overview-chart-card">
+                <div class="overview-chart-header"><div><h3>Weekly movement</h3></div></div>
+                <div class="sr-card-chart"><canvas id="movement-chart-weekly" role="img" aria-label="Units sold each week across all products"></canvas></div>
+            </div>
+            <div class="overview-chart-card">
+                <div class="overview-chart-header"><div><h3>Fastest movers</h3></div></div>
+                <div class="sr-card-chart"><canvas id="movement-chart-top" role="img" aria-label="Five products with the most units sold in 90 days"></canvas></div>
+            </div>
+            <div class="overview-chart-card">
+                <div class="overview-chart-header"><div><h3>History coverage</h3></div><span class="info-tooltip"><button class="info-tooltip-trigger" type="button" aria-label="About sales history coverage" aria-describedby="movement-coverage-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="tooltip-box" id="movement-coverage-help" role="tooltip"><?= htmlspecialchars($coverageNote) ?></span></span></div>
+                <div class="sr-card-chart"><canvas id="movement-chart-coverage" role="img" aria-label="Products grouped by how much of the 90-day review is recorded"></canvas></div>
+                <ul class="sr-coverage-counts">
+                    <?php foreach ($movementChartData['coverage']['labels'] as $i => $coverageLabel): ?>
+                        <li><span><?= htmlspecialchars($coverageLabel) ?></span><strong><?= (int)$movementChartData['coverage']['values'][$i] ?></strong></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        </div>
         <div class="sr-tools">
             <label class="sr-search"><span class="sr-only">Search Stock Movement products</span><i class="bi bi-search" aria-hidden="true"></i><input type="search" id="risk-search" placeholder="Search products" aria-controls="risk-table-body" autocomplete="off"></label>
             <label><span class="sr-only">Stock</span><select id="movement-stock" aria-label="Stock"><option value="in-stock">With stock</option><option value="all">All products</option></select></label>
-            <div class="sr-metric-tools">
-                <div class="sr-metric-label">
-                    <label for="movement-sales-metric">Sales metric</label>
-                    <span class="info-tooltip"><button class="info-tooltip-trigger" type="button" aria-label="About sales history coverage" aria-describedby="movement-coverage-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="tooltip-box" id="movement-coverage-help" role="tooltip">Bars compare periods within each product. <?= htmlspecialchars($coverageNote) ?></span></span>
-                </div>
-                <select id="movement-sales-metric" aria-controls="risk-table-body"><option value="units">Units sold (base units)</option><option value="days">Selling days</option></select>
-            </div>
         </div>
         <p id="movement-report-status" class="sr-caption" role="status"></p>
         <label class="sr-mobile-sort" for="risk-sort-mobile">Sort products<select id="risk-sort-mobile" aria-label="Sort products"><option value="days">Selling days: low to high</option><option value="name">Product A–Z</option><option value="stock">Stock: high to low</option><option value="sales">Latest units sold: low to high</option></select></label>
@@ -51,7 +87,7 @@ if (isset($pdo) && $pdo instanceof PDO && function_exists('get_store_settings'))
                 <th scope="col" class="sr-num" aria-sort="none"><button type="button" data-risk-sort="stock">Stock<i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
                 <th scope="col" aria-sort="none"><button type="button" data-risk-sort="sales" aria-label="90-day sales, sort by latest units sold" title="Sort by latest units sold">90-day sales<i class="bi bi-arrow-down-up" aria-hidden="true"></i></button></th>
                 <th scope="col" class="sr-num" aria-sort="ascending"><button type="button" data-risk-sort="days">Selling days<i class="bi bi-arrow-up" aria-hidden="true"></i></button><span class="info-tooltip"><button class="info-tooltip-trigger" type="button" aria-label="About selling days" aria-describedby="movement-days-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="tooltip-box" id="movement-days-help" role="tooltip">Distinct days with recorded sales in the latest 30 days. Multiple purchases on one day count as one day. Quantity sold is measured separately.</span></span></th>
-                <th scope="col">Status <?php $statusGuideId = 'movement-status-help'; include __DIR__ . '/stock_movement_status_help.php'; ?></th><th scope="col">Trend</th><th scope="col" aria-label="Product details"></th>
+                <th scope="col" class="sr-status-col">Status <?php $statusGuideId = 'movement-status-help'; include __DIR__ . '/stock_movement_status_help.php'; ?></th><th scope="col">Trend</th><th scope="col" aria-label="Product details"></th>
             </tr></thead>
             <tbody id="risk-table-body">
             <?php foreach ($riskRows as $row):
@@ -63,21 +99,7 @@ if (isset($pdo) && $pdo instanceof PDO && function_exists('get_store_settings'))
             <tr data-risk-row data-product-id="<?= $id ?>" data-name="<?= htmlspecialchars($row['product_name']) ?>" data-stock="<?= (int)$row['quantity_on_hand'] ?>" data-sales="<?= $row['recent_sales'] ?>" data-days="<?= $row['selling_days'] ?>" data-search="<?= htmlspecialchars(strtolower($row['product_name'] . ' ' . ($row['sku'] ?? '') . ' ' . ($row['category_name'] ?? ''))) ?>">
                 <td><div class="sr-product"><button type="button" class="sr-product-link" data-risk-review="<?= $id ?>" aria-haspopup="dialog" aria-controls="movement-drawer" aria-expanded="false" aria-label="View details for <?= htmlspecialchars($row['product_name']) ?>"><?= htmlspecialchars($row['product_name']) ?></button><span><?= htmlspecialchars($row['sku'] ?? '') ?></span></div></td>
                 <td class="sr-num" data-label="Stock"><?= number_format((int)$row['quantity_on_hand']) ?></td>
-                <td class="sr-90-day-sales" data-label="90-day sales">
-                    <div class="sr-sales-chart" hidden><canvas aria-hidden="true"></canvas></div>
-                    <dl class="sr-sales-periods">
-                        <?php foreach ($row['sales_periods'] as $salesPeriod): ?>
-                        <div>
-                            <dt class="sr-caption sr-sales-range"><?= htmlspecialchars($salesPeriod['label']) ?></dt>
-                            <dd>
-                                <strong class="sr-sales-value" data-units="<?= $salesPeriod['units_sold'] ?>" data-days="<?= $salesPeriod['selling_days'] ?>" data-coverage="<?= $salesPeriod['coverage'] ?>"><?= $salesPeriod['units_sold'] === null ? '—' : number_format($salesPeriod['units_sold']) ?></strong>
-                                <span class="sr-only sr-sales-unit"><?= $salesPeriod['units_sold'] === null ? 'base units sold unavailable' : 'base units sold' ?></span>
-                                <?php if ($coverageLabels[$salesPeriod['coverage']] !== ''): ?><span class="sr-caption sr-sales-coverage"><?= htmlspecialchars($coverageLabels[$salesPeriod['coverage']]) ?></span><?php endif; ?>
-                            </dd>
-                        </div>
-                        <?php endforeach; ?>
-                    </dl>
-                </td>
+                <td class="sr-num" data-label="90-day sales"><?= array_diff(array_column($row['sales_periods'], 'coverage'), ['unavailable']) === [] ? '—' : number_format((int)$row['total_sales']) ?></td>
                 <td class="sr-num" data-label="Selling days"><?= $row['selling_days'] ?><span class="sr-caption"> / 30</span></td>
                 <td class="sr-status" data-label="Status"><span class="info-tooltip"><button type="button" class="info-tooltip-trigger sr-badge sr-<?= $color ?>" aria-label="<?= htmlspecialchars($row['movement_label']) ?> criteria for <?= htmlspecialchars($row['product_name']) ?>" aria-describedby="movement-criterion-<?= $id ?>"><i class="bi bi-<?= $icon ?>" aria-hidden="true"></i><?= htmlspecialchars($row['movement_label']) ?></button><span class="tooltip-box" id="movement-criterion-<?= $id ?>" role="tooltip"><?= htmlspecialchars($criterion) ?></span></span></td>
                 <td data-label="Trend"><span class="sr-trend"><?php if ($row['trend'] !== null): ?><i class="bi bi-<?= $trendIcon ?>" aria-hidden="true"></i><?= $trendLabel ?><?php else: ?><span aria-label="Trend unavailable">—</span><?php endif; ?></span></td>
@@ -154,6 +176,20 @@ if (isset($pdo) && $pdo instanceof PDO && function_exists('get_store_settings'))
         <header class="sr-detail-heading"><h3 id="movement-detail-title"><?= htmlspecialchars($row['product_name']) ?></h3><p class="sr-caption"><?= htmlspecialchars($row['sku'] ?? '') ?> · <?= htmlspecialchars($row['category_name'] ?? 'Uncategorized') ?></p></header>
         <div class="sr-detail-status"><span class="sr-badge sr-<?= $color ?>"><i class="bi bi-<?= $icon ?>" aria-hidden="true"></i><?= htmlspecialchars($row['movement_label']) ?></span></div>
         <div class="sr-stock-now"><span>Stock now</span><strong><?= number_format((int)$row['quantity_on_hand']) ?></strong></div>
+        <section class="sr-detail-section" data-screen-only><h4>Weekly sales <span class="sr-caption">· 13 weeks</span></h4>
+            <div class="sr-detail-chart"><canvas aria-hidden="true" data-movement-weekly="<?= htmlspecialchars(json_encode($row['weekly_sales'])) ?>"></canvas></div>
+            <p class="sr-caption">Units sold each week. A blank week has no figure, not zero sales.</p>
+            <table class="sr-only"><caption>Weekly sales in base units</caption><thead><tr><th scope="col">Week of</th><th scope="col">Units sold</th></tr></thead><tbody>
+            <?php foreach ($movementPeriod['weeks'] as $week => $weekRange): ?>
+                <tr><th scope="row"><?= htmlspecialchars($weekRange['label']) ?></th><td><?= $row['weekly_sales'][$week] === null ? 'No figure' : number_format($row['weekly_sales'][$week]) ?></td></tr>
+            <?php endforeach; ?>
+            </tbody></table>
+        </section>
+        <section class="sr-detail-section">
+            <p class="sr-caption sr-coverage-note"><?= htmlspecialchars($coverageNote) ?></p>
+            <?php if ($row['trend'] !== null): ?><p class="sr-trend-basis"><?= $row['selling_days'] ?> selling days now · <?= number_format($row['previous_average'], 1) ?> average in the previous two periods.</p><?php endif; ?>
+        </section>
+        <div class="sr-report-only">
         <section class="sr-detail-section"><h4>Sales across 90 days</h4><table class="sr-period-table"><thead><tr><th scope="col">Period</th><th scope="col" class="sr-num">Units sold<span class="sr-caption">Base units</span></th><th scope="col" class="sr-num">Selling days</th></tr></thead><tbody>
             <?php foreach ($row['sales_periods'] as $salesPeriod):
                 $latest = $salesPeriod['end'] === $movementPeriod['end'];
@@ -170,9 +206,8 @@ if (isset($pdo) && $pdo instanceof PDO && function_exists('get_store_settings'))
             </tr>
             <?php endforeach; ?>
         </tbody></table>
-        <p class="sr-caption sr-coverage-note"><?= htmlspecialchars($coverageNote) ?></p>
-        <?php if ($row['trend'] !== null): ?><p class="sr-trend-basis"><?= $row['selling_days'] ?> selling days now · <?= number_format($row['previous_average'], 1) ?> average in the previous two periods.</p><?php endif; ?>
         </section>
+        </div>
         <section class="sr-detail-section"><h4>Stock flow <span class="sr-caption">· Latest 30 days</span></h4><dl class="sr-flow">
             <?php foreach (['balance' => 'Opening (reconstructed)', 'received' => 'Received', 'sale_out' => 'Sales stock movement', 'returns' => 'Returns to stock', 'other' => 'Corrections / other', 'remaining' => 'Closing stock (yesterday)'] as $key => $label): ?>
             <div><dt><?= $label ?></dt><dd><?= number_format($row[$key]) ?></dd></div>

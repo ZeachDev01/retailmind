@@ -2,12 +2,13 @@
 
 Implemented 2026-11-12 after the confirmed design discussion and interactive layout review. This replaces the calendar-month comparison and the earlier [Stock Risk implementation](inventory-stock-risk-consolidation.md).
 
-The next iteration adds a Chart.js comparison to each Product row and three Units sold columns to the report summary. Every report will still include full Product details. [Follow-up specification and acceptance tests](https://github.com/ZeachDev01/retailmind/issues/494).
+The next iteration replaces the repeated 3×30-day grids with charts: three page-level cards and one weekly chart in the drawer. Charts use 13 weekly buckets built from the same daily sales query as the 90-day periods, so no extra query or schema change is needed. The report keeps the detailed three-period table and summary.
 
 ## Periods and quantities
 
 - Three consecutive, non-overlapping 30-day periods ending yesterday in Philippine time. Exact date ranges and month names identify each period; today is excluded from sales and trend.
-- The main table shows Product, Stock, Sold, Selling days, Status, and Trend. Stock is the current recorded quantity; Sold and Selling days refer to the latest 30 days.
+- The main table shows Product, Stock, 90-day sales, Selling days, Status, and Trend. Stock is the current recorded quantity; 90-day sales is one total across the three periods; Selling days refers to the latest 30 days.
+- Three page-level charts above the table: weekly movement for all products, the five fastest movers by 90-day units, and history coverage counts. A Chart.js-free browser shows a short fallback note instead of blank canvases.
 - Sales Frequency counts distinct dates with recorded customer sales. Multiple receipts, repeated line items, and bulk purchases on one day count as one selling day. Quantity is separate and Sales Packs use the existing base-unit conversion.
 - Sales remain gross recorded quantities before refunds/reversals. Forecast-only imports are excluded. Receiving, stock issues, pullouts and corrections are not customer sales.
 
@@ -32,7 +33,7 @@ Confirmed refinement, 2026-11-12: the Status heading also explains all five clas
 
 Tooltip placement reserves space for the fixed desktop or mobile header, chooses the roomier side of its trigger, and limits height to the available viewport space. Short screens allow internal scrolling to reach every status; Escape remains dismissed while scrolling. `stock_movement_tooltip_browser_test.js` covers fixed-header overlap and reachable final content at 1280×680, 390×600, and 640×360.
 
-Product name and chevron open a right-side drawer. The native dialog provides modal behavior and Escape handling, with a local Tab wrap while open; closing returns focus, restores scrolling and detaches the outside-click and keyboard listeners. Details show current stock, status, all three period comparisons, latest-period stock flow and history warnings. Calculation basis uses a disclosure.
+Product name and chevron open a right-side drawer. The native dialog provides modal behavior and Escape handling, with a local Tab wrap while open; closing returns focus, restores scrolling and detaches the outside-click and keyboard listeners. Details show current stock, status, a 13-week sales chart, latest-period stock flow and history warnings. A weekly bar has no figure before the product existed; a missing figure is never drawn as zero. The coverage note stays with the chart. Calculation basis uses a disclosure.
 
 The drawer reconstructs yesterday's closing stock by reversing today's movements from current stock. It then reconstructs the latest period's opening stock. Opening + received + sales stock movement + returns + corrections / other = closing. Recorded sales/movement mismatches are identified. Reconstructed balances cannot establish actual shelf counts or complete movement history.
 
@@ -46,8 +47,8 @@ The existing stock_risk.php, stock-risk.css, stock-risk.js, DOM identifiers and 
 
 ## Verification
 
-- php src/backend/tests/stock_movement_reader_test.php: rolling boundaries, year rollover/leap year, bulk purchases, packs, distinct selling days, classification boundaries, exact trend comparison, new/unknown history, stockouts, Dead Stock precedence, latest-period reconciliation, today's stock changes, active scope and legacy links.
-- node src/backend/tests/inventory_overview_clarity_browser_test.js: existing Overview behavior, 1440px/390px in light/dark themes, tooltip focus/Escape/tap, right-drawer focus/close/viewport bounds, filters, sorting, pagination, complete and filtered reports, PDF/print preview and blocked pop-ups.
+- php src/backend/tests/stock_movement_reader_test.php: rolling boundaries, year rollover/leap year, bulk purchases, packs, distinct selling days, classification boundaries, exact trend comparison, new/unknown history, stockouts, Dead Stock precedence, latest-period reconciliation, today's stock changes, 13 weekly buckets, active scope and legacy links.
+- node src/backend/tests/inventory_overview_clarity_browser_test.js: existing Overview behavior, page charts and drawer chart, 1440px/390px in light/dark themes, tooltip focus/Escape/tap, right-drawer focus/close/viewport bounds, filters, sorting, pagination, complete and filtered reports, PDF/print preview and blocked pop-ups.
 - npm run check and npm run check:contracts passed; inventory alert and recent-movement checks passed.
 - Captures and fixture PDF: output/playwright/inventory-overview/.
 

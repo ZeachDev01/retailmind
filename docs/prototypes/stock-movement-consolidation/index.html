@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<!--
+  PROTOTYPE — throwaway. Question: unsaon pag-consolidate sa Stock Movement page ug drawer,
+  ug asa ibutang ang tulo ka graph (page aggregate, row trend, product detail)?
+
+  Three variants, switchable via ?variant=A|B|C:
+    A "Sparkline table" — dense table, inline weekly sparkline per row, page aggregate strip, drawer with one chart
+    B "Split view"       — list left, persistent detail pane right, drawer removed
+    C "Bento + plain table" — three chart cards above a plain table, drawer chart-first
+
+  Fake data. Does not touch the real page. Chart.js is the vendored 4.4.4 copy.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · Stock Movement consolidation</title>
+<style>
+  :root{
+    --primary:#2563eb; --primary-dark:#1d4ed8;
+    --text:#1f2937; --muted:#626b7a; --border:#e5e7eb;
+    --danger:#dc2626; --success:#16a34a; --warning:#b45309;
+    --surface:#ffffff; --surface-soft:#f8fafc; --app-bg:#eef2f7;
+    --radius:14px; --shadow-sm:0 1px 2px rgba(15,23,42,.06);
+    --shadow-lg:0 20px 50px rgba(15,23,42,.18);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:"Segoe UI",Inter,system-ui,-apple-system,sans-serif;color:var(--text);background:var(--app-bg);font-size:14px}
+  button,input,select{font:inherit;color:inherit}
+  button{cursor:pointer}
+  .app{display:flex;min-height:100vh}
+  .rail{width:74px;background:#111827;display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 0;flex:0 0 74px}
+  .rail .logo{width:42px;height:42px;border-radius:12px;background:#fff;display:grid;place-items:center;font-weight:700;color:#1e3a8a;font-size:12px}
+  .rail .nav{width:40px;height:40px;border-radius:11px;background:#1f2937;color:#cbd5e1;display:grid;place-items:center;font-size:15px}
+  .rail .nav.on{background:var(--primary);color:#fff}
+  .rail .spacer{flex:1}
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .topbar{height:66px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 24px}
+  .searchbox{display:flex;align-items:center;gap:10px;background:var(--surface-soft);border:1px solid var(--border);border-radius:12px;padding:9px 12px;flex:1;max-width:640px;color:var(--muted)}
+  .searchbox input{border:0;outline:0;background:transparent;flex:1;color:var(--text)}
+  .kbd{border:1px solid var(--border);border-radius:6px;padding:1px 6px;font-size:11px;color:var(--muted);background:#fff}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:12px}
+  .btn{border:1px solid var(--border);background:#fff;border-radius:10px;padding:8px 12px;display:inline-flex;align-items:center;gap:8px}
+  .btn-primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  .btn-quiet{background:var(--surface-soft)}
+  .content{padding:26px 30px 120px;max-width:1560px;width:100%;margin:0 auto}
+  .pagehead{display:flex;align-items:flex-end;gap:20px;margin-bottom:22px;flex-wrap:wrap}
+  .pagehead h1{font-size:28px;margin:0;letter-spacing:-.3px}
+  .tabs{display:flex;gap:22px;margin-left:auto;border-bottom:1px solid transparent}
+  .tabs .tab{border:0;background:none;padding:6px 2px 10px;color:var(--muted);font-weight:600;border-bottom:2px solid transparent;display:inline-flex;gap:7px;align-items:center}
+  .tabs .tab.on{color:var(--text);border-bottom-color:var(--primary)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+  .card-pad{padding:18px 20px}
+  .card-title{font-size:15px;font-weight:700;margin:0}
+  .page-sub{color:var(--muted);font-size:12px;margin-top:4px}
+  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:14px 20px;border-bottom:1px solid var(--border)}
+  .toolbar .grow{flex:1;min-width:180px}
+  .field{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:10px;padding:8px 10px;background:#fff}
+  .field input{border:0;outline:0;background:transparent;width:100%}
+  .field select{border:0;outline:0;background:transparent;padding-right:4px}
+  table{width:100%;border-collapse:collapse}
+  thead th{font-size:11.5px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);text-align:left;padding:10px 12px;background:var(--surface-soft);border-bottom:1px solid var(--border);font-weight:600;white-space:nowrap}
+  thead th.num{text-align:right}
+  tbody td{padding:12px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr.clickable{cursor:pointer}
+  tbody tr.clickable:hover td{background:#f9fbff}
+  tbody tr.sel td{background:#eff6ff}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .pname{font-weight:600;color:var(--primary);font-size:13.5px;text-align:left;background:none;border:0;padding:0}
+  .psku{color:var(--muted);font-size:11.5px;margin-top:2px}
+  .badge{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 9px;font-size:11.5px;font-weight:600;white-space:nowrap}
+  .badge.slate{background:#eef2f7;color:#475569}
+  .badge.green{background:#e8f7ee;color:#166534}
+  .badge.amber{background:#fef3e2;color:#9a3412}
+  .badge.red{background:#fdecec;color:#991b1b}
+  .sparkbox{width:132px;height:34px;position:relative}
+  .mini{width:76px;height:26px;position:relative}
+  .cell-muted{color:var(--muted);font-size:12px}
+  .chev{border:0;background:none;color:var(--primary);font-size:17px;padding:4px 8px;line-height:1}
+  .pager{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--border)}
+  .pager .pgs{display:flex;gap:6px}
+  .pager .pg{width:32px;height:32px;border-radius:9px;border:1px solid var(--border);background:#fff}
+  .hint{color:var(--muted);font-size:11.5px}
+  .chartwrap{position:relative;width:100%}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted)}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+  .empty{color:var(--muted);text-align:center;padding:26px 10px;font-size:13px}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* A: aggregate strip */
+  .strip-head{display:flex;align-items:center;gap:14px;padding:14px 20px 4px}
+  .strip-head .spacer{flex:1}
+  .seg{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+  .seg button{border:0;background:#fff;padding:6px 10px;font-size:12px;color:var(--muted)}
+  .seg button.on{background:var(--primary);color:#fff}
+  .kpis{display:flex;gap:26px;padding:0 20px 8px;flex-wrap:wrap}
+  .kpi .v{font-size:19px;font-weight:700}
+  .kpi .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+
+  /* B: split */
+  .split{display:grid;grid-template-columns:352px minmax(0,1fr);gap:18px;align-items:start}
+  .listcard{overflow:hidden}
+  .listrow{display:grid;grid-template-columns:minmax(0,1fr) 76px;gap:8px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer}
+  .listrow:hover{background:#f9fbff}
+  .listrow.sel{background:#eff6ff}
+  .listrow .meta{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);margin-top:3px}
+  .listrow .n{font-size:13px;font-weight:600}
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+  .detailhead{display:flex;align-items:flex-start;gap:16px;padding:18px 20px;border-bottom:1px solid var(--border)}
+  .detailhead .spacer{flex:1}
+  .detailhead h2{font-size:18px;margin:0}
+  .detailkpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:16px 20px}
+  .dbox{border:1px solid var(--border);border-radius:11px;padding:10px 12px;background:var(--surface-soft)}
+  .dbox .v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+  .dbox .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+  .pilltabs{display:flex;gap:6px;padding:0 20px 6px}
+  .pilltabs button{border:1px solid var(--border);background:#fff;border-radius:999px;padding:5px 12px;font-size:12px;color:var(--muted)}
+  .pilltabs button.on{background:#e8efff;border-color:#c7d8ff;color:var(--primary-dark);font-weight:600}
+
+  /* C: bento */
+  .bento{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:16px;margin-bottom:18px}
+  .bento .card{padding:16px 18px}
+  .bento h3{font-size:13px;margin:0 0 2px}
+  .bento .sub{font-size:11.5px;color:var(--muted);margin-bottom:8px}
+  .bento .big{font-size:21px;font-weight:700}
+  .coverlist{display:flex;flex-direction:column;gap:7px;margin-top:6px}
+  .coverlist .r{display:grid;grid-template-columns:1fr auto;gap:10px;font-size:12px}
+  .bar{height:6px;border-radius:99px;background:#eef2f7;overflow:hidden;grid-column:1/-1}
+  .bar span{display:block;height:100%;background:var(--primary)}
+
+  /* drawer */
+  dialog.drawer{border:0;padding:0;margin:0 0 0 auto;height:100%;max-height:100%;width:520px;max-width:96vw;background:#fff;box-shadow:var(--shadow-lg);border-left:1px solid var(--border)}
+  dialog.drawer::backdrop{background:rgba(15,23,42,.42)}
+  .drawer-inner{display:flex;flex-direction:column;height:100%}
+  .dhead{display:flex;align-items:flex-start;gap:12px;padding:18px 20px;border-bottom:1px solid var(--border)}
+  .dhead .spacer{flex:1}
+  .dhead h2{margin:2px 0 2px;font-size:17px}
+  .dbody{overflow:auto;padding:16px 20px 28px;display:flex;flex-direction:column;gap:16px}
+  .dlabel{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+  .dstock{display:flex;align-items:baseline;justify-content:space-between}
+  .dstock .v{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums}
+  .flow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}
+  .flow .r{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--border);font-size:13px}
+  .flow .r strong{font-variant-numeric:tabular-nums}
+  .note{background:var(--surface-soft);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--muted)}
+  details.calc{font-size:12px;color:var(--muted)}
+  details.calc summary{cursor:pointer;font-weight:600;color:var(--text)}
+  details.calc ul{margin:8px 0 0 16px;padding:0}
+
+  /* switcher */
+  .switcher{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:80;display:flex;align-items:center;gap:6px;background:#0f172a;color:#f8fafc;border-radius:999px;padding:7px 9px;box-shadow:0 16px 40px rgba(2,6,23,.4);font-size:13px}
+  .switcher button{border:0;background:#1e293b;color:#f8fafc;width:30px;height:30px;border-radius:50%}
+  .switcher button:hover{background:#334155}
+  .switcher .lbl{padding:0 8px;min-width:230px;text-align:center}
+  .switcher .note{color:#94a3b8;font-size:11px;padding:0 6px}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="logo">RM</div>
+    <div class="nav on">▦</div>
+    <div class="nav">▤</div>
+    <div class="nav">⛁</div>
+    <div class="nav">⌘</div>
+    <div class="nav">◷</div>
+    <div class="nav">⚙</div>
+    <div class="spacer"></div>
+    <div class="nav">MS</div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div class="searchbox">
+        <span>⌕</span>
+        <input placeholder="Search products, reports, settings, and pages…" aria-label="Global search">
+        <span class="kbd">Ctrl K</span>
+      </div>
+      <div class="right"><button class="btn">🔔 Notifications</button></div>
+    </header>
+    <main class="content">
+      <div class="pagehead">
+        <div>
+          <h1>Stock overview</h1>
+          <div class="page-sub">Prototype · fake data · Aug 22, 2026 – Nov 19, 2026 · 90-day review</div>
+        </div>
+        <nav class="tabs" aria-label="Stock overview sections">
+          <button class="tab">Stock Overview</button>
+          <button class="tab">Products</button>
+          <button class="tab on">⇄ Stock Movement</button>
+        </nav>
+      </div>
+      <div id="mount"></div>
+    </main>
+  </div>
+</div>
+
+<div class="switcher" role="group" aria-label="Prototype variant switcher">
+  <button id="prev" aria-label="Previous variant">‹</button>
+  <span class="lbl" id="lbl">A</span>
+  <button id="next" aria-label="Next variant">›</button>
+  <span class="note">← → keys</span>
+</div>
+
+<script src="../../../src/frontend/assets/vendor/chartjs/chart.umd.min.js"></script>
+<script>
+/* ---------------- fake data ---------------- */
+const WEEKS = ["W1","W2","W3","W4","W5","W6","W7","W8","W9","W10","W11","W12","W13"];
+const WEEK_DATES = ["Aug 21","Aug 28","Sep 4","Sep 11","Sep 18","Sep 25","Oct 2","Oct 9","Oct 16","Oct 23","Oct 30","Nov 6","Nov 13"];
+const N = (n) => Array.from({length:13}, () => n);
+const LATE = (n, from) => Array.from({length:13}, (_, i) => i < from ? null : n);
+
+const PRODUCTS = [
+  {id:1,name:"Chilli Powder Seasoning",sku:"6975670530178",cat:"Household",stock:21,weeks:LATE(0,9).map((v,i)=> i<9?null:[0,1,0,2][i-9]),days:1,status:"limited",
+   flow:{opening:0,received:24,sold:-3,returns:0,other:0}},
+  {id:2,name:"Gardenia Bread",sku:"RM26111249183597",cat:"Bakery",stock:6,weeks:LATE(0,9).map((v,i)=> i<9?null:[2,1,1,1][i-9]),days:1,status:"limited",
+   flow:{opening:0,received:12,sold:-6,returns:0,other:0}},
+  {id:3,name:"Lucky Me Pancit Canton Original 60g",sku:"4800016644934",cat:"Noodles",stock:84,weeks:[40,38,44,41,46,39,45,42,40,44,43,41,46],days:28,status:"fast",
+   flow:{opening:62,received:120,sold:-98,returns:2,other:-2}},
+  {id:4,name:"Coke Mismo 300ml",sku:"4801981115012",cat:"Beverages",stock:36,weeks:[22,20,24,21,25,23,22,24,20,23,22,21,24],days:27,status:"fast",
+   flow:{opening:44,received:96,sold:-104,returns:0,other:0}},
+  {id:5,name:"Safeguard Classic 130g",sku:"4800888140019",cat:"Household",stock:12,weeks:[2,1,3,2,1,2,1,2,2,1,2,1,2],days:9,status:"slow",
+   flow:{opening:14,received:12,sold:-14,returns:0,other:0}},
+  {id:6,name:"Datu Puti Soy Sauce 385ml",sku:"4800360000210",cat:"Condiments",stock:0,weeks:[4,3,5,4,3,2,1,0,0,0,0,0,0],days:7,status:"stockout",
+   flow:{opening:19,received:0,sold:-19,returns:0,other:0}},
+  {id:7,name:"Tide Bar 55g",sku:"4800888170025",cat:"Household",stock:5,weeks:N(0),days:0,status:"dead",
+   flow:{opening:5,received:0,sold:0,returns:0,other:0}},
+  {id:8,name:"Bear Brand Sterilized 300ml",sku:"4801981120016",cat:"Beverages",stock:48,weeks:[12,14,11,13,12,11,12,14,13,12,13,12,14],days:26,status:"fast",
+   flow:{opening:40,received:96,sold:-88,returns:0,other:0}},
+  {id:9,name:"Skyflakes Crackers 250g",sku:"4800016480075",cat:"Snacks",stock:30,weeks:[5,4,6,5,4,5,6,4,5,6,5,4,5],days:19,status:"fast",
+   flow:{opening:32,received:48,sold:-50,returns:0,other:0}},
+  {id:10,name:"Downy Sachet 25ml",sku:"4800888160014",cat:"Household",stock:120,weeks:[30,28,32,31,29,30,33,31,30,29,32,30,31],days:30,status:"fast",
+   flow:{opening:110,received:240,sold:-230,returns:0,other:0}}
+];
+
+const STATUS = {
+  limited:{cls:"slate",label:"Limited history"},
+  fast:{cls:"green",label:"Selling"},
+  slow:{cls:"amber",label:"Slow moving"},
+  dead:{cls:"red",label:"No recorded sales"},
+  stockout:{cls:"red",label:"Out of stock"}
+};
+const FLOW_LABELS = [
+  ["opening","Opening (reconstructed)"],["received","Received"],["sold","Sales stock movement"],
+  ["returns","Returns to stock"],["other","Corrections / other"]
+];
+const sum = (a) => a.reduce((s,v)=> s + (v||0), 0);
+const sold90 = (p) => sum(p.weeks);
+/* reconstructed stock line for the detail chart */
+function stockSeries(p){
+  const first = p.weeks.findIndex(v => v !== null);
+  let running = p.stock;
+  const out = new Array(13).fill(null);
+  for (let i=12;i>=0;i--){
+    if (i >= first) out[i] = running;
+    running -= (p.weeks[i] || 0);
+  }
+  return out;
+}
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+let charts = [];
+function mkChart(el, config){
+  if (!window.Chart || !el) return;
+  const c = new Chart(el, config);
+  charts.push(c);
+  return c;
+}
+function destroyCharts(){ charts.forEach(c => { try { c.destroy(); } catch(e){} }); charts = []; }
+const money = (n) => n.toLocaleString();
+
+/* ---------------- shared bits ---------------- */
+function badge(p){
+  const s = STATUS[p.status];
+  return `<span class="badge ${s.cls}">${s.label}</span>`;
+}
+function fallbackChart(el){
+  if (window.Chart) return "";
+  return `<div class="empty">Chart library not loaded.</div>`;
+}
+function chartCard(opts){ /* {title, sub, id, h, legend} */
+  return `<div class="card" style="padding:16px 18px">
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+      <h3 style="font-size:13px;margin:0">${opts.title}</h3>
+      ${opts.big ? `<span class="big">${opts.big}</span>` : ""}
+      ${opts.sub ? `<span class="hint">${opts.sub}</span>` : ""}
+    </div>
+    ${opts.legend || ""}
+    <div class="chartwrap"><canvas id="${opts.id}" height="${opts.h || 150}" role="img" aria-label="${opts.aria || opts.title}"></canvas></div>
+    ${fallbackChart()}
+  </div>`;
+}
+function legend(items){
+  return `<div class="legend" style="margin-bottom:4px">${items.map(([c,t])=>`<span><i style="background:${c}"></i>${t}</span>`).join("")}</div>`;
+}
+
+/* ---------------- variant A ---------------- */
+function variantA(){
+  return `<div class="card" style="margin-bottom:18px">
+    <div class="strip-head">
+      <h2 class="card-title">Store movement · all shown products</h2>
+      <span class="hint">13 weeks · base units</span>
+      <div class="spacer"></div>
+      <div class="seg" role="group" aria-label="Aggregate metric">
+        <button class="on">Units sold</button><button>Stock received</button>
+      </div>
+      <button class="btn btn-quiet" id="aHide">Collapse</button>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><div class="v">${money(PRODUCTS.reduce((s,p)=>s+sold90(p),0))}</div><div class="l">Sold · 90 days</div></div>
+      <div class="kpi"><div class="v">${money(PRODUCTS.reduce((s,p)=>s+p.stock,0))}</div><div class="l">Stock now</div></div>
+      <div class="kpi"><div class="v">${PRODUCTS.filter(p=>p.status==="dead").length}</div><div class="l">No recorded sales</div></div>
+      <div class="kpi"><div class="v">${PRODUCTS.filter(p=>p.status==="limited").length}</div><div class="l">Limited history</div></div>
+    </div>
+    <div class="chartwrap" id="aStrip" style="padding:4px 12px 14px"><canvas id="aAgg" height="120" role="img" aria-label="Weekly units sold across all products"></canvas></div>
+    <div class="hint" style="padding:0 20px 12px">Weeks before a product's first record stay blank. Blank is not zero sales.</div>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <div class="field grow"><span>⌕</span><input id="aSearch" placeholder="Search products" aria-label="Search products"></div>
+      <div class="field"><select aria-label="Stock filter"><option>With stock</option><option>All products</option></select></div>
+      <span class="hint">${PRODUCTS.length} products</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Product</th><th class="num">Stock</th><th>13-week trend</th>
+        <th class="num">90-day sold</th><th class="num">Selling days</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody id="aRows"></tbody>
+    </table>
+    <div class="pager"><span id="aCount"></span><span class="pgs"><button class="pg">‹</button><button class="pg">›</button></span></div>
+  </div>
+
+  <dialog class="drawer" id="aDrawer" aria-label="Product details">
+    <div class="drawer-inner">
+      <div class="dhead">
+        <div>
+          <div class="dlabel">Product details</div>
+          <h2 id="aDName"></h2>
+          <div class="psku" id="aDSku"></div>
+        </div>
+        <div class="spacer"></div>
+        <button class="chev" id="aClose" aria-label="Close details">✕</button>
+      </div>
+      <div class="dbody" id="aDBody"></div>
+    </div>
+  </dialog>`;
+}
+function renderARows(){
+  const q = (document.getElementById("aSearch")?.value || "").toLowerCase();
+  const rows = PRODUCTS.filter(p => !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
+  const tb = document.getElementById("aRows");
+  tb.innerHTML = rows.map(p => `
+    <tr class="clickable" data-id="${p.id}">
+      <td><div class="pname">${p.name}</div><div class="psku">${p.sku}</div></td>
+      <td class="num">${p.stock}</td>
+      <td style="width:150px"><div class="sparkbox"><canvas data-spark="${p.id}" role="img" aria-label="Weekly units, 13 weeks"></canvas></div>
+          <span class="sr-only">${p.weeks.filter(v=>v!==null).map(v=>v).join(", ")} units per week</span></td>
+      <td class="num">${sold90(p)}</td>
+      <td class="num">${p.days} <span class="cell-muted">/ 30</span></td>
+      <td>${badge(p)}</td>
+      <td><button class="chev" data-open="${p.id}" aria-label="Open ${p.name} details">›</button></td>
+    </tr>`).join("") || `<tr><td colspan="7" class="empty">No product matches.</td></tr>`;
+  document.getElementById("aCount").textContent = `Showing 1–${rows.length} of ${rows.length} products`;
+  charts.filter(c => c.canvas && c.canvas.closest(".sparkbox")).forEach(c => { try{c.destroy();}catch(e){} });
+  charts = charts.filter(c => !(c.canvas && c.canvas.closest(".sparkbox")));
+  tb.querySelectorAll(".sparkbox canvas").forEach(cv => {
+    const p = PRODUCTS.find(x => x.id === +cv.dataset.spark);
+    mkChart(cv, {
+      type:"bar",
+      data:{labels:WEEK_DATES, datasets:[{data:p.weeks, backgroundColor:css("--primary"), borderRadius:2, barPercentage:.72, categoryPercentage:.9}]},
+      options:{responsive:true, maintainAspectRatio:false, animation:false,
+        plugins:{legend:{display:false},tooltip:{enabled:true,callbacks:{title:(i)=>i[0].label,label:(i)=>`${i.raw ?? "no figure"} units`}}},
+        scales:{x:{display:false},y:{display:false, beginAtZero:true}}}
+    });
+  });
+  tb.querySelectorAll("tr[data-id]").forEach(tr => tr.addEventListener("click", () => openA(+tr.dataset.id)));
+}
+function openA(id){
+  const p = PRODUCTS.find(x => x.id === id);
+  document.getElementById("aDName").textContent = p.name;
+  document.getElementById("aDSku").textContent = `${p.sku} · ${p.cat}`;
+  document.getElementById("aDBody").innerHTML = `
+    <div><div class="dlabel">Stock now</div><div class="dstock"><span class="v">${p.stock}</span>${badge(p)}</div></div>
+    <div>
+      <div class="dlabel" style="margin-bottom:6px">Stock flow · last 30 days</div>
+      <div class="chartwrap"><canvas id="aDChart" height="190" role="img" aria-label="Weekly units sold with reconstructed stock level"></canvas></div>
+      ${legend([[css("--primary"),"Units sold / week"],[css("--muted"),"Stock level"]]).replace(/margin-bottom:4px/,"margin-top:8px;margin-bottom:0")}
+    </div>
+    <div class="flow">
+      ${FLOW_LABELS.map(([k,l]) => `<div class="r"><span>${l}</span><strong>${p.flow[k]}</strong></div>`).join("")}
+      <div class="r" style="border-bottom:0"><span>Closing (yesterday)</span><strong>${p.stock}</strong></div>
+    </div>
+    <div class="note">Weeks before ${p.weeks.findIndex(v=>v!==null) >= 0 ? WEEK_DATES[p.weeks.findIndex(v=>v!==null)] : "—"} have no recorded history for this product. Blank bars mean no figure, not zero sales.</div>
+    <details class="calc"><summary>How these numbers are built</summary>
+      <ul><li>Sales come from recorded sale line items, counted in base units.</li>
+      <li>Opening is rebuilt backwards from stock now, so it can differ from the record.</li>
+      <li>Stock flow covers the latest 30 days only.</li></ul>
+    </details>`;
+  const dlg = document.getElementById("aDrawer");
+  dlg.showModal();
+  const ctx = document.getElementById("aDChart");
+  mkChart(ctx, {
+    data:{labels:WEEK_DATES, datasets:[
+      {type:"bar", label:"Units sold", data:p.weeks, backgroundColor:css("--primary"), borderRadius:3, order:2},
+      {type:"line", label:"Stock level", data:stockSeries(p), borderColor:css("--muted"), backgroundColor:"transparent",
+       borderWidth:1.5, borderDash:[4,3], pointRadius:0, tension:.25, order:1, yAxisID:"y1"}
+    ]},
+    options:{responsive:true, maintainAspectRatio:false, animation:false,
+      plugins:{legend:{display:false}, tooltip:{filter:(i)=>i.raw!==null}},
+      scales:{x:{grid:{display:false}, ticks:{font:{size:9}, maxRotation:0, autoSkip:true, maxTicksLimit:6}},
+              y:{beginAtZero:true, grid:{color:"#eef2f7"}, ticks:{font:{size:9}, precision:0}},
+              y1:{position:"right", beginAtZero:true, grid:{display:false}, ticks:{font:{size:9}}}}}
+  });
+}
+function mountA(){
+  mount.innerHTML = variantA();
+  renderARows();
+  document.getElementById("aSearch").addEventListener("input", renderARows);
+  document.querySelectorAll("#mount .seg button").forEach(b => b.addEventListener("click", () => {
+    b.parentElement.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+  }));
+  document.getElementById("aClose").addEventListener("click", () => document.getElementById("aDrawer").close());
+  document.getElementById("aHide").addEventListener("click", (e) => {
+    const strip = document.getElementById("aStrip");
+    const hidden = strip.style.display === "none";
+    strip.style.display = hidden ? "" : "none";
+    e.currentTarget.textContent = hidden ? "Collapse" : "Expand";
+  });
+  const totals = WEEK_DATES.map((_,i) => PRODUCTS.reduce((s,p)=> s + (p.weeks[i]||0), 0));
+  mkChart(document.getElementById("aAgg"), {
+    type:"line",
+    data:{labels:WEEK_DATES, datasets:[{data:totals, borderColor:css("--primary"), backgroundColor:"rgba(37,99,235,.10)",
+      fill:true, tension:.3, pointRadius:0, pointHoverRadius:4, borderWidth:2}]},
+    options:{responsive:true, maintainAspectRatio:false, animation:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:(i)=>`${i.raw} units`}}},
+      scales:{x:{grid:{display:false}, ticks:{font:{size:10}}}, y:{beginAtZero:true, grid:{color:"#eef2f7"}, ticks:{font:{size:10}}}}}
+  });
+}
+
+/* ---------------- variant B ---------------- */
+function variantB(){
+  return `<div class="split">
+    <div class="card listcard">
+      <div class="toolbar" style="border-bottom:1px solid var(--border)">
+        <div class="field grow"><span>⌕</span><input id="bSearch" placeholder="Search products" aria-label="Search products"></div>
+      </div>
+      <div id="bList" style="max-height:640px;overflow:auto"></div>
+      <div class="pager" style="border-top:1px solid var(--border)"><span id="bCount"></span><span class="pgs"><button class="pg">‹</button><button class="pg">›</button></span></div>
+    </div>
+    <div class="card" id="bDetail"></div>
+  </div>`;
+}
+function renderBList(selId){
+  const q = (document.getElementById("bSearch")?.value || "").toLowerCase();
+  const rows = PRODUCTS.filter(p => !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
+  document.getElementById("bList").innerHTML = rows.map(p => `
+    <div class="listrow ${p.id===selId?"sel":""}" data-id="${p.id}" tabindex="0" role="button" aria-pressed="${p.id===selId}">
+      <div>
+        <div class="n">${p.name}</div>
+        <div class="meta">${p.stock} in stock · ${sold90(p)} sold 90d · <span class="dot" style="background:${p.status==="fast"?"var(--success)":p.status==="slow"?"var(--warning)":"var(--danger)"}"></span></div>
+      </div>
+      <div class="mini"><canvas data-spark="${p.id}" role="img" aria-label="Weekly units" aria-hidden="true"></canvas></div>
+    </div>`).join("") || `<div class="empty">No product matches.</div>`;
+  document.getElementById("bCount").textContent = `${rows.length} products`;
+  charts.filter(c => c.canvas && c.canvas.closest("#bList")).forEach(c => { try{c.destroy();}catch(e){} });
+  charts = charts.filter(c => !(c.canvas && c.canvas.closest("#bList")));
+  document.querySelectorAll("#bList canvas[data-spark]").forEach(cv => {
+    const p = PRODUCTS.find(x => x.id === +cv.dataset.spark);
+    mkChart(cv, {type:"bar",
+      data:{labels:WEEK_DATES, datasets:[{data:p.weeks, backgroundColor:css("--primary"), borderRadius:1, barPercentage:.8, categoryPercentage:.9}]},
+      options:{responsive:true, maintainAspectRatio:false, animation:false, plugins:{legend:{display:false},tooltip:{enabled:false}},
+        scales:{x:{display:false},y:{display:false,beginAtZero:true}}}});
+  });
+  document.querySelectorAll("#bList .listrow").forEach(r => {
+    const go = () => renderBDetail(+r.dataset.id, document.getElementById("bDetail"));
+    r.addEventListener("click", go);
+    r.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+  });
+}
+function renderBDetail(id, host){
+  const p = PRODUCTS.find(x => x.id === id);
+  const tab = (host.dataset.btab || "sales");
+  const body = `
+    <div class="detailhead">
+      <div>
+        <div class="dlabel">Product details</div>
+        <h2>${p.name}</h2>
+        <div class="psku">${p.sku} · ${p.cat}</div>
+      </div>
+      <div class="spacer"></div>
+      ${badge(p)}
+    </div>
+    <div class="detailkpis">
+      <div class="dbox"><div class="l">Stock now</div><div class="v">${p.stock}</div></div>
+      <div class="dbox"><div class="l">Sold · 90d</div><div class="v">${sold90(p)}</div></div>
+      <div class="dbox"><div class="l">Selling days</div><div class="v">${p.days}/30</div></div>
+      <div class="dbox"><div class="l">Received · 30d</div><div class="v">${p.flow.received}</div></div>
+    </div>
+    <div class="pilltabs" role="group" aria-label="Detail chart">
+      <button data-btab="sales" class="${tab==="sales"?"on":""}" aria-pressed="${tab==="sales"}">Sales &amp; stock</button>
+      <button data-btab="flow" class="${tab==="flow"?"on":""}" aria-pressed="${tab==="flow"}">Stock flow</button>
+      <button data-btab="coverage" class="${tab==="coverage"?"on":""}" aria-pressed="${tab==="coverage"}">Coverage</button>
+    </div>
+    <div class="chartwrap" style="padding:6px 20px 14px"><canvas id="bChart" height="240" role="img" aria-label="Detail chart"></canvas></div>
+    <div style="padding:0 20px 18px" class="hint">${tab==="flow" ? "Latest 30 days. Opening is reconstructed backwards from stock now." : tab==="coverage" ? "Three 30-day review windows. Blank means no figure for that window." : "Weekly units sold with the reconstructed stock level."}</div>`;
+  host.innerHTML = body;
+  host.querySelectorAll("[data-btab]").forEach(b => b.addEventListener("click", () => {
+    host.dataset.btab = b.dataset.btab;
+    destroyCharts(); renderBDetail(id, host);
+  }));
+  const ctx = document.getElementById("bChart");
+  if (tab === "flow"){
+    const labels = FLOW_LABELS.map(([,l]) => l);
+    const vals = FLOW_LABELS.map(([k]) => p.flow[k]);
+    mkChart(ctx, {type:"bar",
+      data:{labels, datasets:[{data:vals, backgroundColor:vals.map(v=>v<0?css("--danger"):css("--primary")), borderRadius:4}]},
+      options:{indexAxis:"y", responsive:true, maintainAspectRatio:false, animation:false,
+        plugins:{legend:{display:false}, tooltip:{callbacks:{label:(i)=>`${i.raw} units`}}},
+        scales:{x:{grid:{color:"#eef2f7"}}, y:{ticks:{font:{size:11}}}}}});
+  } else if (tab === "coverage"){
+    const buckets = [sum(p.weeks.slice(0,4)), sum(p.weeks.slice(4,9)), sum(p.weeks.slice(9,13))];
+    const gaps = [p.weeks.slice(0,4).every(v=>v===null), p.weeks.slice(4,9).every(v=>v===null), p.weeks.slice(9,13).every(v=>v===null)];
+    mkChart(ctx, {type:"bar",
+      data:{labels:["Aug 22 – Sep 20","Sep 21 – Oct 20","Oct 21 – Nov 19"],
+        datasets:[{data:buckets.map((v,i)=> gaps[i] ? null : v),
+          backgroundColor:buckets.map((_,i)=>gaps[i]?"#e5e7eb":css("--primary")), borderRadius:4, barPercentage:.5}]},
+      options:{responsive:true, maintainAspectRatio:false, animation:false,
+        plugins:{legend:{display:false}, tooltip:{filter:(i)=>i.raw!==null, callbacks:{label:(i)=>`${i.raw} units`}}},
+        scales:{x:{grid:{display:false}, ticks:{font:{size:10}, maxRotation:0, autoSkip:false}},
+                y:{beginAtZero:true, grid:{color:"#eef2f7"}}}}});
+  } else {
+    mkChart(ctx, {data:{labels:WEEK_DATES, datasets:[
+      {type:"bar", data:p.weeks, backgroundColor:css("--primary"), borderRadius:3, order:2},
+      {type:"line", data:stockSeries(p), borderColor:css("--muted"), borderDash:[4,3], borderWidth:1.5, pointRadius:0, tension:.25, order:1, yAxisID:"y1"}
+    ]},
+    options:{responsive:true, maintainAspectRatio:false, animation:false,
+      plugins:{legend:{display:false}, tooltip:{filter:(i)=>i.raw!==null}},
+      scales:{x:{grid:{display:false}, ticks:{font:{size:10}, maxRotation:0, autoSkip:true, maxTicksLimit:7}},
+              y:{beginAtZero:true, grid:{color:"#eef2f7"}, ticks:{precision:0}}, y1:{position:"right", grid:{display:false}, ticks:{precision:0}}}}});
+  }
+}
+function mountB(){
+  mount.innerHTML = variantB();
+  renderBList(PRODUCTS[0].id);
+  renderBDetail(PRODUCTS[0].id, document.getElementById("bDetail"));
+  document.getElementById("bSearch").addEventListener("input", () => {
+    renderBList(document.querySelector("#bList .listrow.sel")?.dataset.id ? +document.querySelector("#bList .listrow.sel").dataset.id : 0);
+  });
+}
+
+/* ---------------- variant C ---------------- */
+function variantC(){
+  const coverage = {
+    complete: PRODUCTS.filter(p=>p.weeks.every(v=>v!==null)).length,
+    partial: PRODUCTS.filter(p=>p.weeks.some(v=>v!==null) && p.weeks.some(v=>v===null)).length,
+    none: PRODUCTS.filter(p=>p.weeks.every(v=>v===null)).length
+  };
+  const top = [...PRODUCTS].sort((a,b)=>sold90(b)-sold90(a)).slice(0,5);
+  return `<div class="bento">
+    <div class="card">
+      <h3>Weekly movement</h3><div class="sub">Units sold across all products · 13 weeks</div>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:4px">
+        <span class="big">${money(PRODUCTS.reduce((s,p)=>s+sold90(p),0))}</span><span class="hint">sold in 90 days</span>
+      </div>
+      <div class="chartwrap"><canvas id="cAgg" height="118" role="img" aria-label="Weekly units sold across all products"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Fastest movers</h3><div class="sub">Units sold · 90 days</div>
+      <div class="chartwrap"><canvas id="cTop" height="170" role="img" aria-label="Top five products by units sold"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>History coverage</h3><div class="sub">How much of the 90-day window is usable</div>
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:104px;height:104px"><canvas id="cCover" role="img" aria-label="Coverage mix"></canvas></div>
+        <div class="coverlist" style="flex:1">
+          <div class="r"><span>Complete</span><strong>${coverage.complete}</strong><div class="bar"><span style="width:${coverage.complete/PRODUCTS.length*100}%"></span></div></div>
+          <div class="r"><span>Partial</span><strong>${coverage.partial}</strong><div class="bar"><span style="width:${coverage.partial/PRODUCTS.length*100}%;background:#f59e0b"></span></div></div>
+          <div class="r"><span>No history</span><strong>${coverage.none}</strong><div class="bar"><span style="width:${coverage.none/PRODUCTS.length*100}%;background:#94a3b8"></span></div></div>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:8px">No history means the product predates recorded data, not zero demand.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <div class="field grow"><span>⌕</span><input id="cSearch" placeholder="Search products" aria-label="Search products"></div>
+      <div class="field"><select aria-label="Stock filter"><option>With stock</option><option>All products</option></select></div>
+      <button class="btn btn-primary" style="margin-left:auto">Generate report</button>
+    </div>
+    <table>
+      <thead><tr><th>Product</th><th class="num">Stock</th><th class="num">90-day sold</th><th class="num">Selling days</th><th>Status</th><th></th></tr></thead>
+      <tbody id="cRows"></tbody>
+    </table>
+    <div class="pager"><span id="cCount"></span><span class="pgs"><button class="pg">‹</button><button class="pg">›</button></span></div>
+  </div>
+
+  <dialog class="drawer" id="cDrawer" aria-label="Product details">
+    <div class="drawer-inner">
+      <div class="dhead">
+        <div><div class="dlabel">Product details</div><h2 id="cDName"></h2><div class="psku" id="cDSku"></div></div>
+        <div class="spacer"></div><button class="chev" id="cClose" aria-label="Close details">✕</button>
+      </div>
+      <div class="dbody" id="cDBody"></div>
+    </div>
+  </dialog>`;
+}
+function renderCRows(){
+  const q = (document.getElementById("cSearch")?.value || "").toLowerCase();
+  const rows = PRODUCTS.filter(p => !q || p.name.toLowerCase().includes(q));
+  document.getElementById("cRows").innerHTML = rows.map(p => `
+    <tr class="clickable" data-id="${p.id}">
+      <td><div class="pname">${p.name}</div><div class="psku">${p.sku} · ${p.cat}</div></td>
+      <td class="num">${p.stock}</td>
+      <td class="num">${sold90(p)}</td>
+      <td class="num">${p.days} <span class="cell-muted">/ 30</span></td>
+      <td>${badge(p)}</td>
+      <td><button class="chev" aria-label="Open ${p.name} details">›</button></td>
+    </tr>`).join("") || `<tr><td colspan="6" class="empty">No product matches.</td></tr>`;
+  document.getElementById("cCount").textContent = `Showing 1–${rows.length} of ${rows.length} products`;
+  document.querySelectorAll("#cRows tr[data-id]").forEach(tr =>
+    tr.addEventListener("click", () => openC(+tr.dataset.id)));
+}
+function openC(id){
+  const p = PRODUCTS.find(x => x.id === id);
+  document.getElementById("cDName").textContent = p.name;
+  document.getElementById("cDSku").textContent = `${p.sku} · ${p.cat}`;
+  const body = document.getElementById("cDBody");
+  body.innerHTML = `
+    <div class="dstock"><div><div class="dlabel">Stock now</div><span class="v">${p.stock}</span></div>${badge(p)}</div>
+    <div class="seg" role="group" aria-label="Detail metric" style="align-self:flex-start">
+      <button class="on" data-cview="sales">Sales &amp; stock</button><button data-cview="flow">Stock flow</button>
+    </div>
+    <div class="chartwrap"><canvas id="cDChart" height="210" role="img" aria-label="Detail chart"></canvas></div>
+    <div class="flow">
+      ${FLOW_LABELS.map(([k,l]) => `<div class="r"><span>${l}</span><strong>${p.flow[k]}</strong></div>`).join("")}
+    </div>
+    <div class="hint">Flow covers the latest 30 days. Opening is reconstructed, not a stored balance.</div>
+    <div class="note">This product was created inside the review window, so earlier weeks stay blank. A dash means no figure, never zero.</div>`;
+  document.getElementById("cDrawer").showModal();
+  const draw = (view) => {
+    const ctx = document.getElementById("cDChart");
+    charts.forEach(c => { if (c.canvas === ctx) { try{c.destroy();}catch(e){} } });
+    charts = charts.filter(c => c.canvas !== ctx);
+    if (view === "flow"){
+      const labels = FLOW_LABELS.map(([,l]) => l);
+      const vals = FLOW_LABELS.map(([k]) => p.flow[k]);
+      mkChart(ctx, {type:"bar", data:{labels, datasets:[{data:vals, backgroundColor:vals.map(v=>v<0?css("--danger"):css("--primary")), borderRadius:4}]},
+        options:{indexAxis:"y", responsive:true, maintainAspectRatio:false, animation:false,
+          plugins:{legend:{display:false}}, scales:{x:{grid:{color:"#eef2f7"}}, y:{ticks:{font:{size:11}}}}}});
+    } else {
+      mkChart(ctx, {data:{labels:WEEK_DATES, datasets:[
+        {type:"bar", data:p.weeks, backgroundColor:css("--primary"), borderRadius:3, order:2},
+        {type:"line", data:stockSeries(p), borderColor:css("--muted"), borderDash:[4,3], borderWidth:1.5, pointRadius:0, tension:.25, order:1, yAxisID:"y1"}
+      ]}, options:{responsive:true, maintainAspectRatio:false, animation:false,
+        plugins:{legend:{display:false}, tooltip:{filter:(i)=>i.raw!==null}},
+        scales:{x:{grid:{display:false}, ticks:{font:{size:10}, maxRotation:0, autoSkip:true, maxTicksLimit:6}},
+                y:{beginAtZero:true, grid:{color:"#eef2f7"}}, y1:{position:"right", grid:{display:false}}}}});
+    }
+  };
+  body.querySelectorAll("[data-cview]").forEach(b => b.addEventListener("click", () => {
+    body.querySelectorAll("[data-cview]").forEach(x => x.classList.toggle("on", x === b));
+    draw(b.dataset.cview);
+  }));
+  draw("sales");
+}
+function mountC(){
+  mount.innerHTML = variantC();
+  renderCRows();
+  document.getElementById("cSearch").addEventListener("input", renderCRows);
+  document.getElementById("cClose").addEventListener("click", () => document.getElementById("cDrawer").close());
+  const totals = WEEK_DATES.map((_,i) => PRODUCTS.reduce((s,p)=> s + (p.weeks[i]||0), 0));
+  mkChart(document.getElementById("cAgg"), {type:"line",
+    data:{labels:WEEK_DATES, datasets:[{data:totals, borderColor:css("--primary"), backgroundColor:"rgba(37,99,235,.12)", fill:true, tension:.3, pointRadius:0, borderWidth:2}]},
+    options:{responsive:true, maintainAspectRatio:false, animation:false, plugins:{legend:{display:false}},
+      scales:{x:{display:false}, y:{beginAtZero:true, grid:{color:"#eef2f7"}, ticks:{font:{size:9}}}}}});
+  const top = [...PRODUCTS].sort((a,b)=>sold90(b)-sold90(a)).slice(0,5);
+  mkChart(document.getElementById("cTop"), {type:"bar",
+    data:{labels:top.map(p=>p.name.length>22?p.name.slice(0,21)+"…":p.name),
+      datasets:[{data:top.map(sold90), backgroundColor:css("--primary"), borderRadius:3, barPercentage:.7}]},
+    options:{indexAxis:"y", responsive:true, maintainAspectRatio:false, animation:false,
+      plugins:{legend:{display:false}}, scales:{x:{grid:{color:"#eef2f7"}, ticks:{font:{size:9}}}, y:{ticks:{font:{size:9}}}}}});
+  const cov = [
+    PRODUCTS.filter(p=>p.weeks.every(v=>v!==null)).length,
+    PRODUCTS.filter(p=>p.weeks.some(v=>v!==null) && p.weeks.some(v=>v===null)).length,
+    PRODUCTS.filter(p=>p.weeks.every(v=>v===null)).length
+  ];
+  mkChart(document.getElementById("cCover"), {type:"doughnut",
+    data:{labels:["Complete","Partial","No history"], datasets:[{data:cov, backgroundColor:[css("--primary"),"#f59e0b","#94a3b8"], borderWidth:0}]},
+    options:{responsive:true, maintainAspectRatio:false, animation:false, cutout:"68%", plugins:{legend:{display:false}}}});
+}
+
+/* ---------------- switcher ---------------- */
+const mount = document.getElementById("mount");
+const NAMES = {
+  A:"A (Sparkline table)",
+  B:"B (Split view)",
+  C:"C (Bento cards)"
+};
+const RENDER = {A:mountA, B:mountB, C:mountC};
+const params = new URLSearchParams(location.search);
+let cur = (params.get("variant") || "A").toUpperCase();
+if (!RENDER[cur]) cur = "A";
+function apply(){
+  destroyCharts();
+  mount.dataset.btab = "sales";
+  params.set("variant", cur);
+  history.replaceState(null, "", `${location.pathname}?${params}`);
+  document.getElementById("lbl").textContent = NAMES[cur];
+  RENDER[cur]();
+}
+function step(d){
+  const keys = ["A","B","C"];
+  cur = keys[(keys.indexOf(cur) + d + keys.length) % keys.length];
+  apply();
+}
+document.getElementById("prev").addEventListener("click", () => step(-1));
+document.getElementById("next").addEventListener("click", () => step(1));
+document.addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+  if (e.key === "ArrowLeft") step(-1);
+  if (e.key === "ArrowRight") step(1);
+});
+apply();
+</script>
+</body>
+</html>

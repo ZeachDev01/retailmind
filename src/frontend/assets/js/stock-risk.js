@@ -4,8 +4,8 @@
     const rows = Array.from(root.querySelectorAll('[data-risk-row]'));
     const search = root.querySelector('#risk-search');
     const stockFilter = root.querySelector('#movement-stock');
-    const salesMetric = root.querySelector('#movement-sales-metric');
-    const salesCharts = new Map();
+    const chartDataNode = root.querySelector('#movement-chart-data');
+    const chartData = chartDataNode ? JSON.parse(chartDataNode.textContent) : null;
     const reportButton = root.querySelector('#movement-report');
     const body = root.querySelector('#risk-table-body');
     const sorters = Array.from(root.querySelectorAll('[data-risk-sort]'));
@@ -20,56 +20,87 @@
     let direction = 1;
     let trigger = null;
     let bodyOverflow = '';
+    let pageCharts = [];
+    let drawerChart = null;
+    let chartRetryBound = false;
+    function colors() {
+        const styles = getComputedStyle(root);
+        return {primary:styles.getPropertyValue('--primary').trim() || '#2563eb',
+            muted:styles.getPropertyValue('--muted').trim() || '#626b7a',
+            grid:styles.getPropertyValue('--border').trim() || '#e5e7eb'};
+    }
+    function destroyPageCharts() { pageCharts.forEach(chart => chart.destroy()); pageCharts = []; }
+    function chartFallback(show) {
+        root.querySelectorAll('.sr-card-chart').forEach(box => {
+            const existing = box.parentElement.querySelector('.sr-chart-fallback');
+            if (show && !existing) {
+                const note = document.createElement('p');
+                note.className = 'sr-chart-fallback';
+                note.textContent = 'Charts are unavailable in this browser.';
+                box.after(note);
+            } else if (!show && existing) {
+                existing.remove();
+            }
+        });
+    }
+    function renderCharts() {
+        destroyPageCharts();
+        if (!chartData || !root.getClientRects().length) return;
+        if (!window.Chart) {
+            chartFallback(true);
+            if (!chartRetryBound) { chartRetryBound = true; window.addEventListener('load', renderCharts, {once:true}); }
+            return;
+        }
+        chartFallback(false);
+        const {primary, grid, muted} = colors();
+        const base = {responsive:true, maintainAspectRatio:false, animation:false, plugins:{legend:{display:false}}};
+        const axis = {beginAtZero:true, grid:{color:grid}, ticks:{font:{size:10}, precision:0}};
+        try {
+            pageCharts.push(new window.Chart(root.querySelector('#movement-chart-weekly'), {
+                type:'line',
+                data:{labels:chartData.weekly.labels, datasets:[{data:chartData.weekly.values, borderColor:primary,
+                    backgroundColor:'rgba(37,99,235,.12)', fill:true, tension:.3, pointRadius:0, borderWidth:2}]},
+                options:{...base, scales:{x:{grid:{display:false}, ticks:{autoSkip:true, maxTicksLimit:7, font:{size:10}}}, y:axis}}
+            }));
+            pageCharts.push(new window.Chart(root.querySelector('#movement-chart-top'), {
+                type:'bar',
+                data:{labels:chartData.top.labels, datasets:[{data:chartData.top.values, backgroundColor:primary, borderRadius:3, maxBarThickness:16}]},
+                options:{...base, indexAxis:'y', scales:{x:axis, y:{grid:{display:false}, ticks:{font:{size:10}}}}}
+            }));
+            pageCharts.push(new window.Chart(root.querySelector('#movement-chart-coverage'), {
+                type:'doughnut',
+                data:{labels:chartData.coverage.labels, datasets:[{data:chartData.coverage.values,
+                    backgroundColor:[primary, '#f59e0b', muted, '#94a3b8'], borderWidth:0}]},
+                options:{...base, cutout:'66%'}
+            }));
+        } catch {
+            destroyPageCharts();
+            chartFallback(true);
+        }
+    }
+    function renderDrawerChart() {
+        const canvas = detailBody.querySelector('canvas[data-movement-weekly]');
+        drawerChart?.destroy();
+        drawerChart = null;
+        if (!canvas || !window.Chart) return;
+        let values = [];
+        try { values = JSON.parse(canvas.dataset.movementWeekly || '[]'); } catch { return; }
+        const {primary, grid} = colors();
+        try {
+            drawerChart = new window.Chart(canvas, {
+                type:'bar',
+                data:{labels:chartData?.weekly?.labels ?? values.map((_, index) => index),
+                    datasets:[{data:values, backgroundColor:primary, borderRadius:3, maxBarThickness:18}]},
+                options:{responsive:true, maintainAspectRatio:false, animation:false,
+                    plugins:{legend:{display:false}, tooltip:{callbacks:{label:item => item.raw === null ? 'No figure' : numberFormat.format(item.raw) + ' units'}}},
+                    scales:{x:{grid:{display:false}, ticks:{autoSkip:true, maxTicksLimit:6, font:{size:10}}},
+                        y:{beginAtZero:true, grid:{color:grid}, ticks:{precision:0}}}}
+            });
+        } catch { drawerChart = null; }
+    }
     function matchingRows() {
         const query = search.value.trim().toLowerCase();
         return rows.filter(row => (stockFilter.value === 'all' || Number(row.dataset.stock) > 0) && row.dataset.search.includes(query));
-    }
-    function renderSales() {
-        if (!root.getClientRects().length) return;
-        const metric = salesMetric.value;
-        const unit = metric === 'days' ? 'selling days' : 'base units sold';
-        const color = getComputedStyle(root).getPropertyValue('--primary').trim() || '#2563eb';
-        for (const [row, chart] of salesCharts) {
-            if (!row.hidden) continue;
-            chart.canvas.parentElement.hidden = true;
-            chart.destroy();
-            salesCharts.delete(row);
-        }
-        rows.filter(row => !row.hidden).forEach(row => {
-            const values = Array.from(row.querySelectorAll('.sr-sales-value'), value => {
-                const amount = value.dataset[metric] === '' ? null : Number(value.dataset[metric]);
-                value.textContent = amount === null ? '—' : numberFormat.format(amount);
-                value.nextElementSibling.textContent = amount === null ? unit + ' unavailable' : unit;
-                return value.dataset.coverage === 'unavailable' ? null : amount;
-            });
-            if (!window.Chart) return;
-            const canvas = row.querySelector('.sr-sales-chart canvas');
-            const chart = salesCharts.get(row);
-            try {
-                if (chart) {
-                    chart.data.datasets[0].data = values;
-                    chart.data.datasets[0].backgroundColor = color;
-                    chart.update();
-                    return;
-                }
-                const context = canvas.getContext('2d');
-                if (!context) return;
-                canvas.parentElement.hidden = false;
-                salesCharts.set(row, new window.Chart(context, {
-                    type:'bar',
-                    data:{labels:values.map((_, index) => index), datasets:[{data:values, backgroundColor:color, maxBarThickness:36}]},
-                    options:{
-                        maintainAspectRatio:false, animation:false, events:[],
-                        plugins:{legend:{display:false}},
-                        scales:{x:{display:false}, y:{display:false, beginAtZero:true}}
-                    }
-                }));
-            } catch {
-                canvas.parentElement.hidden = true;
-                salesCharts.delete(row);
-                window.Chart.getChart?.(canvas)?.destroy();
-            }
-        });
     }
     function render() {
         const matching = matchingRows();
@@ -83,13 +114,11 @@
         root.querySelector('#risk-page-status').textContent = 'Page ' + page + ' of ' + pages;
         previous.disabled = page === 1;
         next.disabled = page === pages;
-        renderSales();
     }
     search.addEventListener('input', () => { page = 1; render(); });
     stockFilter.addEventListener('change', () => { page = 1; render(); });
-    salesMetric.addEventListener('change', renderSales);
-    root.addEventListener('retailmind:stockmovementopen', renderSales);
-    window.addEventListener('retailmind:themechange', renderSales);
+    root.addEventListener('retailmind:stockmovementopen', renderCharts);
+    window.addEventListener('retailmind:themechange', () => { renderCharts(); if (drawer.open) renderDrawerChart(); });
     function outsideDrawer(event) {
         if (event.target !== drawer) return;
         const rect = drawer.getBoundingClientRect();
@@ -114,6 +143,7 @@
         bodyOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         drawer.showModal();
+        renderDrawerChart();
         drawer.addEventListener('click', outsideDrawer);
         drawer.addEventListener('keydown', containDrawerFocus);
     });
@@ -124,6 +154,8 @@
         document.body.style.overflow = bodyOverflow;
         trigger?.setAttribute('aria-expanded', 'false');
         trigger?.focus();
+        drawerChart?.destroy();
+        drawerChart = null;
         detailBody.replaceChildren();
     });
     function sortRows(key, order) {
@@ -192,6 +224,7 @@
             section.className = 'sr-report-product';
             section.append(root.querySelector('#risk-detail-' + row.dataset.productId).content.cloneNode(true));
             section.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+            section.querySelectorAll('[data-screen-only]').forEach(el => el.remove());
             section.querySelector('.sr-coverage-note').remove();
             section.querySelectorAll('details').forEach(el => { el.open = true; });
             snapshot.append(section);

@@ -21,10 +21,19 @@ final class StockMovementReader
             $windows[] = ['start' => $start->format('Y-m-d'), 'end' => $end->format('Y-m-d'),
                 'label' => $start->format('M j, Y') . ' – ' . $end->modify('-1 day')->format('M j, Y')];
         }
+        $weeks = [];
+        for ($i = 12; $i >= 0; $i--) {
+            $start = $date->modify('-' . (7 * ($i + 1)) . ' days');
+            $weeks[] = ['start' => $start->format('Y-m-d'), 'end' => $start->modify('+7 days')->format('Y-m-d'),
+                'label' => $start->format('M j')];
+        }
+        // Keep the first bucket inside the same 90-day review as the three periods.
+        $weeks[0]['start'] = $windows[2]['start'];
+        $weeks[0]['label'] = (new DateTimeImmutable($windows[2]['start']))->format('M j');
         return [
             'start' => $windows[2]['start'], 'recent_start' => $windows[0]['start'],
             'end' => $date->format('Y-m-d'), 'today_end' => $date->modify('+1 day')->format('Y-m-d'),
-            'windows' => $windows, 'label' => $windows[0]['label'],
+            'windows' => $windows, 'weeks' => $weeks, 'weekly_start' => $weeks[0]['start'], 'label' => $windows[0]['label'],
             'review_label' => (new DateTimeImmutable($windows[2]['start']))->format('M j, Y') . ' – ' . $date->modify('-1 day')->format('M j, Y'),
         ];
     }
@@ -37,23 +46,32 @@ final class StockMovementReader
         $ids = array_map('intval', array_column($products, 'product_id'));
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
         $units = ForecastReadinessQuery::salesUnitsSql($pdo, 'si');
+        $weekIndex = [];
+        foreach ($period['weeks'] as $i => $week) {
+            for ($day = new DateTimeImmutable($week['start']); $day->format('Y-m-d') < $week['end']; $day = $day->modify('+1 day')) {
+                $weekIndex[$day->format('Y-m-d')] = $i;
+            }
+        }
         $query = $pdo->prepare("SELECT si.product_id, DATE(s.sale_date) AS sale_day, SUM({$units}) AS units
             FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
             WHERE si.product_id IN ({$placeholders}) AND s.sale_date >= ? AND s.sale_date < ?
             GROUP BY si.product_id, DATE(s.sale_date) HAVING SUM({$units}) > 0");
-        $query->execute(array_merge($ids, [$period['start'], $period['end']]));
+        $query->execute(array_merge($ids, [min($period['start'], $period['weekly_start']), $period['end']]));
         $sales = [];
         foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $id = (int)$row['product_id'];
             foreach ($period['windows'] as $i => $window) {
                 if ($row['sale_day'] >= $window['start'] && $row['sale_day'] < $window['end']) {
-                    $id = (int)$row['product_id'];
                     $sales[$id][$i]['units'] = ($sales[$id][$i]['units'] ?? 0) + (int)$row['units'];
                     $sales[$id][$i]['days'] = ($sales[$id][$i]['days'] ?? 0) + 1;
                     break;
                 }
             }
+            if (isset($weekIndex[$row['sale_day']])) {
+                $week = $weekIndex[$row['sale_day']];
+                $sales[$id]['weekly'][$week] = ($sales[$id]['weekly'][$week] ?? 0) + (int)$row['units'];
+            }
         }
-
         $history = [];
         foreach ($products as $product) {
             $stock = (int)$product['quantity_on_hand'];
@@ -108,6 +126,13 @@ final class StockMovementReader
                 ];
             }
             $total = array_sum($sold);
+            $weekly = [];
+            foreach ($period['weeks'] as $i => $week) {
+                $weekUnits = (int)($sales[$id]['weekly'][$i] ?? 0);
+                // Same honesty rule as the periods: keep recorded sales, withhold zeros we cannot support.
+                $unsupported = $created === '' || $created >= $week['end'];
+                $weekly[] = $weekUnits > 0 || !$unsupported ? $weekUnits : null;
+            }
             $kind = match (true) {
                 $created === '' || $created > $period['start'] => 'limited',
                 $total === 0 && (int)$product['quantity_on_hand'] > 0 => 'dead',
@@ -127,7 +152,7 @@ final class StockMovementReader
             $trend = in_array($kind, ['limited', 'stockout'], true) || $item['minimum'] <= 0 ? null : ($days[0] * 2 <=> $days[1] + $days[2]);
             $item['balance'] = $item['remaining'] - $item['received'] - $item['sale_out'] - $item['returns'] - $item['other'];
             $rows[] = array_merge($product, $item, ['period_sales' => $sold, 'period_days' => $days,
-                'sales_periods' => array_reverse($salesPeriods),
+                'sales_periods' => array_reverse($salesPeriods), 'weekly_sales' => $weekly,
                 'total_sales' => $total, 'recent_sales' => $sold[0], 'selling_days' => $days[0],
                 'trend' => $trend, 'previous_average' => ($days[1] + $days[2]) / 2,
                 'movement_kind' => $kind, 'movement_label' => $label, 'history_note' => $note]);

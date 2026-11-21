@@ -76,6 +76,23 @@ $expect(array_column($byId[16]['sales_periods'], 'coverage') === ['partial', 'co
     && $byId[16]['sales_periods'][0]['units_sold'] === 0, 'Creation on the final displayed day still gives partial coverage.');
 $expect($byId[12]['sales_periods'][1]['coverage'] === 'unavailable' && $byId[12]['sales_periods'][1]['units_sold'] === 3,
     'Keep inconsistent sales records visible and mark the unavailable coverage.');
+$expect(array_sum(array_map('intval', array_filter($byId[1]['weekly_sales'], static fn($v) => $v !== null))) === $byId[1]['total_sales'],
+    'Weekly series must add up to the same recorded sales total as the 30-day periods.');
+$expect(count($byId[1]['weekly_sales']) === 13, 'Every product carries 13 weekly buckets.');
+$expect($byId[5]['weekly_sales'][0] === null && $byId[5]['weekly_sales'][11] === 6,
+    'A new product shows no figure before its creation date and recorded sales after it.');
+$expect($period['weeks'][12]['end'] === '2026-11-12' && $period['weeks'][0]['start'] === '2026-08-14',
+    'Weekly buckets end yesterday and cover the 90-day review plus one leading day.');
+$expect($period['weeks'][0]['label'] === 'Aug 14' && $period['weeks'][1]['label'] === 'Aug 20'
+    && $period['weeks'][12]['label'] === 'Nov 5', 'Weekly labels name the first day of each bucket.');
+$expect(in_array(null, $byId[8]['weekly_sales'], true) && $byId[8]['total_sales'] === 4
+    && array_sum(array_filter($byId[8]['weekly_sales'], static fn($v) => $v !== null)) === 4,
+    'Unknown creation keeps recorded weeks and withholds unsupported zeros.');
+$expect(array_sum(array_filter($byId[12]['weekly_sales'], static fn($v) => $v !== null)) === $byId[12]['total_sales'],
+    'Recorded sales in an unavailable coverage window still appear in the weekly series.');
+$expect(array_reduce($rows, static fn(bool $ok, array $row): bool => $ok && $row['total_sales']
+    === array_sum(array_filter($row['weekly_sales'], static fn($v) => $v !== null)), true),
+    'Every product weekly series reconciles with its 90-day total.');
 $expect($byId[1]['movement_kind'] === 'slow' && $byId[1]['trend'] === 0, 'Bulk buying must not turn a product Fast-Moving.');
 $expect($byId[2]['selling_days'] === 10 && $byId[2]['movement_kind'] === 'fast', 'Ten distinct selling days is Fast-Moving.');
 $expect($byId[3]['selling_days'] === 9 && $byId[3]['movement_kind'] === 'slow', 'Nine distinct selling days is Slow-Moving.');
