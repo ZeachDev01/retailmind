@@ -65,12 +65,14 @@ $movementChartData = [
             </div>
             <div class="overview-chart-card">
                 <div class="overview-chart-header"><div><h3>History coverage</h3></div><span class="info-tooltip"><button class="info-tooltip-trigger" type="button" aria-label="About sales history coverage" aria-describedby="movement-coverage-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="tooltip-box" id="movement-coverage-help" role="tooltip"><?= htmlspecialchars($coverageNote) ?></span></span></div>
-                <div class="sr-card-chart"><canvas id="movement-chart-coverage" role="img" aria-label="Products grouped by how much of the 90-day review is recorded"></canvas></div>
-                <ul class="sr-coverage-counts">
-                    <?php foreach ($movementChartData['coverage']['labels'] as $i => $coverageLabel): ?>
-                        <li><span><?= htmlspecialchars($coverageLabel) ?></span><strong><?= (int)$movementChartData['coverage']['values'][$i] ?></strong></li>
-                    <?php endforeach; ?>
-                </ul>
+                <div class="sr-coverage">
+                    <div class="sr-card-chart"><canvas id="movement-chart-coverage" role="img" aria-label="Products grouped by how much of the 90-day review is recorded"></canvas></div>
+                    <ul class="sr-coverage-counts">
+                        <?php foreach ($movementChartData['coverage']['labels'] as $i => $coverageLabel): ?>
+                            <li><span><?= htmlspecialchars($coverageLabel) ?></span><strong><?= (int)$movementChartData['coverage']['values'][$i] ?></strong></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
             </div>
         </div>
         <div class="sr-tools">

@@ -197,6 +197,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <section class="workspace-guidance help-workflows" aria-labelledby="workspace-guidance-title">
             <?php $guidanceIsHelp = true; include __DIR__ . '/workspace_overview.php'; ?>
         </section>
+        <?php if (current_role() === 'inventory_manager'): ?>
+            <?php include __DIR__ . '/store_setup_checklist.php'; ?>
+        <?php endif; ?>
     </main>
 </div>
 </body>

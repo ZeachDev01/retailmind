@@ -309,9 +309,9 @@ async function main() {
         check(await page.inputValue('#received_qty') === '5' && await page.inputValue('#supplier') === 'Reviewed shopping store',
             'edit and back preserve all draft values');
         await scan(page, 'UNKNOWN-' + token);
-        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('No product matches'));
+        await page.getByRole('heading', {name: 'Barcode not found'}).waitFor();
         await scan(page, fixture.products.ambiguous_a.barcode);
-        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('more than one product'));
+        await page.getByRole('heading', {name: 'Barcode needs review'}).waitFor();
         check(await page.inputValue('#product_id') === String(fixture.products.zero.product_id)
             && await page.inputValue('#received_qty') === '5', 'unknown and ambiguous scans preserve the draft');
         await page.goto(receivingPath);
@@ -593,7 +593,7 @@ async function main() {
         const delayedScan = scan(page, fixture.products.zero.barcode);
         await page.waitForTimeout(100);
         await scan(page, 'LATEST-UNKNOWN-' + token);
-        await page.waitForFunction(() => document.getElementById('scan_status').textContent.includes('No product matches'));
+        await page.getByRole('heading', {name: 'Barcode not found'}).waitFor();
         releaseDelayedLookup();
         await delayedScan;
         await page.waitForTimeout(250);

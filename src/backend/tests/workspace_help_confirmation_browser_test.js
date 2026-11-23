@@ -48,7 +48,12 @@ const fixture = action => {
             await page.locator('#landing-login-username').fill('theme_' + role);
             await page.locator('#landing-login-password').fill(data.password);
             await Promise.all([page.waitForURL(u => !u.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
-            await page.goto(origin + '/components/auth/help.php');
+            if (role === 'inventory_manager') {
+                await page.getByRole('link', {name: 'View guidance'}).click();
+                await page.waitForURL('**/auth/help.php');
+            } else {
+                await page.goto(origin + '/components/administrator/dashboard.php');
+            }
             const taskItem = page.locator('.setup-task-item').filter({has: page.getByRole('button', {name: label, exact: true})});
             await taskItem.getByRole('button', {name: label, exact: true}).click();
             await page.locator('.setup-task-item', {hasText: role === 'admin' ? 'Store calendar review' : 'Products and opening stock'})
@@ -56,7 +61,7 @@ const fixture = action => {
             assert.ok(JSON.parse(fixture('setup_state')).some(row => row.task_key === task && row.confirmed_workspace === role), role + ' confirmation persists');
             await page.reload();
             assert.equal(await page.getByRole('button', {name: label, exact: true}).count(), 0, role + ' confirmation survives reload');
-            console.log(role + ': Help confirmation passed');
+            console.log(role + ': setup confirmation passed');
         }
     } finally {
         if (browser) await browser.close();

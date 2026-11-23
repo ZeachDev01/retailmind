@@ -67,19 +67,25 @@ final class OpenFoodFactsCatalog
     public static function downloadPhoto(string $url, int $limit, ?callable $request = null): ?string
     {
         if (!self::isPhotoUrl($url)) return null;
-        [$status, $body] = $request ? $request($url) : self::request($url, $limit, 'image/*');
+        [$status, $body] = $request ? $request($url) : self::request($url, $limit, 'image/*', connectTimeoutMs: 5000, timeoutMs: 10000);
         return $status === 200 && is_string($body) && strlen($body) <= $limit ? $body : null;
     }
 
-    private static function request(string $url, int $limit = 65536, string $accept = 'application/json'): array
+    private static function request(
+        string $url,
+        int $limit = 65536,
+        string $accept = 'application/json',
+        int $connectTimeoutMs = 1500,
+        int $timeoutMs = 3500,
+    ): array
     {
         if (!function_exists('curl_init')) return [0, null];
 
         $curl = curl_init($url);
         $body = '';
         curl_setopt_array($curl, [
-            CURLOPT_CONNECTTIMEOUT_MS => 1500,
-            CURLOPT_TIMEOUT_MS => 3500,
+            CURLOPT_CONNECTTIMEOUT_MS => $connectTimeoutMs,
+            CURLOPT_TIMEOUT_MS => $timeoutMs,
             CURLOPT_USERAGENT => 'RetailMind/1.0 (https://github.com/ZeachDev01/retailmind)',
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_HTTPHEADER => ['Accept: ' . $accept],

@@ -41,13 +41,9 @@ $inventory = $render();
 $assert(str_contains($inventory, 'Welcome to the Inventory Manager Workspace'), 'Inventory uses the invitation heading.');
 $assert(!str_contains($inventory, 'Stock monitoring'), 'Inventory banner omits page-specific workflow copy.');
 $assert(str_contains($inventory, 'href="/components/auth/help.php" class="btn btn-primary">View guidance'), 'View guidance links directly to Help.');
-$assert(!str_contains($inventory, 'Store calendar review') && !str_contains($inventory, 'Awaiting Administrator'), 'Inventory hides the calendar task.');
-$assert(str_contains($inventory, 'Confirm product setup') && str_contains($inventory, '0 of 1 tasks confirmed'), 'Product confirmation and visible progress remain available.');
-$pdo->exec("INSERT INTO store_setup_confirmations VALUES ('store_calendar', 1, 'admin', '2026-11-12')");
-$assert(str_contains($render(), '0 of 1 tasks confirmed'), 'Hidden calendar confirmations do not count toward inventory progress.');
-$pdo->exec('DELETE FROM store_setup_confirmations');
+$assert(!str_contains($inventory, 'store-setup-checklist'), 'Inventory welcome omits the Store setup checklist.');
+$assert(str_contains($inventory, 'Not now'), 'Inventory can defer the welcome prompt.');
 $pdo->exec("INSERT INTO store_setup_confirmations VALUES ('products', 1, 'inventory_manager', '2026-11-12')");
-$assert(str_contains($render(), '1 of 1 tasks confirmed &middot; Your tasks complete'), 'Inventory completion describes personal tasks.');
 $assert(!\App\Store\StoreSetupConfirmations::isComplete($pdo), 'Global Store setup still requires calendar confirmation.');
 
 $role = 'admin';

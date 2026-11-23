@@ -252,7 +252,7 @@ Alerts favor easy words and calm hierarchy. Dialogs use the strongest depth toke
 
 ### Workspace Help
 
-Inventory Manager first-visit guidance uses the existing invitation styling, a stable welcome heading and View guidance linking directly to Help. Its checklist shows product setup only, with progress scoped to that task; Administrator calendar review and global Store completion remain unchanged. See the Workspace Help surface brief for 2026-11-12 verification and limits.
+The Inventory Manager welcome card shows the workspace heading, View guidance and Not now. View guidance opens Workspace Help, where the product setup checklist follows the walkthroughs. This keeps the welcome card short and gives Inventory Managers a place to confirm their setup task.
 
 Workspace Help presents role-specific walkthroughs as divided rows within task groups, using existing navigation icons, summaries, and Start / Continue / Replay actions. Wide layouts place each group introduction beside its topic list; intermediate and mobile layouts stack them, with full-width actions on small screens. An active walkthrough appears in a separate resume panel. Button labels retain explicit contrasting foregrounds in both themes, and Help-only CSS avoids changing the shared onboarding presentation. The current implementation, verification and limits are recorded in the [Workspace Help surface brief](../.impeccable/surfaces/workspace-help.md). No global tokens or visual-world rules were added.
 

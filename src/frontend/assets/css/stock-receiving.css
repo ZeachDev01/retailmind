@@ -25,6 +25,7 @@
 .receiving-search-group input[type="search"], .receiving-search-group input[type="text"] { flex: 1; min-width: 0; min-height: 44px; padding: .625rem .875rem; font-size: .875rem; border: 1px solid var(--border); border-radius: 6px; background: var(--theme-surface, #fff); color: var(--text); }
 .receiving-search-group button { flex: none; min-height: 44px; padding: 0 1.25rem; font-size: .875rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .receiving-search-bar small { display: block; font-size: .75rem; color: var(--muted); line-height: 1.5; margin-top: .25rem; }
+.receiving-search-bar > small:empty { display: none; }
 .receiving-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; padding: 1.25rem; background: var(--theme-surface-soft, #f8fafc); border-bottom: 1px solid var(--border); }
 .receiving-form .receiving-picker label { font-size: .875rem; }
 .receiving-picker small { display: block; margin-top: .5rem; }
@@ -352,13 +353,59 @@
     .receiving-review-quantities { gap: .5rem; }
 }
 
-.receiving-code-recovery { border-top: 1px solid var(--border); padding-block: .75rem; overflow-wrap: anywhere; }
-.receiving-code-recovery label { display: flex; align-items: center; gap: .5rem; min-height: 44px; padding-block: .25rem; }
-.receiving-code-recovery input[type="radio"] { width: auto; min-height: auto; margin: 0; padding: 0; }
+.receiving-code-recovery {
+    display: grid;
+    gap: .875rem;
+    padding: .875rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--theme-surface-soft, #f8fafc);
+    font-size: .875rem;
+    overflow-wrap: anywhere;
+}
+.receiving-code-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .625rem; }
+.receiving-code-header h3 { margin: 0; color: var(--text); font-size: 1rem; scroll-margin-top: 5rem; }
+#scan_recovery_code { font-size: .8125rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.receiving-code-recovery p { margin: 0; color: var(--muted); line-height: 1.5; }
+#scan_recovery_message, #scan_saved_size { flex-basis: 100%; }
+.receiving-code-recovery legend { margin-bottom: .375rem; font-weight: 650; }
+.receiving-packaging-options { display: flex; flex-wrap: wrap; gap: .375rem; }
+.receiving-form .receiving-packaging-options label {
+    display: flex;
+    flex: 1 0 auto;
+    align-items: center;
+    gap: .5rem;
+    min-height: 44px;
+    margin: 0;
+    padding: .375rem .625rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--theme-surface, #fff);
+    cursor: pointer;
+}
+.receiving-packaging-options label:hover { border-color: var(--primary); }
+.receiving-packaging-options label:has(:checked) {
+    border-color: var(--primary);
+    background: var(--theme-info-surface, #eff6ff);
+    color: var(--theme-info-text, #1d4ed8);
+}
+.receiving-code-recovery input[type="radio"] { width: auto; min-height: auto; margin: 0; padding: 0; accent-color: var(--primary); }
+#scan_packaging_hint:not(:empty) { margin-top: .375rem; }
 .receiving-code-actions, #scan_package_confirmation { display: flex; flex-wrap: wrap; gap: .5rem; }
-.receiving-code-recovery [hidden] { display: none; }
-#scan_saved_size { flex-basis: 100%; }
-.receiving-code-recovery :focus { outline: 2px solid var(--primary); outline-offset: 3px; }
+.receiving-code-recovery .btn { min-height: 44px; min-width: 0; padding: .5rem .75rem; font-size: .875rem; white-space: normal; }
+.receiving-code-utilities { gap: 0 .875rem; padding-top: .125rem; border-top: 1px solid var(--border); }
+.receiving-code-utilities button {
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--theme-info-text, #1d4ed8);
+    font: inherit;
+    cursor: pointer;
+}
+.receiving-code-utilities button:hover { text-decoration: underline; }
+#scan_package_confirmation { padding-top: .75rem; border-top: 1px solid var(--border); }
+.receiving-code-actions:not(:has(> :not([hidden]))) { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
     .receiving-card, .receiving-category-tile { transition: none; }

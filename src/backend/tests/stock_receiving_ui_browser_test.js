@@ -244,7 +244,7 @@ function fixture(action) {
         assert.equal(await page.locator('.receiving-line').count(), 1, 'duplicate scan creates no duplicate line');
         await page.locator('#product_search_scan').fill('UNKNOWN-9999');
         await page.locator('#add_scanned_item').click();
-        await page.waitForFunction(() => document.querySelector('#scan_status').textContent.includes('No product matches'));
+        await page.getByRole('heading', {name: 'Barcode not found'}).waitFor();
         assert.equal(await page.locator('.receiving-line').count(), 1, 'unknown code preserves line');
 
         await page.goto(url + '?product_id=1');
@@ -389,7 +389,7 @@ function fixture(action) {
         await page.locator('#product_search_scan').fill('THEME-BARCODE');
         await page.route('**/product_code_lookup.php?**', route => route.fulfill({status:500, contentType:'application/json', body:'{"success":false}'}));
         await page.locator('#add_scanned_item').click();
-        await page.waitForFunction(() => document.querySelector('#scan_status').textContent.includes('could not be checked'));
+        await page.getByRole('heading', {name: 'Barcode lookup needs attention'}).waitFor();
         await page.unroute('**/product_code_lookup.php?**');
         await page.locator('#received_qty').fill('invalid inactive units');
         await page.locator('#quantity_mode').selectOption('packages');

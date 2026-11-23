@@ -196,7 +196,10 @@ const fixture = action => {
         await page.waitForURL('**/inventory_management/inventory_overview.php');
         const invOverview = page.locator('#workspace-guidance');
         await invOverview.waitFor();
-        const invChecklist = invOverview.locator('.store-setup-checklist');
+        assert.equal(await invOverview.locator('.store-setup-checklist').count(), 0);
+        await invOverview.getByRole('link', {name: 'View guidance'}).click();
+        await page.waitForURL('**/auth/help.php');
+        const invChecklist = page.locator('.store-setup-checklist');
         await invChecklist.waitFor();
 
         // 6. Role-specific view in Inventory Workspace
@@ -222,12 +225,12 @@ const fixture = action => {
         ]);
         await page.waitForLoadState('domcontentloaded');
 
-        // Observe updated progress in Inventory Workspace
-        const updatedInvTask = page.locator('#workspace-guidance .setup-task-item', {hasText: 'Products and opening stock'});
+        // Observe updated progress in Inventory Workspace Help
+        const updatedInvTask = invChecklist.locator('.setup-task-item', {hasText: 'Products and opening stock'});
         await updatedInvTask.locator('.setup-task-status:has-text("Confirmed")').waitFor();
-        assert.match(await page.locator('#workspace-guidance .store-setup-checklist').innerText(), /1 of 1 tasks confirmed/);
+        assert.match(await invChecklist.innerText(), /1 of 1 tasks confirmed/);
         assert.match(await updatedInvTask.innerText(), /Confirmed/);
-        assert.equal(await page.locator('#workspace-guidance .setup-task-item', {hasText: 'Store calendar review'}).count(), 0);
+        assert.equal(await invChecklist.locator('.setup-task-item', {hasText: 'Store calendar review'}).count(), 0);
 
         // Verify DB persistence
         setupRows = JSON.parse(fixture('setup_state'));
@@ -292,9 +295,9 @@ const fixture = action => {
         await openHelp();
         const helpChecklist = page.locator('.store-setup-checklist');
         await helpChecklist.waitFor();
-        assert.match(await helpChecklist.innerText(), /2 of 2 tasks confirmed/);
-        assert.match(await helpChecklist.innerText(), /Setup complete/);
-        assert.equal(await helpChecklist.locator('.setup-task-status:has-text("Confirmed")').count(), 2);
+        assert.match(await helpChecklist.innerText(), /1 of 1 tasks confirmed/);
+        assert.match(await helpChecklist.innerText(), /Your tasks complete/);
+        assert.equal(await helpChecklist.locator('.setup-task-status:has-text("Confirmed")').count(), 1);
 
         // Reopening/reloading Help does not change completion state
         await page.reload();

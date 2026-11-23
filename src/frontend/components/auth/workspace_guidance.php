@@ -90,8 +90,8 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
                 </div>
                 <?php else: ?>
                     <?php include __DIR__ . '/workspace_overview.php'; ?>
+                    <?php include __DIR__ . '/store_setup_checklist.php'; ?>
                 <?php endif; ?>
-                <?php include __DIR__ . '/store_setup_checklist.php'; ?>
                 <?php include __DIR__ . '/workspace_guidance_actions.php'; ?>
             </section>
             <?php $guidanceHtml = ob_get_clean(); ?>

@@ -203,9 +203,11 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
                 assert.equal(await page.locator('#' + id).isVisible(), false, id + ' hides while comparing Stock Movement');
             }
             assert.equal(await page.locator('[data-risk-row]:visible').count(), 10);
-            for (const selector of ['#movement-chart-weekly', '#movement-chart-top', '#movement-chart-coverage']) {
+            for (const [selector, maxHeight] of [['#movement-chart-weekly', 144], ['#movement-chart-top', 144], ['#movement-chart-coverage', 96]]) {
                 assert.equal(await page.locator(selector).isVisible(), true, 'The three page charts render when the tab opens: ' + selector);
                 assert.ok(await drawnCanvasPixels(page, selector) > 0, 'The chart draws pixels: ' + selector);
+                const height = await page.locator(selector).evaluate(canvas => canvas.getBoundingClientRect().height);
+                assert.ok(height > 0 && height <= maxHeight, 'The chart stays compact: ' + selector + ' (' + height + 'px)');
             }
             const coverageCounts = page.locator('.sr-coverage-counts li');
             assert.equal(await coverageCounts.count(), 4, 'Coverage keeps a text count beside the chart');

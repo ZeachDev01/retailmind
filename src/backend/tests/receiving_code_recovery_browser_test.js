@@ -100,11 +100,18 @@ function fixture(action) {
         await page.locator('#product_search_scan').fill('UNKNOWN-CARTON-12');
         await page.locator('#product_search_scan').press('Enter');
         await page.locator('#receiving_code_recovery').waitFor({state:'visible'});
+        assert.equal(await page.getByRole('heading', {name:'Barcode not found'}).isVisible(), true);
+        assert.equal(await page.locator('#product_search_status').innerText(), '');
+        assert.equal(await page.locator('#scan_back').isVisible(), false);
         assert.equal(await page.locator('[name=scan_packaging]:checked').count(), 0, 'unknown classification has no default');
         await page.getByLabel('Receiving case', {exact:true}).check();
         await page.locator('#scan_find_existing').click();
+        assert.equal(await page.locator('#scan_find_hint').isVisible(), true);
         await page.locator('#product_search_scan').fill('THEME-ITEM');
-        await page.getByRole('button', {name:'Add Theme Test Item',exact:true}).click();
+        await page.locator('#product_search_scan').press('Enter');
+        const existingItem = page.getByRole('button', {name:'Add Theme Test Item',exact:true});
+        assert.equal(await existingItem.evaluate(button => button === document.activeElement), true);
+        await existingItem.press('Enter');
         assert.match(await page.locator('#scan_package_confirmation').innerText(), /24/);
         assert.equal(await page.locator('.receiving-line').count(), 0, 'unknown carton requires explicit size confirmation before adding');
         await page.locator('#scan_use_units').click();
@@ -114,6 +121,7 @@ function fixture(action) {
         await scan('UNKNOWN-CANCEL');
         await page.getByLabel('Sales Pack', {exact:true}).check();
         assert.match(await page.locator('#scan_packaging_hint').innerText(), /size, barcode and price/);
+        await page.locator('#scan_find_existing').click();
         await page.locator('#scan_back').click();
         assert.equal(await page.locator('#product_search_scan').inputValue(), 'UNKNOWN-CANCEL');
         await page.locator('#scan_cancel').click();
@@ -171,10 +179,10 @@ function fixture(action) {
                 await page.setViewportSize({width,height:1000});
                 await page.emulateMedia({reducedMotion:'reduce'});
                 await page.evaluate(t => {document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;}, theme);
-                await page.locator('#scan_recovery_message').evaluate(el => el.blur());
-                await page.locator('#scan_recovery_message').focus();
+                await page.locator('#scan_recovery_title').evaluate(el => el.blur());
+                await page.locator('#scan_recovery_title').focus();
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-                const box = await page.locator('#scan_recovery_message').boundingBox();
+                const box = await page.locator('#scan_recovery_title').boundingBox();
                 assert(box.y >= 60 && box.y + box.height <= 1000, 'recovery focus clears fixed chrome: ' + JSON.stringify({width,theme,box}));
                 await page.screenshot({path:path.join(output, `recovery-${width}-${theme}.png`),fullPage:true});
             }

@@ -175,8 +175,8 @@ function correction_e(mixed $value): string {
                 <div class="form-group">
                     <label for="refund_id">Refund ID</label>
                     <div class="input-with-affix">
-                        <span class="input-affix">#</span>
-                        <input id="refund_id" class="pos-input" name="refund_id" type="number" min="1" placeholder="1042" autocomplete="off" inputmode="numeric" required>
+                        <span class="input-affix" aria-hidden="true">#</span>
+                        <input id="refund_id" class="pos-input" name="refund_id" type="number" min="1" placeholder="e.g. 1042 from Cash Refunds" autocomplete="off" inputmode="numeric" required>
                     </div>
                 </div>
 
@@ -205,9 +205,10 @@ function correction_e(mixed $value): string {
                     <div class="form-group">
                         <label for="cash_amount">Amount (PHP)</label>
                         <div class="input-with-affix">
-                            <span class="input-affix">₱</span>
-                            <input id="cash_amount" class="pos-input" name="cash_amount" type="number" step="0.01" placeholder="0.00" autocomplete="off" inputmode="decimal">
+                            <span class="input-affix" aria-hidden="true">₱</span>
+                            <input id="cash_amount" class="pos-input" name="cash_amount" type="number" step="0.01" placeholder="e.g. -20.00" autocomplete="off" inputmode="decimal" aria-describedby="cash-amount-hint">
                         </div>
+                        <small id="cash-amount-hint">Use a positive amount for cash in and a negative amount for cash out.</small>
                     </div>
                 </div>
             </fieldset>
@@ -242,7 +243,7 @@ function correction_e(mixed $value): string {
 
             <div class="form-group">
                 <label for="explanation">Reason and approved changes</label>
-                <textarea id="explanation" class="pos-input" name="explanation" required minlength="8" maxlength="2000" rows="3"></textarea>
+                <textarea id="explanation" class="pos-input" name="explanation" required minlength="8" maxlength="2000" rows="3" placeholder="e.g. The customer received PHP 20 more than recorded. Record a PHP 20 cash-out adjustment."></textarea>
             </div>
 
             <label class="correction-confirm-box" for="approve-confirm-check">

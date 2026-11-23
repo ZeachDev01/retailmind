@@ -245,11 +245,6 @@
     user-select: none;
 }
 
-.input-with-affix .pos-input {
-    padding-left: 2rem;
-    width: 100%;
-}
-
 .correction-form .pos-input {
     width: 100%;
     min-height: 42px;
@@ -261,6 +256,10 @@
     font-size: 0.92rem;
     font-family: inherit;
     transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.correction-form .input-with-affix .pos-input {
+    padding-left: 2rem;
 }
 
 .correction-form .pos-input:focus {

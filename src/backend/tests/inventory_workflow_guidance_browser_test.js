@@ -74,15 +74,12 @@ const fixture = action => {
 
         // Inventory invitation opens Help without starting a walkthrough.
         assert.match(await guidanceBanner.locator('h2').innerText(), /Inventory Manager Workspace/);
-        assert.doesNotMatch(await guidanceBanner.locator('h2').innerText(), /Stock monitoring/);
+        assert.equal(await guidanceBanner.locator('.store-setup-checklist').count(), 0);
         await guidanceBanner.getByRole('link', {name: 'View guidance'}).click();
         await page.waitForURL('**/auth/help.php');
         assert.equal(await page.locator('.walkthrough-topic-card').count() > 0, true);
-        await page.getByRole('link', {name: 'Back to workspace'}).click();
-        await guidanceBanner.waitFor();
 
-        // Check Store setup checklist presence
-        const checklist = guidanceBanner.locator('.store-setup-checklist');
+        const checklist = page.locator('.store-setup-checklist');
         await checklist.waitFor();
         assert.match(await checklist.innerText(), /Store setup checklist/);
 
@@ -96,6 +93,8 @@ const fixture = action => {
 
         const calendarTask = checklist.locator('.setup-task-item', {hasText: 'Store calendar review'});
         assert.equal(await calendarTask.count(), 0);
+        await page.getByRole('link', {name: 'Back to workspace'}).click();
+        await guidanceBanner.waitFor();
 
         // Visual screenshot of inventory landing guidance
         for (const theme of ['light', 'dark']) {
