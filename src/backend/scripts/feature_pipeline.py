@@ -292,6 +292,7 @@ def train_and_evaluate(df):
     data = history_at(history, history.date.max())
     training = build_training_rows(history, data.date.max())
     folds = []
+    held_out_daily = []
     totals = {
         h: {
             "actual": [], "predicted": [], "baseline": [],
@@ -430,6 +431,14 @@ def train_and_evaluate(df):
                     pred_frac_map[h] = p_val
                     base_frac_map[h] = b_val
 
+            for h in range(1, 29):
+                held_out_daily.append({
+                    "product_id": pid, "forecast_origin": str(origin.date()),
+                    "target_date": str((origin + pd.Timedelta(days=h)).date()),
+                    "actual_units": holdout_actual[h], "predicted_units": pred_daily_map[h],
+                    "baseline_units": base_daily_map[h],
+                })
+
             for horizon in (7, 14, 28):
                 a = sum(holdout_actual[h] for h in range(1, horizon + 1))
                 p = sum(pred_daily_map[h] for h in range(1, horizon + 1))
@@ -525,6 +534,6 @@ def train_and_evaluate(df):
             "included_products": eligible_pids,
             "excluded_products": [pid for pid in all_products if pid not in eligible_pids],
             "exclusion_reasons": {k: v for k, v in product_exclusion_reasons.items()},
-            "observations": len(data), "folds": folds,
+            "observations": len(data), "folds": folds, "held_out_daily": held_out_daily,
         },
     }

@@ -252,7 +252,7 @@ const fixture = action => {
         assert.equal(await page.locator('.page-subtitle').count(), 0, 'Demand Forecast relies on its status panel instead of a page subtitle');
         const adminStudioNav = page.locator('.forecast-studio-nav');
         assert.equal(await adminStudioNav.count(), 1, 'Administrator uses the shared forecasting studio navigation');
-        assert.equal(await adminStudioNav.locator('a').count(), 5, 'Administrator sees five permitted forecasting destinations');
+        assert.equal(await adminStudioNav.locator('a').count(), 6, 'Administrator sees six permitted forecasting destinations');
         for (const label of ['Data readiness', 'Model review', 'Demand forecast', 'Exceptions']) {
             assert.ok((await adminStudioNav.innerText()).includes(label), 'Administrator navigation includes ' + label);
         }

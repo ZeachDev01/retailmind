@@ -242,6 +242,7 @@ $managerInventoryItems = [];
 $administratorForecastingItems = [
     ['path' => 'components/report/data_readiness.php', 'icon' => 'accept_database', 'label' => 'Data Readiness'],
     ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'process', 'label' => 'Model Training'],
+    ['path' => 'components/report/forecast_analytics.php', 'icon' => 'combo_chart', 'label' => 'Forecast Analytics'],
     ['path' => 'components/administrator/model_review.php', 'icon' => 'combo_chart', 'label' => 'Model Review & Approval'],
     ['path' => 'components/report/predictions.php', 'icon' => 'positive_dynamic', 'label' => 'Demand Forecast'],
     ['path' => 'components/report/forecast_exceptions.php', 'icon' => 'disclaimer', 'label' => 'Forecast Exceptions'],

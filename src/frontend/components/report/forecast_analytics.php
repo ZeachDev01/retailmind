@@ -6,8 +6,8 @@ use App\Forecasting\DemandForecastService;
 use App\Forecasting\CandidateEvaluationService;
 use App\Forecasting\ReplenishmentQueueService;
 
-require_role(['super_admin']);
-require_capability(RoleCapabilityPolicy::CONFIGURE_MODELS);
+require_role(['admin', 'super_admin']);
+require_capability(RoleCapabilityPolicy::VIEW_FORECAST_ANALYTICS);
 
 function analytics_empty_state(string $icon, string $title, string $description, string $path, string $action): void
 {
@@ -29,30 +29,38 @@ function analytics_empty_state(string $icon, string $title, string $description,
 $storeId = store_scope_id($pdo);
 $saleUnitsSql = sales_units_sql($pdo, 'si');
 
-// 1. Determine currently displayed forecast and model version
+// Explicit run selection never falls back to another model's evidence.
 $demandService = new DemandForecastService($pdo, new CandidateEvaluationService($pdo), new ReplenishmentQueueService($pdo));
-$latestJobId = $demandService->getLatestSuccessfulJobId();
-
-$displayedModelVersion = null;
-$forecastOrigin = null;
-if ($latestJobId) {
-    $stmt = $pdo->prepare("SELECT model_version, forecast_origin FROM demand_forecasts WHERE job_id = ? LIMIT 1");
-    $stmt->execute([$latestJobId]);
-    $jobMeta = $stmt->fetch(PDO::FETCH_ASSOC);
-    if ($jobMeta) {
-        $displayedModelVersion = $jobMeta['model_version'];
-        $forecastOrigin = $jobMeta['forecast_origin'];
+$completedRuns = $pdo->query("SELECT training_run_id, model_version, started_at, metrics_json FROM model_training_runs WHERE status='completed' ORDER BY training_run_id DESC")->fetchAll(PDO::FETCH_ASSOC);
+$selectedRun = null;
+$requestedRun = $_GET['training_run_id'] ?? null;
+$requestedVersion = $_GET['model_version'] ?? null;
+foreach ($completedRuns as $run) {
+    if (($requestedRun !== null && is_scalar($requestedRun) && (string)$run['training_run_id'] === (string)$requestedRun)
+        || ($requestedRun === null && $requestedVersion !== null && is_string($requestedVersion) && $run['model_version'] === $requestedVersion)
+        || ($requestedRun === null && $requestedVersion === null)) {
+        $selectedRun = $run;
+        break;
     }
 }
+if (($requestedRun !== null || $requestedVersion !== null) && !$selectedRun) {
+    http_response_code(404);
+    exit('Completed training candidate not found.');
+}
+$displayedModelVersion = $selectedRun['model_version'] ?? null;
+$runEvidence = json_decode((string)($selectedRun['metrics_json'] ?? ''), true) ?: [];
+$runMetadata = $runEvidence['metadata'] ?? [];
+$historicalDaily = $runMetadata['held_out_daily'] ?? [];
+$historicalProducts = array_values(array_unique(array_column($historicalDaily, 'product_id')));
+$historicalProduct = is_string($_GET['product_id'] ?? null) ? $_GET['product_id'] : (string)($historicalProducts[0] ?? '');
+$historicalDaily = array_values(array_filter($historicalDaily, static fn(array $row): bool => (string)$row['product_id'] === $historicalProduct));
+$forecastOrigin = null;
 
 // Model governance settings
 $govStmt = $pdo->query("SELECT setting_key, setting_value FROM platform_settings WHERE setting_key IN ('ml_approved_model_version', 'ml_observation_mode', 'ml_recommendations_suspended', 'demo_import_metadata', 'demo_replay_result')");
 $govSettings = $govStmt ? $govStmt->fetchAll(PDO::FETCH_KEY_PAIR) : [];
 
 $approvedModel = $govSettings['ml_approved_model_version'] ?? null;
-if (!$displayedModelVersion) {
-    $displayedModelVersion = $approvedModel ?: null;
-}
 
 $observationMode = in_array($govSettings['ml_observation_mode'] ?? '0', ['1', 'true'], true);
 $recommendationsSuspended = in_array($govSettings['ml_recommendations_suspended'] ?? '0', ['1', 'true'], true);
@@ -61,13 +69,19 @@ $hasDemoReplay = !empty($govSettings['demo_replay_result']);
 // 2. Fetch candidate evaluations for this specific model version
 $evalService = new CandidateEvaluationService($pdo);
 $evaluations = $displayedModelVersion ? $evalService->getEvaluationsByModelVersion($displayedModelVersion) : [];
+if (isset($runEvidence['evaluations']) && is_array($runEvidence['evaluations'])) {
+    $evaluations = [];
+    foreach ($runEvidence['evaluations'] as $horizon => $metrics) {
+        $evaluations[] = ['horizon_days' => (int)$horizon] + $metrics;
+    }
+}
 $evalByHorizon = [];
 foreach ($evaluations as $e) {
     $evalByHorizon[(int)$e['horizon_days']] = $e;
 }
 
 // 2b. Prediction Performance Evidence (honest evidence matched with subsequent Store sales outcomes)
-$perfEvidence = $demandService->getPredictionPerformanceEvidence(null, $displayedModelVersion);
+$perfEvidence = $demandService->getPredictionPerformanceEvidence(null, $displayedModelVersion ?? 'none');
 
 // 3. Demo status indicator
 $isDemoMode = false;
@@ -100,10 +114,11 @@ try {
         JOIN products p ON df.product_id = p.product_id
         WHERE df.target_date <= CURDATE()
           AND j.trigger_type = 'forecast_generation' AND j.status = 'succeeded'
+          AND df.model_version = ?
         ORDER BY df.target_date DESC, df.product_id ASC
         LIMIT 25
     ");
-    $stmt->execute();
+    $stmt->execute([$displayedModelVersion ?? 'none']);
     $actualVsForecast = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {}
 
@@ -284,6 +299,44 @@ function format_wape_metric(?float $val, ?string $reason): string {
         </div>
 
         <?php forecast_workflow(''); ?>
+        <section class="model-context-card" aria-labelledby="candidate-evidence-title">
+            <h2 id="candidate-evidence-title">Historical candidate evaluation</h2>
+            <form method="get">
+                <label for="analytics-run">Completed training run</label>
+                <select id="analytics-run" name="training_run_id">
+                    <?php foreach ($completedRuns as $run): ?>
+                    <option value="<?= (int)$run['training_run_id'] ?>" <?= $selectedRun && $selectedRun['training_run_id'] === $run['training_run_id'] ? 'selected' : '' ?>>Run #<?= (int)$run['training_run_id'] ?> � <?= htmlspecialchars($run['model_version']) ?> � <?= htmlspecialchars($run['started_at']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <button type="submit" class="btn btn-secondary">View candidate</button>
+            </form>
+            <?php if ($selectedRun): ?>
+            <p>Training run #<?= (int)$selectedRun['training_run_id'] ?> � Candidate <code><?= htmlspecialchars($displayedModelVersion) ?></code> � Qualification: <?= htmlspecialchars($runEvidence['outcome'] ?? $runMetadata['outcome'] ?? 'Not recorded') ?><?= isset($runMetadata['job_id']) ? ' � Job #' . (int)$runMetadata['job_id'] : '' ?></p>
+            <p>Source: <?= htmlspecialchars($runMetadata['evidence_label'] ?? 'Not recorded') ?>. History: <?= htmlspecialchars($runMetadata['data_window_start'] ?? 'Not recorded') ?> to <?= htmlspecialchars($runMetadata['data_window_end'] ?? 'Not recorded') ?>.</p>
+            <?php else: ?><p>No completed training candidates yet.</p><?php endif; ?>
+            <p>Viewing evidence does not approve a model, advance Store observation or enable buying guidance.</p>
+            <h3>Held-out daily predictions</h3>
+            <p>Each historical fold was fitted on earlier records. These are evaluation outputs, separate from the final candidate fitted on all training history and from prospective Store observation. Original source dates are unchanged.</p>
+            <?php if (!$historicalDaily): ?>
+                <p>No held-out daily predictions recorded for this candidate. Aggregate quality results may still be available below.</p>
+            <?php else: ?>
+                <form method="get">
+                    <input type="hidden" name="training_run_id" value="<?= (int)$selectedRun['training_run_id'] ?>">
+                    <label for="analytics-product">Historical Product ID</label>
+                    <select id="analytics-product" name="product_id"><?php foreach ($historicalProducts as $id): ?><option value="<?= htmlspecialchars((string)$id) ?>" <?= (string)$id === $historicalProduct ? 'selected' : '' ?>><?= htmlspecialchars((string)$id) ?></option><?php endforeach; ?></select>
+                    <button type="submit" class="btn btn-secondary">Compare product</button>
+                </form>
+                <canvas id="historicalChart" role="img" aria-label="Held-out actual and predicted daily units; exact values in the following table"></canvas>
+                <div class="table-wrap"><table class="data-table" aria-label="Candidate held-out daily evidence">
+                    <thead><tr><th scope="col">Product ID</th><th scope="col">Forecast origin</th><th scope="col">Original target date</th><th scope="col">Actual units</th><th scope="col">Predicted units</th><th scope="col">Weekly baseline units</th></tr></thead>
+                    <tbody><?php foreach ($historicalDaily as $row): ?><tr>
+                        <?php foreach (['product_id', 'forecast_origin', 'target_date', 'actual_units', 'predicted_units', 'baseline_units'] as $key): ?><td><?= htmlspecialchars((string)$row[$key]) ?></td><?php endforeach; ?>
+                    </tr><?php endforeach; ?></tbody>
+                </table></div>
+            <?php endif; ?>
+            <?php if ($hasDemoReplay): ?><p><a href="forecast_replay.php">Separately fitted historical replay</a> uses its own identified experiment and metrics; it is not evidence produced by the selected final candidate.</p><?php endif; ?>
+        </section>
+
         <?php if ($observationMode && !$recommendationsSuspended): ?>
             <p class="forecast-notice" role="status">Observation only. Forecasts are not approved for routine buying.</p>
         <?php endif; ?>
@@ -373,7 +426,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
             </div>
 
             <div class="analytics-tab-panel chart-card" id="analytics-panel-actual" role="tabpanel" aria-labelledby="analytics-tab-actual" data-analytics-panel="actual">
-                <h2>Forecasts vs Recorded Sales <?php forecast_help('sales-comparison-help', 'Recorded units by product and date. Forecasts are blue; recorded sales are green.', 'About the sales comparison'); ?></h2>
+                <h2>Subsequent Store forecasts vs recorded sales <?php forecast_help('sales-comparison-help', 'Recorded units by product and date. Forecasts are blue; recorded sales are green.', 'About the sales comparison'); ?></h2>
                 <?php if (empty($actualChartData)): ?>
                     <?php analytics_empty_state('bar-chart', 'Ready for your first comparison', 'Compare saved forecasts once their target dates have recorded sales.', 'components/report/data_readiness.php', 'Check data readiness'); ?>
                 <?php else: ?><canvas id="actualChart" role="img" aria-label="Recorded forecast and sales comparison"></canvas>
@@ -644,6 +697,7 @@ function format_wape_metric(?float $val, ?string $reason): string {
 </div>
 
 <script>
+const historicalData = <?= json_encode($historicalDaily, JSON_HEX_TAG) ?>;
 const featureData = <?= json_encode(['labels' => array_keys($featureImportance), 'values' => array_values($featureImportance)], JSON_HEX_TAG) ?>;
 const trendData = <?= json_encode($trainingTrend, JSON_HEX_TAG) ?>;
 const actualData = <?= json_encode($actualChartData, JSON_HEX_TAG) ?>;
@@ -811,14 +865,17 @@ const redrawAnalytics = () => {
     if (activeTab) drawAnalyticsPanel(activeTab.dataset.analyticsTab);
 };
 
+const drawHistorical = () => drawBars('historicalChart', historicalData.map(x => x.target_date), [{values: historicalData.map(x => x.predicted_units), fill: '#2563eb'}, {values: historicalData.map(x => x.actual_units), fill: '#16a34a'}], ['Predicted', 'Actual']);
+drawHistorical();
 const redrawAll = () => {
+    drawHistorical();
     drawAnalyticsPanel('features');
     drawAnalyticsPanel('trend');
     drawAnalyticsPanel('actual');
 };
 
-window.addEventListener('retailmind:themechange', redrawAnalytics);
-window.addEventListener('resize', redrawAnalytics);
+window.addEventListener('retailmind:themechange', () => { redrawAnalytics(); drawHistorical(); });
+window.addEventListener('resize', () => { redrawAnalytics(); drawHistorical(); });
 
 if (window.MutationObserver) {
     const themeObserver = new MutationObserver(mutations => {
