@@ -79,12 +79,6 @@ function current_workspace_roles(?string $primaryRole = null): array
         $roles = array_values(array_unique(array_merge(['super_admin'], $roles)));
     }
 
-    // ADR-0030: the Super Administrator workspace is local-only. Tunnel
-    // sessions keep every other assigned workspace.
-    if (is_tunnel_request()) {
-        $roles = array_values(array_filter($roles, static fn(string $role): bool => $role !== 'super_admin'));
-    }
-
     return $roles;
 }
 
@@ -307,14 +301,6 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
         $_SESSION['display_name'] = $user['display_name'];
         $_SESSION['roles'] = $assignedRoles;
         $availableWorkspaces = current_workspace_roles((string)$user['role_name']);
-        if ($availableWorkspaces === []) {
-            // ADR-0030: tunnel sessions cannot use the Super Administrator workspace.
-            App\Core\Session::destroy();
-            access_denied_page(
-                'The Super Administrator workspace is only available on the Store computer.',
-                'Super Administrator workspace · local only'
-            );
-        }
         $lastWorkspace = '';
         try {
             $preference = $pdo->prepare('SELECT last_workspace_role FROM users WHERE user_id = ?');
@@ -407,14 +393,6 @@ function validate_current_session(PDO $pdo): void
     $assignedRoles = user_role_names($pdo, (int)$_SESSION['user_id'], (string)$user['role_name']);
     $_SESSION['roles'] = $assignedRoles;
     $availableWorkspaces = current_workspace_roles((string)$user['role_name']);
-    if ($availableWorkspaces === []) {
-        // ADR-0030: tunnel sessions cannot use the Super Administrator workspace.
-        App\Core\Session::destroy();
-        access_denied_page(
-            'The Super Administrator workspace is only available on the Store computer.',
-            'Super Administrator workspace · local only'
-        );
-    }
     $_SESSION['role'] = $selectedWorkspace !== null
         && in_array($selectedWorkspace, $availableWorkspaces, true)
         ? $selectedWorkspace
@@ -440,7 +418,6 @@ function require_role(array $allowed_roles): void
         exit;
     }
     validate_current_session($pdo);
-    require_workspace_access();
     // Issue #86: the active workspace is authoritative. POS-adjacent pages
     // are evaluated from the single selected workspace (current_role()),
     // never from the union of all assigned roles.
@@ -461,22 +438,6 @@ function role_capability_policy(): App\Authorization\RoleCapabilityPolicy
 
 // is_remote_request() lives in bootstrap/app.php (loaded above) so tunnel hosts
 // are classified once for every caller (ADR-0030).
-
-function workspace_blocked_over_tunnel(?string $role = null): bool
-{
-    $role ??= current_role();
-    return $role === 'super_admin' && is_tunnel_request();
-}
-
-function require_workspace_access(): void
-{
-    if (workspace_blocked_over_tunnel()) {
-        access_denied_page(
-            'The Super Administrator workspace is only available on the Store computer. Switch to another workspace to keep working.',
-            'Super Administrator workspace · local only'
-        );
-    }
-}
 
 function require_local_request(string $message = 'This action is not available during remote monitoring.'): void
 {
@@ -544,7 +505,6 @@ function require_any_capability(
         exit;
     }
     validate_current_session($pdo);
-    require_workspace_access();
     foreach ($capabilities as $capability) {
         if (has_capability((string)$capability, $targetRole, $context)) {
             return;
@@ -587,7 +547,6 @@ function logout_user(): void
 
 function redirect_by_role(): void
 {
-    require_workspace_access();
     header('Location: ' . app_url(App\Authorization\RoleWorkspaceRouter::pathFor(current_role())));
     exit;
 }

@@ -2,11 +2,25 @@
 
 Verified locally for #421 on 2026-11-04 (Asia/Manila). This is the fresh isolated Demo; October databases, passwords and Laragon paths in earlier guide revisions are obsolete.
 
+## Four-role panel walkthrough
+
+Start at [Demo login](http://127.0.0.1:8093/?login=1) and open one browser profile per role. Use the Demo-only accounts below.
+
+1. **Super Administrator** shows accounts and role permissions, opens Import Sales History, and previews the three-row `m5-import-preview.csv` in the Demo home. Discard the preview after showing the validated rows. The full M5 history is already loaded.
+2. **Super Administrator** requests training from the current **Model Training** page and points out the new job ID. Continue to the next roles while Python runs.
+3. **Administrator** opens **Model Review** to show candidate checks and the Store approval boundary.
+4. **Inventory Manager** shows stock-rule recommendations and records Demo stock receiving. For the live sale, use a Demo item with a selling price and barcode. **Cashier** opens a shift on **Demo Front Counter**, sells the received item, and shows its receipt. This sequence creates Demo inventory and POS records.
+5. Return to the training job and open **Historical M5 comparison** or **Forecast Analytics**. Identify the live job by ID and label the stored historical replay as prepared evidence.
+
+The expanded Administrator workflow, including Administrator import, training, configuration, and Analytics, is tracked in [issue #499](https://github.com/ZeachDev01/retailmind/issues/499). The restored checkout uses the existing Super Administrator pages for those steps.
+
+On 2026-11-23, all four Demo accounts reached their role pages, the three-row CSV preview opened, and the Cashier could select Demo Front Counter. The running worker processed rehearsal job **#6** in 39 seconds. The candidate failed quality checks and no model was approved. The rehearsal did not submit receiving or checkout.
+
 ## Open the prepared Demo
 
-Open [Demo login](http://127.0.0.1:8093/?login=1). Accounts are `demo_super_admin`, `demo_admin`, `demo_inventory_manager`, and `demo_cashier`. Their Demo-only password and exact environment are recorded outside Git in `C:/Users/Mike/AppData/Local/Temp/retailmind-421-demo-handoff.md` and the persistent Demo home. No operational credentials are needed.
+Open [Demo login](http://127.0.0.1:8093/?login=1). Accounts are `demo_super_admin`, `demo_admin`, `demo_inventory_manager`, and `demo_cashier`. Their Demo-only password is in the `DEMO_PASSWORD` field of `C:/Users/Mike/AppData/Local/retailmind-demos/m5-421-20261103/environment.json`.
 
-The database is `retailmind_demo_m5_421_20261103` on the separate loopback MariaDB instance at `127.0.0.1:3307`. PHP serves only `127.0.0.1:8093` from `C:/xampp/htdocs/retailmind/.worktrees/integration-421`. Keep that checkout: its model artifacts and server paths are in use. Sessions and recovery storage are separate from the Store.
+The database is `retailmind_demo_m5_421_20261103` on the separate loopback MariaDB instance at `127.0.0.1:3307`. PHP serves only `127.0.0.1:8093` from `C:/xampp/htdocs/retailmind/.worktrees/demo-m5-421`, restored at the previously verified commit `6a135087` on 2026-11-23. Sessions, model storage, and recovery storage are separate from the Store.
 
 ## Browser walkthrough
 
@@ -51,11 +65,12 @@ Use a fresh PowerShell process. Do not rerun setup, preparation, training or imp
 
 ```powershell
 $m5Home = 'C:/Users/Mike/AppData/Local/retailmind-demos/m5-421-20261103'
-Set-Location 'C:/xampp/htdocs/retailmind/.worktrees/integration-421'
+Set-Location 'C:/xampp/htdocs/retailmind/.worktrees/demo-m5-421'
 $m5Environment = Get-Content -LiteralPath "$m5Home/environment.json" -Raw | ConvertFrom-Json
 $m5Environment.PSObject.Properties | ForEach-Object {
     [Environment]::SetEnvironmentVariable($_.Name, [string]$_.Value, 'Process')
 }
+$env:Path = "C:/xampp/php;$env:Path"
 if (-not (Get-NetTCPConnection -State Listen -LocalPort 3307 -ErrorAction SilentlyContinue)) {
     $m5Data = "$m5Home/mysql-data"
     Start-Process 'C:/xampp/mysql/bin/mysqld.exe' -WindowStyle Hidden -ArgumentList @(
@@ -74,7 +89,7 @@ if (-not (Get-NetTCPConnection -State Listen -LocalPort 8093 -ErrorAction Silent
 }
 ```
 
-The starter refuses a busy port and records process IDs/logs under `.scratch/public-sales-demo/retailmind_demo_m5_421_20261103/` in the integration checkout. The current browser-only session uses an application server with no continuous worker; the starter intentionally starts both after restart. MariaDB logs are under the persistent home's `mysql-data/server.log`; prepared data, credentials and verification evidence remain outside Git.
+The starter launches both the PHP server and Python worker. It refuses a busy port and records process IDs and logs under `.scratch/public-sales-demo/retailmind_demo_m5_421_20261103/` in the Demo checkout. MariaDB logs are under the persistent home's `mysql-data/server.log`. Prepared data, credentials, and verification evidence remain outside Git.
 
 No Windows startup task was installed or executed as part of this work. Manual server recovery was exercised; a complete Windows reboot was not. Operational environment files and Store data were preserved. See the verification report for exact checks and blocked stages.
 

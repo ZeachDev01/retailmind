@@ -3,8 +3,7 @@
 declare(strict_types=1);
 
 // Contract tests for ADR-0030: tunnel sessions have full workspace parity for
-// admin, inventory_manager, and cashier; the Super Administrator workspace
-// stays local-only.
+// every assigned role, including the Super Administrator workspace.
 
 $failures = [];
 $assert = static function (bool $condition, string $message) use (&$failures): void {
@@ -31,7 +30,7 @@ $evalFunction = static function (string $source, string $name): void {
     }
     eval(substr($source, $start, $end - $start + 3));
 };
-foreach (['current_role', 'current_roles', 'current_workspace_roles', 'workspace_blocked_over_tunnel'] as $functionName) {
+foreach (['current_role', 'current_roles', 'current_workspace_roles'] as $functionName) {
     $evalFunction($authSource, $functionName);
 }
 
@@ -83,30 +82,27 @@ $resetEnv();
 $_SERVER['HTTP_CF_CONNECTING_IP'] = '203.0.113.9';
 $assert(is_remote_request(), 'Cloudflare edge IP without tunnel host stays remote');
 
-echo "\n=== 3. Super Administrator workspace is local-only on tunnels ===\n";
+echo "\n=== 3. Every assigned workspace is available on tunnels ===\n";
 
 $resetEnv();
 $_SERVER['HTTP_HOST'] = 'store.trycloudflare.com';
 $_SESSION['roles'] = ['super_admin', 'admin'];
 $_SESSION['role'] = 'super_admin';
-$assert(workspace_blocked_over_tunnel(), 'Active super_admin workspace is blocked on a tunnel');
-$assert(current_workspace_roles() === ['admin'], 'Tunnel hides the super_admin workspace from the switcher');
+$assert(current_workspace_roles() === ['super_admin', 'admin'], 'Tunnel offers every assigned workspace, including super_admin');
 
 $_SESSION['role'] = 'admin';
-$assert(!workspace_blocked_over_tunnel(), 'Active admin workspace is allowed on a tunnel');
-$assert(current_workspace_roles() === ['admin'], 'Tunnel keeps other assigned workspaces');
+$assert(current_workspace_roles() === ['super_admin', 'admin'], 'Tunnel keeps other assigned workspaces');
 
 $resetEnv();
 $_SERVER['HTTP_HOST'] = 'localhost';
 $_SESSION['role'] = 'super_admin';
-$assert(!workspace_blocked_over_tunnel(), 'super_admin workspace stays available on localhost');
 $assert(current_workspace_roles() === ['super_admin', 'admin'], 'Localhost keeps every assigned workspace');
 
 $_SESSION['roles'] = ['super_admin'];
 unset($_SESSION['role']);
 $resetEnv();
 $_SERVER['HTTP_HOST'] = 'store.trycloudflare.com';
-$assert(current_workspace_roles() === [], 'super_admin-only account has no tunnel workspace');
+$assert(current_workspace_roles() === ['super_admin'], 'super_admin-only account can sign in to its tunnel workspace');
 
 unset($_SESSION['roles'], $_SESSION['role']);
 $resetEnv();
@@ -124,14 +120,10 @@ $assert(str_contains($bootstrapCode, 'function is_tunnel_host('), 'is_tunnel_hos
 $assert(str_contains($bootstrapCode, 'is_tunnel_request()) {'), 'Remote detection short-circuits tunnel requests');
 $assert(str_contains($databaseCode, 'is_tunnel_host($host)'), 'Database host classification reuses the tunnel helper');
 
-$requireRolePos = strpos($authCode, 'function require_role(');
-$requireRoleBody = $requireRolePos === false ? '' : substr($authCode, $requireRolePos, 900);
-$assert(str_contains($requireRoleBody, 'require_workspace_access();'), 'require_role blocks the super_admin workspace on tunnels');
 $assert(str_contains($authCode, "function require_any_capability("), 'Capability gate exists');
-$assert(substr_count($authCode, 'require_workspace_access();') >= 3, 'Every gateway applies the workspace block');
 
 $gatewayFile = (string)file_get_contents($root . '/src/frontend/components/auth/workspace.php');
-$assert(str_contains($gatewayFile, 'current_workspace_roles()'), 'Workspace switcher uses the filtered workspace list');
+$assert(str_contains($gatewayFile, 'current_workspace_roles()'), 'Workspace switcher uses the assigned workspace list');
 
 $loginFile = (string)file_get_contents($root . '/src/backend/includes/auth.php');
 $assert(str_contains($loginFile, '$availableWorkspaces = current_workspace_roles('), 'Sign-in lands on an available workspace');

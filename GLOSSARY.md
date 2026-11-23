@@ -395,7 +395,7 @@ The active role context through which a user accesses RetailMind. A multi-role u
 _Avoid_: Combined permissions, role bundle
 
 **Tunnel Session**:
-A RetailMind session opened through the Store's tunnel link, away from the Store computer. Administrator, Inventory Manager, and Cashier workspaces have the same capabilities as on localhost; the Super Administrator workspace remains local-only.
+A RetailMind session opened through the Store's tunnel link, away from the Store computer. All assigned Workspaces, including Super Administrator, have the same capabilities as on localhost; each user retains only their assigned Workspace permissions.
 _Avoid_: Remote monitoring, read-only remote access, owner-only monitoring
 
 **Stock Status Indicator**:

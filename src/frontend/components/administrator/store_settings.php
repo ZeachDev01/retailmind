@@ -340,7 +340,7 @@ $remoteAccessStatus = (string)($tunnelStatus['status'] ?? 'offline');
                 <div id="remote-url-container" class="remote-url-container<?= (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])) ? '' : ' u-hidden' ?>">
                     <div class="remote-url-top">
                         <label class="remote-url-label" for="remote-public-url">Public Tunnel URL</label>
-                        <span class="remote-url-security-note">Full staff Workspaces &bull; Super Administrator stays local</span>
+                        <span class="remote-url-security-note">All assigned Workspaces &bull; Sign-in required</span>
                     </div>
                     <div class="remote-url-group">
                         <div class="remote-input-wrapper">

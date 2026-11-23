@@ -431,8 +431,6 @@ try {
     $assert(str_contains($bootstrapCode, 'function is_remote_request('), 'bootstrap/app.php defines is_remote_request');
     $assert(str_contains($bootstrapCode, 'function is_tunnel_host('), 'bootstrap/app.php defines is_tunnel_host');
     $assert(str_contains($authCode, 'function require_local_request('), 'auth.php defines require_local_request');
-    $assert(str_contains($authCode, 'function require_workspace_access('), 'auth.php defines require_workspace_access');
-    $assert(str_contains($authCode, 'require_workspace_access();'), 'auth.php applies the tunnel workspace block');
 
 } catch (\Throwable $e) {
     $failures[] = 'Contract threw exception: ' . $e->getMessage() . "\n" . $e->getTraceAsString();
