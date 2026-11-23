@@ -6,6 +6,16 @@ require_once __DIR__ . '/../bootstrap/app.php';
 use App\Forecasting\DemandHistoryService;
 use App\Store\ScheduledDemandDriverService;
 
+class DemandEvidenceCountingPdo extends PDO
+{
+    public int $queries = 0;
+    public function prepare(string $query, array $options = []): PDOStatement|false
+    {
+        $this->queries++;
+        return parent::prepare($query, $options);
+    }
+}
+
 $failures = [];
 $assert = function (bool $condition, string $message) use (&$failures) {
     if (!$condition) {
@@ -19,7 +29,7 @@ $assert = function (bool $condition, string $message) use (&$failures) {
 echo "Testing App\\Forecasting\\DemandHistoryService (Ticket #161)...\n\n";
 
 try {
-    $pdo = new PDO('sqlite::memory:');
+    $pdo = new DemandEvidenceCountingPdo('sqlite::memory:');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     $pdo->exec("
@@ -122,6 +132,24 @@ try {
     $assert(array_column($importOnly, 'classification') === ['valid_demand', 'genuine_zero', 'missing_evidence'], 'Imported quantities, supported zero and absent dates remain distinct');
     $assert(array_column($importOnly, 'valid_sales_units') === [3, 0, 0], 'Bulk imported quantities retain exact units');
     $assert($importOnly[1]['out_of_stock'] === null && $importOnly[1]['price'] === null && $importOnly[1]['is_on_promotion'] === null, 'Imported zero invents no availability, price or promotion evidence');
+    $pdo->exec("INSERT INTO scheduled_demand_drivers VALUES (1,1,'price','2026-09-29','2026-11-23 15:00:00','{\"price\":10}')");
+    $pdo->exec("INSERT INTO sales (sale_id,sale_date) VALUES (1,'2026-11-23 15:00:00'); INSERT INTO stock_movements (product_id,change_qty,moved_at) VALUES (1,30,'2026-11-23 15:00:00')");
+    $pdo->queries = 0;
+    $laterStoreEvidence = $service->getDailyEvidence($pdo, 1, '2026-09-29', '2026-10-20', '2026-10-20 23:59:59');
+    $assert($pdo->queries <= 10, 'Store setup after cutoff keeps imported history query count bounded across dates');
+    $assert(array_slice(array_column($laterStoreEvidence, 'classification'), 0, 3) === ['valid_demand','genuine_zero','missing_evidence'], 'Later price, receiving and sale cannot rewrite earlier history');
+    $assert($laterStoreEvidence[0]['price'] === null, 'A backdated price recorded after cutoff is unavailable');
+    $pdo->exec("UPDATE scheduled_demand_drivers SET effective_date='2026-11-23'; INSERT INTO forecast_sales_imports VALUES(1,'2014-03-01',4),(1,'2026-11-23',9)");
+    $pdo->exec("INSERT INTO sale_items (sale_id,product_id,quantity,unit_price,subtotal) VALUES(1,1,1,10,10); INSERT INTO store_calendar (calendar_date,status,recorded_at) VALUES('2026-11-24','closed','2026-11-23 16:00:00')");
+    $pdo->queries = 0;
+    $nextDay = $service->getDailyEvidence($pdo, 1, '2014-03-01', '2026-11-24', '2026-11-24 23:59:59');
+    $assert($pdo->queries < 100, 'Twelve years of imports plus two Store days use only bounded Store-tail queries');
+    $assert($nextDay[0]['valid_sales_units'] === 4 && $nextDay[0]['price'] === null, 'Later setup preserves original historical imported units and unknown price');
+    $saleDay = $nextDay[count($nextDay)-2];
+    $assert($saleDay['valid_sales_units'] === 1 && $saleDay['source'] === 'pos' && (float)$saleDay['price'] === 10.0, 'Next-cutoff reconstruction preserves POS precedence and known price');
+    $assert($nextDay[count($nextDay)-1]['classification'] === 'closed', 'Next-cutoff reconstruction preserves Store calendar closure');
+    $pdo->exec("DELETE FROM sale_items; DELETE FROM store_calendar; DELETE FROM forecast_sales_imports WHERE sale_date IN ('2014-03-01','2026-11-23')");
+    $pdo->exec('DELETE FROM scheduled_demand_drivers; DELETE FROM sales; DELETE FROM stock_movements');
     $partialImport = $service->getDailyEvidence($pdo, 1, '2026-09-30', '2026-09-30', '2026-09-30 12:00:00')[0];
     $assert($partialImport['classification'] === 'missing_evidence', 'Whole-day imports are unavailable before end of day');
     $pdo->exec("INSERT INTO store_calendar (calendar_date, status, recorded_at) VALUES ('2026-09-30', 'closed', '2026-09-29 12:00:00')");

@@ -40,17 +40,28 @@ class DemandHistoryService
         $current = new DateTime($startDate, $this->timezone);
         $end = new DateTime($endDate, $this->timezone);
         
-        // Imported-only history has no Store evidence to reconstruct per day.
-        // Keep the same classification below, and fall back as soon as Store evidence exists.
+        // Reconstruct only the Store tail; a later delivery or price must not
+        // turn years of earlier imported history into per-day database queries.
         $importOnly = false;
         $importedQuantities = [];
         try {
-            $importOnly = (bool)$pdo->query('SELECT
-                NOT EXISTS (SELECT 1 FROM sales)
-                AND NOT EXISTS (SELECT 1 FROM stock_movements)
-                AND NOT EXISTS (SELECT 1 FROM store_calendar)
-                AND NOT EXISTS (SELECT 1 FROM store_weekly_schedule)
-                AND NOT EXISTS (SELECT 1 FROM scheduled_demand_drivers)')->fetchColumn();
+            $firstStore = $pdo->prepare('SELECT MIN(evidence_date) FROM (
+                SELECT DATE(sale_date) AS evidence_date FROM sales WHERE sale_date <= ?
+                UNION ALL SELECT DATE(moved_at) FROM stock_movements WHERE moved_at <= ?
+                UNION ALL SELECT calendar_date FROM store_calendar WHERE recorded_at <= ?
+                UNION ALL SELECT effective_date FROM store_weekly_schedule WHERE recorded_at <= ?
+                UNION ALL SELECT effective_date FROM scheduled_demand_drivers WHERE scheduled_at <= ?
+            ) AS store_evidence');
+            $firstStore->execute(array_fill(0, 5, $cutoff));
+            $firstStoreDate = $firstStore->fetchColumn();
+            if ($firstStoreDate && $startDate < $firstStoreDate && $firstStoreDate <= $endDate) {
+                $prefixEnd = (new DateTime($firstStoreDate, $this->timezone))->modify('-1 day')->format('Y-m-d');
+                return array_merge(
+                    $this->getDailyEvidence($pdo, $productId, $startDate, $prefixEnd, $cutoff),
+                    $this->getDailyEvidence($pdo, $productId, $firstStoreDate, $endDate, $cutoff)
+                );
+            }
+            $importOnly = !$firstStoreDate || $firstStoreDate > $endDate;
             if ($importOnly) {
                 $imports = $pdo->prepare('SELECT sale_date, quantity FROM forecast_sales_imports
                     WHERE product_id = ? AND sale_date >= ? AND sale_date <= ?');
