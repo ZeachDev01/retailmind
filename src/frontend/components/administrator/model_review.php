@@ -92,6 +92,27 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $summary = $activationService->getApprovalSummary();
+$demoReview = null;
+$demoDatabase = (string)$pdo->query('SELECT DATABASE()')->fetchColumn();
+if (preg_match('/^retailmind_demo_[a-z0-9_]+$/D', $demoDatabase)
+    && in_array(strtolower((string)env('APP_ENV')), ['development', 'test'], true)
+    && in_array((string)env('DB_HOST'), ['localhost', '127.0.0.1', '::1'], true)) {
+    $requestedRun = $_GET['training_run_id'] ?? null;
+    $demoRuns = $pdo->query("SELECT training_run_id, model_version, metrics_json FROM model_training_runs
+        WHERE status='completed' AND model_version LIKE 'demo_%' ORDER BY training_run_id DESC")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($demoRuns as $run) {
+        if ($requestedRun === null || (is_scalar($requestedRun) && (string)$run['training_run_id'] === (string)$requestedRun)) {
+            $demoReview = $run;
+            break;
+        }
+    }
+    if ($requestedRun !== null && !$demoReview) {
+        http_response_code(404);
+        exit('Completed Demo training candidate not found.');
+    }
+}
+$demoEvidence = json_decode((string)($demoReview['metrics_json'] ?? ''), true) ?: [];
+$demoMetadata = $demoEvidence['metadata'] ?? [];
 
 $reviewEscape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 $reviewNumber = static fn($value): ?float => is_numeric($value) && is_finite((float)$value) && (float)$value >= 0 ? (float)$value : null;
@@ -168,6 +189,15 @@ $reviewBars = static function (array $rows) use ($reviewEscape): void {
 
         <div class="model-review-content">
             <?php require __DIR__ . '/../report/forecast_scheduler_health.php'; ?>
+            <?php if ($demoReview): ?>
+            <section class="dashboard-section model-review-panel" aria-labelledby="demo-review-heading">
+                <h2 id="demo-review-heading">Completed historical Demo evidence</h2>
+                <p>Training run #<?= (int)$demoReview['training_run_id'] ?> · Candidate <?= $reviewEscape($demoReview['model_version']) ?> · Qualification: <?= $reviewEscape($demoEvidence['outcome'] ?? $demoMetadata['outcome'] ?? 'Not recorded') ?><?= isset($demoMetadata['job_id']) ? ' · Job #' . (int)$demoMetadata['job_id'] : '' ?></p>
+                <p>Source: <?= $reviewEscape($demoMetadata['evidence_label'] ?? 'Demo evidence; provenance unverified') ?>. History: <?= $reviewEscape($demoMetadata['data_window_start'] ?? 'Not recorded') ?> to <?= $reviewEscape($demoMetadata['data_window_end'] ?? 'Not recorded') ?>.</p>
+                <p>This completed run is separate from any queued or running job. Historical Demo evaluation provides no usable Store observation days and cannot activate a Store model or provide operational buying guidance.</p>
+                <a href="<?= $reviewEscape(app_url('components/report/forecast_analytics.php') . '?training_run_id=' . (int)$demoReview['training_run_id']) ?>">View this run's quality checks and historical Analytics</a>
+            </section>
+            <?php endif; ?>
             <?php if ($message): ?>
                 <div id="review-feedback" class="alert <?= $reviewEscape($messageClass) ?>" role="status"><?= $reviewEscape($message) ?></div>
             <?php endif; ?>
