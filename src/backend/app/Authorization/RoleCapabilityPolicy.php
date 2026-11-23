@@ -73,9 +73,10 @@ final class RoleCapabilityPolicy
             self::VIEW_FORECASTS,
             self::GENERATE_FORECASTS,
             self::CONFIGURE_TRAINING_SETTINGS,
+            self::RETRAIN_MODELS,
             // Scoped model review, approval/replacement, and rollback for the
             // local Administrator (ADR-0022). Retains technical setup authority
-            // (CONFIGURE_MODELS, RETRAIN_MODELS) with the Super Administrator.
+            // (CONFIGURE_MODELS) with the Super Administrator.
             self::APPROVE_MODELS,
             self::REPLACE_MODELS,
             self::ROLL_BACK_MODELS,
