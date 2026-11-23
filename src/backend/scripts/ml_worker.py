@@ -19,6 +19,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
+from m5_sales_experiment import SOURCE_URL as M5_SOURCE_URL, SOURCE_REVISION as M5_SOURCE_REVISION
 from feature_pipeline import (FEATURE_COLUMNS, FEATURE_VERSION, build_feature_matrix,
                               history_at, normalize_history, train_and_evaluate)
 
@@ -106,7 +107,7 @@ def recover_expired_leases(conn):
                 operator_message = 'Job failed: lease expired and maximum retries (3) exceeded.',
                 diagnostic_reference = 'LEASE_TIMEOUT_EXHAUSTED'
             WHERE status = 'running' 
-              AND lease_expires_at < NOW()
+              AND lease_expires_at <= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
               AND attempts >= 3
         """)
         conn.commit()
@@ -120,7 +121,7 @@ def claim_job(conn):
                 SELECT job_id, trigger_type, attempts, model_version, evidence_cutoff 
                 FROM ml_jobs 
                 WHERE status = 'queued' 
-                   OR (status = 'running' AND lease_expires_at < NOW() AND attempts < 3)
+                   OR (status = 'running' AND lease_expires_at <= DATE_SUB(NOW(), INTERVAL 5 MINUTE) AND attempts < 3)
                 ORDER BY queued_at ASC 
                 LIMIT 1 
                 FOR UPDATE
@@ -130,7 +131,7 @@ def claim_job(conn):
                 SELECT job_id, trigger_type, attempts 
                 FROM ml_jobs 
                 WHERE status = 'queued' 
-                   OR (status = 'running' AND lease_expires_at < NOW() AND attempts < 3)
+                   OR (status = 'running' AND lease_expires_at <= DATE_SUB(NOW(), INTERVAL 5 MINUTE) AND attempts < 3)
                 ORDER BY queued_at ASC 
                 LIMIT 1 
                 FOR UPDATE
@@ -200,7 +201,6 @@ def process_job(conn, job):
             else:
                 raise ValueError(f"Unknown job trigger type: {trigger}")
 
-            renew_lease(conn, job_id)
             cursor.execute("""
                 UPDATE ml_jobs 
                 SET status = 'succeeded', 
@@ -471,16 +471,26 @@ def run_model_retraining(conn, cursor, job_id):
         """, (version, horizon, metrics['mae'], metrics['rmse'], wape,
               metrics['baseline_mae'], metrics['baseline_rmse'], baseline, outcome,
               metrics['missing_metric_reason'], meta['data_window_start'], meta['data_window_end']))
+    source = context.get('source') or {}
+    experiment = source.get('experiment') or {}
+    evidence_label = 'Store evidence known at each completed-day cutoff'
+    if context['dataset_kind'] == 'demo':
+        evidence_label = 'Demo evidence; provenance unverified'
+        if source.get('source_kind') == 'uci_online_retail':
+            evidence_label = 'External Demo: UCI Online Retail; not Store accuracy'
+        elif (source.get('source_kind') == 'm5_daily'
+              and experiment.get('source_url') == M5_SOURCE_URL
+              and experiment.get('source_revision') == M5_SOURCE_REVISION
+              and experiment.get('seed') == 42
+              and re.fullmatch(r'[a-f0-9]{64}', experiment.get('source_sha256', ''))):
+            evidence_label = 'External Demo: M5 original daily sales; not Store accuracy'
     meta.update(context)
     meta.update({
         'model_name': model_name, 'model_version': version, 'job_id': job_id,
         'created_at': datetime.now(timezone.utc).isoformat(),
         'outcome': 'passed' if all(o == 'passed' for o in outcomes) else
                    'incomplete' if 'incomplete' in outcomes else 'failed',
-        'evidence_label': ('External Demo: UCI Online Retail; not Store accuracy'
-                           if (context.get('source') or {}).get('source_kind') == 'uci_online_retail'
-                           else 'Demo evidence; provenance unverified') if context['dataset_kind'] == 'demo'
-                          else 'Store evidence known at each completed-day cutoff',
+        'evidence_label': evidence_label,
     })
     cursor.execute("""
         INSERT INTO model_training_runs

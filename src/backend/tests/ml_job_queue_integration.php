@@ -34,10 +34,10 @@ try {
 }
 
 try {
-    $service->enqueue('model_retraining', 1, 'admin');
-    $assert(false, 'Admin should not be able to enqueue model_retraining');
+    $service->enqueue('model_retraining', 1, 'inventory_manager');
+    $assert(false, 'Inventory Manager should not be able to enqueue model_retraining');
 } catch (RuntimeException $e) {
-    $assert(str_contains($e->getMessage(), 'Unauthorized'), 'Expected auth error for admin');
+    $assert(str_contains($e->getMessage(), 'Unauthorized'), 'Expected auth error for Inventory Manager');
 }
 
 $pdo->exec("TRUNCATE TABLE ml_jobs");

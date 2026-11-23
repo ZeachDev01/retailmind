@@ -207,7 +207,12 @@ try {
     $signals = $signalSource->store();
 
     assert_same(1, $signals['forecasting_failure']['value'] ?? 0, 'Preserved startup diagnostic makes system visibly unhealthy after recovery');
-    assert_true(str_contains($signals['forecasting_failure']['explanation'] ?? '', 'Database service unavailable after startup retries'), 'Signal explains startup database unavailability');
+    assert_true(str_contains($signals['forecasting_failure']['explanation'] ?? '', 'DB_STARTUP_TIMEOUT'), 'Signal provides a diagnostic reference without exposing connection details');
+
+    $clock->now = new DateTimeImmutable('+30 minutes', new DateTimeZone('Asia/Manila'));
+    ForecastingSchedulerService::recordSchedulerCheck(0, null, $storageLogsDir, $clock->now);
+    $signalsIdle = $signalSource->store();
+    assert_same(0, $signalsIdle['forecasting_failure']['value'] ?? 0, 'A successful idle scheduler check resolves a startup outage without requiring a completed job');
 
     // After subsequent job succeeds, health reporting recovers
     $nextSuccessTime = (new DateTime('+1 hour', new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s');
@@ -216,6 +221,7 @@ try {
     assert_same(0, $signalsAfter['forecasting_failure']['value'] ?? 0, 'Signal resolves once subsequent job succeeds');
 
     @unlink($diagFile);
+    @unlink($storageLogsDir . '/forecasting_scheduler_health.json');
     @rmdir($storageLogsDir);
     echo "  ok - Persistent failure surfaces visibly and recovers on subsequent success\n";
 

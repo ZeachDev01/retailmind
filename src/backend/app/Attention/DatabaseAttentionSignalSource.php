@@ -216,9 +216,13 @@ final class DatabaseAttentionSignalSource
                     $diagTime = (string)($lastDiag['timestamp'] ?? '');
                     $latestSuccessRow = $this->row("SELECT completed_at FROM ml_jobs WHERE status = 'succeeded' ORDER BY job_id DESC LIMIT 1");
                     $latestSuccessTime = (string)($latestSuccessRow['completed_at'] ?? '');
+                    $health = \App\Forecasting\ForecastingSchedulerService::getSchedulerHealth($this->storageDir, $this->clock->now());
+                    if (in_array($health['state'], ['idle', 'work_pending'], true)) {
+                        $latestSuccessTime = max($latestSuccessTime, (string)$health['checked_at']);
+                    }
                     if ($diagTime >= $recentCutoff && $diagTime > $latestSuccessTime) {
                         $failureValue = 1;
-                        $failureExplanation = 'Forecasting outage recorded: ' . ($lastDiag['error'] ?? 'Local database outage');
+                        $failureExplanation = 'Forecasting background execution is unavailable. Ask the Super Administrator to check the scheduler log. Reference: ' . ($lastDiag['diagnostic_reference'] ?? 'SCHEDULER_STARTUP_FAILED');
                         $failureDetectedAt = $diagTime;
                     }
                 }

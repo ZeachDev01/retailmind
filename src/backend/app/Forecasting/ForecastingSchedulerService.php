@@ -15,6 +15,34 @@ class ForecastingSchedulerService {
         $this->pdo = $pdo;
     }
 
+    public static function recordSchedulerCheck(int $pendingJobs, ?string $diagnostic = null, ?string $logDir = null, ?\DateTimeImmutable $now = null): void {
+        $logDir ??= dirname(__DIR__, 2) . '/storage/logs';
+        $now ??= new \DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
+        $status = [
+            'checked_at' => $now->setTimezone(new DateTimeZone('Asia/Manila'))->format('Y-m-d H:i:s'),
+            'pending_jobs' => $pendingJobs,
+            'diagnostic_reference' => $diagnostic,
+        ];
+        if (!is_dir($logDir)) mkdir($logDir, 0775, true);
+        if (file_put_contents($logDir . '/forecasting_scheduler_health.json', json_encode($status, JSON_THROW_ON_ERROR), LOCK_EX) === false) {
+            throw new \RuntimeException('SCHEDULER_HEALTH_WRITE_FAILED: check permissions on forecasting storage/logs.');
+        }
+    }
+
+    public static function getSchedulerHealth(?string $logDir = null, ?\DateTimeImmutable $now = null): array {
+        $logDir ??= dirname(__DIR__, 2) . '/storage/logs';
+        $now ??= new \DateTimeImmutable('now', new DateTimeZone('Asia/Manila'));
+        $status = json_decode((string)@file_get_contents($logDir . '/forecasting_scheduler_health.json'), true);
+        if (!is_array($status) || !isset($status['checked_at'], $status['pending_jobs'])) {
+            return ['state' => 'unavailable', 'checked_at' => null, 'diagnostic_reference' => 'SCHEDULER_CHECK_MISSING'];
+        }
+        $checked = \DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', (string)$status['checked_at'], new DateTimeZone('Asia/Manila'));
+        $age = $checked ? $now->getTimestamp() - $checked->getTimestamp() : -1;
+        $status['state'] = !empty($status['diagnostic_reference']) || $age < 0 ? 'unavailable'
+            : ($age > 900 ? 'stale' : ((int)$status['pending_jobs'] > 0 ? 'work_pending' : 'idle'));
+        return $status;
+    }
+
     public static function canAutomaticallyRetry(array $job): bool {
         $diagnostic = (string)($job['diagnostic_reference'] ?? '');
         return ($job['status'] ?? '') === 'failed'
@@ -40,7 +68,9 @@ class ForecastingSchedulerService {
      * Recovers expired worker leases and enforces the 3-attempt ceiling.
      */
     public function recoverExpiredLeases(?DateTime $now = null): int {
-        $nowStr = $now ? $now->format('Y-m-d H:i:s') : (new DateTime('now', new DateTimeZone('Asia/Manila')))->format('Y-m-d H:i:s');
+        $recoveryCutoff = $now ? clone $now : new DateTime('now', new DateTimeZone('Asia/Manila'));
+        $nowStr = $recoveryCutoff->format('Y-m-d H:i:s');
+        $expiredBefore = $recoveryCutoff->modify('-5 minutes')->format('Y-m-d H:i:s');
         try {
             // Fail jobs with expired lease that reached or exceeded 3 attempts
             $stmt1 = $this->pdo->prepare("
@@ -51,10 +81,10 @@ class ForecastingSchedulerService {
                     diagnostic_reference = 'LEASE_TIMEOUT_EXHAUSTED'
                 WHERE status = 'running' 
                   AND lease_expires_at IS NOT NULL 
-                  AND lease_expires_at <= :now 
+                  AND lease_expires_at <= :expired_before
                   AND attempts >= 3
             ");
-            $stmt1->execute(['now' => $nowStr]);
+            $stmt1->execute(['now' => $nowStr, 'expired_before' => $expiredBefore]);
 
             // Re-queue expired lease jobs under 3 attempts for retry on later tick
             $stmt2 = $this->pdo->prepare("
@@ -63,10 +93,10 @@ class ForecastingSchedulerService {
                     lease_expires_at = NULL 
                 WHERE status = 'running' 
                   AND lease_expires_at IS NOT NULL 
-                  AND lease_expires_at <= :now 
+                  AND lease_expires_at <= :expired_before
                   AND attempts < 3
             ");
-            $stmt2->execute(['now' => $nowStr]);
+            $stmt2->execute(['expired_before' => $expiredBefore]);
 
             return $stmt1->rowCount() + $stmt2->rowCount();
         } catch (\Throwable) {
@@ -83,6 +113,7 @@ class ForecastingSchedulerService {
         
         $targetCutoff = (clone $now)->modify('-1 day')->format('Y-m-d');
         $result = [
+            'check_succeeded' => false,
             'forecast_jobs_queued' => 0,
             'retrain_jobs_queued' => 0,
             'observation_jobs_queued' => 0,
@@ -147,6 +178,7 @@ class ForecastingSchedulerService {
             $result
         );
         
+        $result['check_succeeded'] = true;
         return $result;
     }
 

@@ -164,8 +164,10 @@ $reviewBars = static function (array $rows) use ($reviewEscape): void {
     <main class="main-content">
         <header class="page-heading"><div><h1>Model Review</h1></div></header>
         <?php forecast_workflow('review'); ?>
+        <?php if ($hasCandidate): ?><p><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/report/forecast_analytics.php') . '?model_version=' . rawurlencode($summary['candidate_version'])) ?>">View candidate Analytics</a></p><?php endif; ?>
 
         <div class="model-review-content">
+            <?php require __DIR__ . '/../report/forecast_scheduler_health.php'; ?>
             <?php if ($message): ?>
                 <div id="review-feedback" class="alert <?= $reviewEscape($messageClass) ?>" role="status"><?= $reviewEscape($message) ?></div>
             <?php endif; ?>

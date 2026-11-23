@@ -41,7 +41,10 @@ function forecast_workflow(string $current): void
         ];
     } elseif ($role === 'admin') {
         $pages = [
+            ['forecast_import.php', 'Import history', 'cloud-arrow-up', 'system_administrator'],
             ['data_readiness.php', 'Data readiness', 'database-check', 'report'],
+            ['ml_settings.php', 'Model training', 'cpu', 'system_administrator'],
+            ['forecast_analytics.php', 'Analytics', 'bar-chart-line', 'report'],
             ['model_review.php', 'Model review', 'clipboard-check', 'administrator'],
             ['predictions.php', 'Demand forecast', 'graph-up-arrow', 'report'],
             ['forecast_exceptions.php', 'Exceptions', 'exclamation-triangle', 'report'],

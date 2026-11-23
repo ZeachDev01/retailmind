@@ -41,6 +41,7 @@ class Cursor:
     def execute(self, sql, params=()):
         import re
         s = re.sub(r"DATE_ADD\(NOW\(\),\s*INTERVAL\s*(\d+)\s*MINUTE\)", r"datetime('now', '+\1 minutes')", sql, flags=re.I)
+        s = s.replace("DATE_SUB(NOW(), INTERVAL 5 MINUTE)", "datetime('now', '-5 minutes')")
         s = s.replace("%s", "?").replace("NOW()", "CURRENT_TIMESTAMP").replace("FOR UPDATE", "")
         self.cursor.execute(s, params)
         return self
@@ -105,6 +106,20 @@ class Connection:
 
 
 class WorkerEvidenceTests(unittest.TestCase):
+    def test_worker_respects_lease_grace_and_retry_ceiling(self):
+        conn = Connection()
+        self.addCleanup(conn.db.close)
+        conn.db.execute("UPDATE ml_jobs SET attempts=1, lease_expires_at=datetime('now', '-4 minutes')")
+        self.assertIsNone(ml_worker.claim_job(conn), 'Do not race a worker inside the five-minute grace period')
+        conn.db.execute("UPDATE ml_jobs SET lease_expires_at=datetime('now', '-6 minutes')")
+        self.assertEqual(2, ml_worker.claim_job(conn)['attempts'])
+        conn.db.execute("UPDATE ml_jobs SET attempts=3, lease_expires_at=datetime('now', '-4 minutes')")
+        self.assertIsNone(ml_worker.claim_job(conn))
+        self.assertEqual('running', conn.db.execute('SELECT status FROM ml_jobs').fetchone()[0])
+        conn.db.execute("UPDATE ml_jobs SET lease_expires_at=datetime('now', '-6 minutes')")
+        self.assertIsNone(ml_worker.claim_job(conn))
+        self.assertEqual('failed', conn.db.execute('SELECT status FROM ml_jobs').fetchone()[0])
+
     def test_m5_demo_reads_fifty_products_and_refuses_missing_coverage(self):
         conn = Connection('retailmind_demo_m5_test')
         self.addCleanup(conn.db.close)
@@ -188,6 +203,39 @@ class WorkerEvidenceTests(unittest.TestCase):
         features = ml_worker.build_feature_matrix(ml_worker.load_history(conn.cursor(), meta), "2023-05-20")
         expected = artifact["model"].predict(features[ml_worker.FEATURE_COLUMNS])
         self.assertEqual([r["predicted_units"] for r in forecasts], [round(float(x)) for x in expected])
+
+    def test_m5_candidate_persists_original_held_out_dates_and_pinned_source(self):
+        from m5_sales_experiment import SOURCE_URL, SOURCE_REVISION
+        for source_url, label in ((SOURCE_URL, 'External Demo: M5 original daily sales; not Store accuracy'),
+                                  ('https://example.invalid/unverified', 'Demo evidence; provenance unverified')):
+            with self.subTest(source_url=source_url):
+                conn = Connection('retailmind_demo_m5_test')
+                self.addCleanup(conn.db.close)
+                conn.seed()
+                conn.db.execute('CREATE TABLE forecast_sales_imports (product_id INTEGER, sale_date TEXT, quantity INTEGER)')
+                conn.db.executemany('INSERT INTO forecast_sales_imports VALUES (?,?,?)',
+                                   [(pid, str(date.date()), 10 + pid) for pid in range(1, 21)
+                                    for date in pd.date_range('2016-01-01', periods=140)])
+                source = {'source_kind': 'm5_daily', 'store_id': 'CA_1', 'products_mapped': 20,
+                          'total_records': 2800, 'date_window': ['2016-01-01', '2016-05-19'],
+                          'experiment': {'source_url': source_url, 'source_revision': SOURCE_REVISION,
+                                         'source_sha256': 'a' * 64, 'seed': 42}}
+                conn.db.execute("UPDATE platform_settings SET setting_value=? WHERE setting_key='demo_import_metadata'",
+                                (json.dumps(source),))
+                conn.commit()
+                ml_worker.process_job(conn, {'job_id': 1, 'trigger_type': 'model_retraining'})
+                job = conn.db.execute('SELECT * FROM ml_jobs').fetchone()
+                self.assertEqual(job['status'], 'succeeded', job['diagnostic_reference'])
+                persisted = json.loads(conn.db.execute('SELECT metrics_json FROM model_training_runs').fetchone()[0])
+                meta = persisted['metadata']
+                self.assertEqual(meta['evidence_label'], label)
+                self.assertEqual(meta['source'], source)
+                self.assertEqual(meta['data_window_start'], '2016-01-01')
+                self.assertEqual(meta['data_window_end'], '2016-05-19')
+                self.assertEqual({row['actual_units'] for row in meta['held_out_daily']}, set(range(11, 31)))
+                self.assertTrue(all(row['forecast_origin'] < row['target_date'] <= '2016-05-19'
+                                    for row in meta['held_out_daily']))
+                self.assertEqual(set(persisted['evaluations']), {'7', '14', '28'})
 
     def test_generation_requires_explicit_approval_even_for_evaluated_candidates(self):
         for database in ('retailmind', 'retailmind_demo_test'):

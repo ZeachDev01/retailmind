@@ -22,10 +22,12 @@ final class RoleCapabilityPolicy
     public const MANAGE_DATABASE_BACKUP = 'manage_database_backup';
     public const MANAGE_REGISTERS = 'manage_registers';
 
+    public const VIEW_FORECAST_ANALYTICS = 'view_forecast_analytics';
     public const VIEW_FORECASTS = 'view_forecasts';
     public const GENERATE_FORECASTS = 'generate_forecasts';
     public const RETRAIN_MODELS = 'retrain_models';
     public const CONFIGURE_MODELS = 'configure_models';
+    public const CONFIGURE_TRAINING_SETTINGS = 'configure_training_settings';
     public const APPROVE_MODELS = 'approve_models';
     public const REPLACE_MODELS = 'replace_models';
     public const ROLL_BACK_MODELS = 'roll_back_models';
@@ -48,12 +50,15 @@ final class RoleCapabilityPolicy
             self::GENERATE_FORECASTS,
             self::RETRAIN_MODELS,
             self::CONFIGURE_MODELS,
+            self::CONFIGURE_TRAINING_SETTINGS,
+            self::VIEW_FORECAST_ANALYTICS,
             self::APPROVE_MODELS,
             self::REPLACE_MODELS,
             self::ROLL_BACK_MODELS,
         ],
         // Either administrator role may create and restore encrypted backups (ADR-0024).
         'admin' => [
+            self::IMPORT_FORECAST_HISTORY,
             self::STORE_OPERATIONS,
             self::VIEW_INVENTORY,
             self::VIEW_STORE_AUDIT,
@@ -69,9 +74,12 @@ final class RoleCapabilityPolicy
             self::MANAGE_REGISTERS,
             self::VIEW_FORECASTS,
             self::GENERATE_FORECASTS,
+            self::CONFIGURE_TRAINING_SETTINGS,
+            self::RETRAIN_MODELS,
+            self::VIEW_FORECAST_ANALYTICS,
             // Scoped model review, approval/replacement, and rollback for the
             // local Administrator (ADR-0022). Retains technical setup authority
-            // (CONFIGURE_MODELS, RETRAIN_MODELS) with the Super Administrator.
+            // (CONFIGURE_MODELS) with the Super Administrator.
             self::APPROVE_MODELS,
             self::REPLACE_MODELS,
             self::ROLL_BACK_MODELS,
@@ -122,6 +130,8 @@ final class RoleCapabilityPolicy
                 self::GENERATE_FORECASTS,
                 self::RETRAIN_MODELS,
                 self::CONFIGURE_MODELS,
+                self::CONFIGURE_TRAINING_SETTINGS,
+                self::VIEW_FORECAST_ANALYTICS,
                 self::APPROVE_MODELS,
                 self::REPLACE_MODELS,
                 self::ROLL_BACK_MODELS,

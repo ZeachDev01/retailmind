@@ -35,9 +35,9 @@ $assert(!$policy->allows('inventory_manager', RoleCapabilityPolicy::GENERATE_FOR
 $assert(!$policy->allows('inventory_manager', RoleCapabilityPolicy::RETRAIN_MODELS), 'Inventory Manager is denied Model Retraining');
 $assert(!$policy->allows('inventory_manager', RoleCapabilityPolicy::CONFIGURE_MODELS), 'Inventory Manager is denied Model Configuration');
 $assert(!$policy->allows('inventory_manager', RoleCapabilityPolicy::APPROVE_MODELS), 'Inventory Manager is denied Model Approval');
-$assert(!$policy->allows('admin', RoleCapabilityPolicy::RETRAIN_MODELS), 'Administrator is denied Model Retraining');
+$assert($policy->allows('admin', RoleCapabilityPolicy::RETRAIN_MODELS), 'Administrator is allowed Model Retraining');
 $assert(!$policy->allows('admin', RoleCapabilityPolicy::CONFIGURE_MODELS), 'Administrator is denied Model Configuration');
-$assert(!$policy->allows('admin', RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY), 'Administrator is denied Forecast History Import');
+$assert($policy->allows('admin', RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY), 'Administrator is allowed Forecast History Import');
 $assert(!$policy->allows('cashier', RoleCapabilityPolicy::VIEW_FORECASTS), 'Cashier is denied Forecast viewing');
 
 // Permitted requests
@@ -132,10 +132,13 @@ $adminForecastingBtn = $adminXpath->query('//nav[@aria-label="Main navigation"]/
 $assert($adminForecastingBtn->length === 1, 'Administrator has dedicated Forecasting navigation group');
 
 $adminForecastingLinks = $adminXpath->query('//nav[@aria-label="Main navigation"]//div[contains(@class,"dropdown")][button[@title="Forecasting"]]//a');
-$assert($adminForecastingLinks->length === 4, 'Administrator Forecasting group has exactly 4 items');
+$assert($adminForecastingLinks->length === 7, 'Administrator Forecasting group has exactly 7 items');
 
 $expectedAdminOrder = [
+    ['title' => 'Import Sales History', 'path' => app_url('components/system_administrator/forecast_import.php')],
     ['title' => 'Data Readiness', 'path' => app_url('components/report/data_readiness.php')],
+    ['title' => 'Model Training', 'path' => app_url('components/system_administrator/ml_settings.php')],
+    ['title' => 'Forecast Analytics', 'path' => app_url('components/report/forecast_analytics.php')],
     ['title' => 'Model Review & Approval', 'path' => app_url('components/administrator/model_review.php')],
     ['title' => 'Demand Forecast', 'path' => app_url('components/report/predictions.php')],
     ['title' => 'Forecast Exceptions', 'path' => app_url('components/report/forecast_exceptions.php')],
@@ -169,9 +172,9 @@ $storeReportsForecasting = $adminXpath->query(
 );
 $assert($storeReportsForecasting->length === 0, 'Store Reports has no duplicate forecasting links');
 
-// Ensure technical ML settings / analytics / import are NOT visible to Administrator
-$adminTechnicalLinks = $adminXpath->query('//nav[@aria-label="Main navigation"]//a[contains(@href, "ml_settings.php") or contains(@href, "forecast_analytics.php") or contains(@href, "forecast_import.php")]');
-$assert($adminTechnicalLinks->length === 0, 'Administrator navigation excludes technical ML settings, analytics, and data import');
+// Training settings are operational; other technical links keep their own permissions.
+$adminTechnicalLinks = $adminXpath->query('//nav[@aria-label="Main navigation"]//a[contains(@href, "forecast_analytics.php") or contains(@href, "forecast_import.php")]');
+$assert($adminTechnicalLinks->length === 2, 'Administrator navigation includes candidate analytics and sales history import');
 
 // Ensure replay/demo/prototype entries are not in normal production menu
 $adminReplay = $adminXpath->query('//nav[@aria-label="Main navigation"]//a[contains(@href, "forecast_replay.php") or contains(@title, "Replay") or contains(@title, "Demo")]');

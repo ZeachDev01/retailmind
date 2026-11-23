@@ -35,7 +35,7 @@ try {
     $assert(!$policy->allows('admin', RoleCapabilityPolicy::PLATFORM_GOVERNANCE, null, $localContext), 'admin lacks platform governance');
     $assert(!$policy->allows('admin', RoleCapabilityPolicy::MUTATE_INVENTORY, null, $localContext), 'admin lacks inventory mutation');
     $assert(!$policy->allows('admin', RoleCapabilityPolicy::OPERATE_POINT_OF_SALE, null, $localContext), 'admin lacks POS');
-    $assert(!$policy->allows('admin', RoleCapabilityPolicy::RETRAIN_MODELS, null, $localContext), 'admin lacks model retrain authority');
+    $assert($policy->allows('admin', RoleCapabilityPolicy::RETRAIN_MODELS, null, $localContext), 'admin has local model retrain authority');
     $assert($policy->allows('admin', RoleCapabilityPolicy::APPROVE_MODELS, null, $localContext), 'admin has model approval authority locally (ADR-0022)');
     $assert(!$policy->allows('admin', RoleCapabilityPolicy::APPROVE_MODELS, null, $remoteContext), 'admin lacks model approval authority remotely');
 
@@ -369,10 +369,9 @@ try {
 
     // 8. Preserved technical model maintenance boundaries (ADR-0022):
     // Super Administrator retains configuration and retraining authority.
-    // Local Administrator has scoped approval/replacement/rollback, but lacks technical configuration/retraining.
+    // Local Administrator can request training and review models; technical configuration stays restricted.
     // Both are refused model mutations remotely.
     $techMaintenanceCaps = [
-        RoleCapabilityPolicy::RETRAIN_MODELS,
         RoleCapabilityPolicy::CONFIGURE_MODELS,
     ];
     foreach ($techMaintenanceCaps as $cap) {
@@ -381,6 +380,7 @@ try {
         $assert(!$policy->allows('super_admin', $cap, null, $remoteContext), "{$cap} refused remotely");
     }
     $scopedApprovalCaps = [
+        RoleCapabilityPolicy::RETRAIN_MODELS,
         RoleCapabilityPolicy::APPROVE_MODELS,
         RoleCapabilityPolicy::REPLACE_MODELS,
         RoleCapabilityPolicy::ROLL_BACK_MODELS,
