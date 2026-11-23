@@ -36,12 +36,18 @@ try {
         'Database service unavailable after startup retries: ' . $e->getMessage(),
         'DB_STARTUP_TIMEOUT'
     );
+    ForecastingSchedulerService::recordSchedulerCheck(0, 'DB_STARTUP_TIMEOUT');
     fwrite(STDERR, "Forecasting scheduler: database unavailable after startup retries: " . $e->getMessage() . PHP_EOL);
     exit(1);
 }
 
 $scheduler = new ForecastingSchedulerService($pdo);
 $result = $scheduler->runScheduler();
+if (empty($result['check_succeeded'])) {
+    ForecastingSchedulerService::recordSchedulerCheck(0, 'SCHEDULER_CHECK_FAILED');
+    fwrite(STDERR, "SCHEDULER_CHECK_FAILED: inspect forecasting_diagnostics.json and database availability.\n");
+    exit(1);
+}
 foreach ($result['training_eligibility'] as $product) {
     if (!$product['eligible']) {
         echo 'Training skipped product ' . $product['product_id'] . ': ' . $product['reason'] . PHP_EOL;
@@ -96,9 +102,19 @@ if ($queued > 0) {
     }
 }
 
+ForecastingSchedulerService::recordSchedulerCheck($hasJobs ? 1 : 0);
+echo $hasJobs ? "Scheduler check succeeded; work pending.\n" : "Scheduler check succeeded; idle (no work).\n";
 if ($hasJobs) {
     if ($isSync) {
-        runWorkerSync($workerScript, $pythonBinary);
+        $workerExit = runWorkerSync($workerScript, $pythonBinary);
+        if ($workerExit !== 0) {
+            ForecastingSchedulerService::recordLocalDiagnostic('Worker exited unsuccessfully. Inspect forecasting-worker.log and the configured Python runtime.', 'WORKER_STARTUP_FAILED');
+            ForecastingSchedulerService::recordSchedulerCheck(1, 'WORKER_STARTUP_FAILED');
+            fwrite(STDERR, "WORKER_STARTUP_FAILED: inspect forecasting-worker.log and the configured Python runtime.\n");
+            exit($workerExit);
+        }
+        $pending = (int)$pdo->query("SELECT COUNT(*) FROM ml_jobs WHERE status IN ('queued', 'running')")->fetchColumn();
+        ForecastingSchedulerService::recordSchedulerCheck($pending);
     } else {
         triggerWorkerAsync($workerScript, $pythonBinary);
     }

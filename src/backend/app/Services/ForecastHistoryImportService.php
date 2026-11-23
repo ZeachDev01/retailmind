@@ -25,6 +25,14 @@ final class ForecastHistoryImportService
 
     public static function parse($stream, array $products, string $today): array
     {
+        $preview = self::parsePreview($stream, $products, $today);
+        if ($preview['invalid']) throw new RuntimeException($preview['invalid'][0]);
+        return $preview['rows'];
+    }
+
+    public static function parsePreview($stream, array $products, string $today): array
+    {
+        $invalid = [];
         $header = fgetcsv($stream, 0, ',', '"', '');
         if ($header) $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
         if ($header !== ['sale_date', 'sku', 'quantity']) {
@@ -36,25 +44,55 @@ final class ForecastHistoryImportService
         while (($row = fgetcsv($stream, 0, ',', '"', '')) !== false) {
             $line++;
             if ($row === [null]) continue;
-            if (count($row) !== 3) throw new RuntimeException("Row {$line}: expected exactly three columns.");
-            [$date, $sku, $quantity] = array_map('trim', $row);
-            $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
-            if (!$parsed || $parsed->format('Y-m-d') !== $date || $date < '1900-01-01' || $date >= $today) {
-                throw new RuntimeException("Row {$line}: use a valid past date in YYYY-MM-DD format.");
+            try {
+                if (count($row) !== 3) throw new RuntimeException("Row {$line}: expected exactly three columns.");
+                [$date, $sku, $quantity] = array_map('trim', $row);
+                $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+                if (!$parsed || $parsed->format('Y-m-d') !== $date || $date < '1900-01-01' || $date >= $today) {
+                    throw new RuntimeException("Row {$line}: use a valid past date in YYYY-MM-DD format.");
+                }
+                if (!isset($products[$sku])) throw new RuntimeException("Row {$line}: SKU {$sku} is not an active product in this store.");
+                if (!preg_match('/^(0|[1-9][0-9]{0,6})$/D', $quantity) || (int)$quantity > 1000000) {
+                    throw new RuntimeException("Row {$line}: quantity must be a whole number from 0 to 1000000.");
+                }
+                $key = $products[$sku]['product_id'] . ':' . $date;
+                if (isset($seen[$key])) throw new RuntimeException("Row {$line}: duplicate product and date. Use one daily total per product.");
+                $seen[$key] = true;
+                $rows[] = ['sale_date' => $date, 'sku' => $sku, 'quantity' => (int)$quantity,
+                    'product_id' => (int)$products[$sku]['product_id'], 'product_name' => $products[$sku]['product_name']];
+            } catch (RuntimeException $exception) {
+                $invalid[] = $exception->getMessage();
             }
-            if (!isset($products[$sku])) throw new RuntimeException("Row {$line}: SKU {$sku} is not an active product in this store.");
-            if (!preg_match('/^(0|[1-9][0-9]{0,6})$/D', $quantity) || (int)$quantity > 1000000) {
-                throw new RuntimeException("Row {$line}: quantity must be a whole number from 0 to 1000000.");
-            }
-            $key = $products[$sku]['product_id'] . ':' . $date;
-            if (isset($seen[$key])) throw new RuntimeException("Row {$line}: duplicate product and date. Use one daily total per product.");
-            $seen[$key] = true;
-            $rows[] = ['sale_date' => $date, 'sku' => $sku, 'quantity' => (int)$quantity,
-                'product_id' => (int)$products[$sku]['product_id'], 'product_name' => $products[$sku]['product_name']];
-            if (count($rows) > 10000) throw new RuntimeException('Import at most 10000 rows at a time.');
+            if (count($rows) + count($invalid) > 10000) throw new RuntimeException('Import at most 10000 rows at a time.');
         }
-        if (!$rows) throw new RuntimeException('The CSV contains no sales history rows.');
-        return $rows;
+        if (!$rows && !$invalid) throw new RuntimeException('The CSV contains no sales history rows.');
+        return ['rows' => $rows, 'invalid' => $invalid];
+    }
+
+    public function preview(array $parsed): array
+    {
+        $preview = $parsed + ['accepted' => 0, 'skipped' => 0];
+        $pos = $this->pdo->prepare('SELECT COUNT(*) FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id WHERE si.product_id = ? AND s.sale_date >= ? AND s.sale_date < DATE_ADD(?, INTERVAL 1 DAY)');
+        $existing = $this->pdo->prepare('SELECT quantity FROM forecast_sales_imports WHERE product_id = ? AND sale_date = ?');
+        foreach ($preview['rows'] as &$row) {
+            $pos->execute([$row['product_id'], $row['sale_date'], $row['sale_date']]);
+            $existing->execute([$row['product_id'], $row['sale_date']]);
+            $quantity = $existing->fetchColumn();
+            if ((int)$pos->fetchColumn() > 0) {
+                $row['status'] = 'Skipped: POS sales take precedence';
+                $preview['skipped']++;
+            } elseif ($quantity !== false && (int)$quantity !== $row['quantity']) {
+                $row['status'] = 'Invalid: conflicting imported total';
+                $preview['invalid'][] = 'Different history already exists for ' . $row['sku'] . ' on ' . $row['sale_date'] . '.';
+            } elseif ($quantity !== false) {
+                $row['status'] = 'Skipped: already imported';
+                $preview['skipped']++;
+            } else {
+                $row['status'] = 'Accepted';
+                $preview['accepted']++;
+            }
+        }
+        return $preview;
     }
 
     public function import(array $rows, int $userId): array

@@ -331,6 +331,20 @@ if ($argv[1] === 'governance_state') {
     $state['users'] = $pdo->query('SELECT user_id,username,display_name,password_hash,role_id,status,must_change_password FROM users ORDER BY user_id')->fetchAll(PDO::FETCH_ASSOC);
     echo json_encode($state); exit;
 }
+if ($argv[1] === 'forecast_import_setup') {
+    $pdo->exec("USE `{$database}`");
+    $pdo->exec("UPDATE sales SET sale_date='2025-12-31 12:00:00' WHERE sale_id=1");
+    exit;
+}
+if ($argv[1] === 'forecast_import_state') {
+    $pdo->exec("USE `{$database}`");
+    $state = [];
+    foreach (['forecast_sales_imports', 'stock_movements', 'model_training_runs'] as $table) {
+        $state[$table] = $pdo->query("SELECT * FROM `{$table}`")->fetchAll(PDO::FETCH_ASSOC);
+    }
+    $state['audits'] = $pdo->query("SELECT user_id FROM activity_log WHERE action = 'Forecast history import' ORDER BY log_id")->fetchAll(PDO::FETCH_COLUMN);
+    echo json_encode($state); exit;
+}
 if ($argv[1] === 'state') {
     $pdo->exec("USE `{$database}`");
     echo json_encode(['users'=>$pdo->query('SELECT user_id,theme_preference,must_change_password FROM users ORDER BY user_id')->fetchAll(PDO::FETCH_ASSOC),
