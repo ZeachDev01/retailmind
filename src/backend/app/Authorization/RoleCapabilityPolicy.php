@@ -56,6 +56,7 @@ final class RoleCapabilityPolicy
         ],
         // Either administrator role may create and restore encrypted backups (ADR-0024).
         'admin' => [
+            self::IMPORT_FORECAST_HISTORY,
             self::STORE_OPERATIONS,
             self::VIEW_INVENTORY,
             self::VIEW_STORE_AUDIT,

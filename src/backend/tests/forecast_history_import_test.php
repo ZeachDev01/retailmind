@@ -43,33 +43,48 @@ foreach ([
     try { parseCsv($invalid); } catch (RuntimeException $e) { $rejected = true; }
     check($rejected, 'Invalid CSV was accepted: ' . $invalid);
 }
+$stream = fopen('php://memory', 'r+');
+fwrite($stream, "sale_date,sku,quantity\n2026-09-01,SKU-A,12\n2026-09-02,UNKNOWN,2\n2026-09-03,SKU-A,-1\n");
+rewind($stream);
+$preview = ForecastHistoryImportService::parsePreview($stream, ['SKU-A' => ['product_id' => 1, 'product_name' => 'Product A']], '2026-10-10');
+fclose($stream);
+check(count($preview['rows']) === 1 && count($preview['invalid']) === 2, 'Preview must report valid and invalid rows without saving');
+check(str_contains($preview['invalid'][0], 'Row 3:') && str_contains($preview['invalid'][1], 'Row 4:'), 'Invalid preview rows retain CSV line numbers');
 $policy = new RoleCapabilityPolicy();
 check($policy->allows('super_admin', RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY), 'Super Administrator must be able to import history');
-foreach (['admin', 'inventory_manager', 'cashier'] as $role) {
+check($policy->allows('admin', RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY), 'Administrator must be able to import history');
+check(!$policy->allows('admin', RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY, null, true), 'History import remains local-only');
+foreach (['inventory_manager', 'cashier'] as $role) {
     check(!$policy->allows($role, RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY), "{$role} must not import forecast history");
 }
 
 if (in_array('--database', $argv, true)) {
     require __DIR__ . '/../config/db.php';
     // Temporary tables shadow application tables on this connection only.
-    $pdo->exec("CREATE TEMPORARY TABLE products (product_id INT PRIMARY KEY, sku VARCHAR(80), product_name VARCHAR(80), branch_id INT, status VARCHAR(20)) ENGINE=InnoDB");
+    $pdo->exec("CREATE TEMPORARY TABLE products (product_id INT PRIMARY KEY, sku VARCHAR(80), product_name VARCHAR(80), status VARCHAR(20)) ENGINE=InnoDB");
     $pdo->exec("CREATE TEMPORARY TABLE sales (sale_id INT PRIMARY KEY, sale_date DATETIME) ENGINE=InnoDB");
     $pdo->exec("CREATE TEMPORARY TABLE sale_items (sale_id INT, product_id INT, quantity INT) ENGINE=InnoDB");
     $pdo->exec("CREATE TEMPORARY TABLE forecast_sales_imports (product_id INT, sale_date DATE, quantity INT, imported_by INT, PRIMARY KEY(product_id, sale_date)) ENGINE=InnoDB");
-    $pdo->exec("INSERT INTO products VALUES (1, 'SKU-A', 'Product A', 1, 'active'), (2, 'SKU-B', 'Other store', 2, 'active')");
+    $pdo->exec("INSERT INTO products VALUES (1, 'SKU-A', 'Product A', 'active'), (2, 'SKU-B', 'Inactive product', 'inactive')");
     function log_activity(...$args): void { $GLOBALS['import_audits'][] = $args[6]; }
-    $service = new ForecastHistoryImportService($pdo, 1);
-    check(count($service->products()) === 1, 'Product lookup must be store-scoped');
+    $service = new ForecastHistoryImportService($pdo);
+    check(count($service->products()) === 1, 'Product lookup must exclude inactive products');
     check($service->import($rows, 1) === ['inserted' => 2, 'skipped' => 0], 'First import failed');
     check($service->import($rows, 1) === ['inserted' => 0, 'skipped' => 2], 'Duplicate import must be idempotent');
     $conflict = parseCsv("sale_date,sku,quantity\n2026-09-03,SKU-A,4\n2026-09-01,SKU-A,99");
-    try { $service->import($conflict, 1); throw new LogicException('Conflict was accepted'); } catch (RuntimeException $e) {}
+    $rejected = false;
+    try { $service->import($conflict, 1); } catch (RuntimeException $e) { $rejected = true; }
+    check($rejected, 'Conflicting history must be rejected');
     check((int)$pdo->query('SELECT COUNT(*) FROM forecast_sales_imports')->fetchColumn() === 2, 'Conflicting import must roll back the entire batch');
     $pdo->exec("INSERT INTO sales VALUES (1, '2026-09-04 12:00:00')");
     $pdo->exec('INSERT INTO sale_items VALUES (1, 1, 3)');
     check($service->import(parseCsv("sale_date,sku,quantity\n2026-09-04,SKU-A,5"), 1) === ['inserted' => 0, 'skipped' => 1], 'POS overlap must be skipped');
-    $pdo->exec("UPDATE products SET branch_id = 2 WHERE product_id = 1");
-    try { $service->import($rows, 1); throw new LogicException('Other-store product was accepted'); } catch (RuntimeException $e) {}
+    $preview = $service->preview(['rows' => parseCsv("sale_date,sku,quantity\n2026-09-01,SKU-A,12\n2026-09-04,SKU-A,999\n2026-09-05,SKU-A,7\n2026-09-02,SKU-A,9"), 'invalid' => []]);
+    check($preview['accepted'] === 1 && $preview['skipped'] === 2 && count($preview['invalid']) === 1, 'Preview must distinguish new, duplicate, POS and conflicting totals');
+    $pdo->exec("UPDATE products SET status = 'inactive' WHERE product_id = 1");
+    $rejected = false;
+    try { $service->import($rows, 1); } catch (RuntimeException $e) { $rejected = true; }
+    check($rejected, 'Product deactivated after preview must be rejected');
     check(count($GLOBALS['import_audits']) === 3, 'Only successful imports should be audited');
 }
 echo "Forecast history import checks passed\n";

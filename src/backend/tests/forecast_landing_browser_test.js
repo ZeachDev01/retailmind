@@ -252,14 +252,14 @@ const fixture = action => {
         assert.equal(await page.locator('.page-subtitle').count(), 0, 'Demand Forecast relies on its status panel instead of a page subtitle');
         const adminStudioNav = page.locator('.forecast-studio-nav');
         assert.equal(await adminStudioNav.count(), 1, 'Administrator uses the shared forecasting studio navigation');
-        assert.equal(await adminStudioNav.locator('a').count(), 5, 'Administrator sees five permitted forecasting destinations');
+        assert.equal(await adminStudioNav.locator('a').count(), 6, 'Administrator sees six permitted forecasting destinations');
         for (const label of ['Data readiness', 'Model review', 'Demand forecast', 'Exceptions']) {
             assert.ok((await adminStudioNav.innerText()).includes(label), 'Administrator navigation includes ' + label);
         }
         assert.equal(await adminStudioNav.locator('a[aria-current="page"]').count(), 1, 'Administrator navigation marks the active forecasting page');
         assert.equal(await adminStudioNav.locator('a[aria-current="page"]').innerText(), 'Demand forecast', 'Demand Forecast is the active Admin destination');
         assert.equal(await adminStudioNav.locator('a[href*="ml_settings.php"]').count(), 1, 'Administrator navigation includes Model Training');
-        assert.equal(await adminStudioNav.locator('a[href*="forecast_import.php"]').count(), 0, 'Administrator navigation excludes history import');
+        assert.equal(await adminStudioNav.locator('a[href*="forecast_import.php"]').count(), 1, 'Administrator navigation includes history import');
         assert.equal(await page.locator('.forecast-tools, .forecast-performance').count(), 0, 'Demand Forecast omits the extra tools and model details');
         assert.equal(await page.locator('.forecast-studio-nav a[href$="replenishment_queue.php"]').count(), 0, 'Administrator studio navigation excludes Inventory Manager buying actions');
         assert.equal(await page.locator('button[name="action"][value="generate"]').count(), 0, 'Demand Forecast has no redundant top generate action');

@@ -240,6 +240,7 @@ $administratorSystemItems = [
 $managerInventoryItems = [];
 
 $administratorForecastingItems = [
+    ['path' => 'components/system_administrator/forecast_import.php', 'icon' => 'filing_cabinet', 'label' => 'Import Sales History'],
     ['path' => 'components/report/data_readiness.php', 'icon' => 'accept_database', 'label' => 'Data Readiness'],
     ['path' => 'components/system_administrator/ml_settings.php', 'icon' => 'process', 'label' => 'Model Training'],
     ['path' => 'components/administrator/model_review.php', 'icon' => 'combo_chart', 'label' => 'Model Review & Approval'],
