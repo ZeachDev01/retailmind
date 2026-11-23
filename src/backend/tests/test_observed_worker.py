@@ -41,6 +41,7 @@ class Cursor:
     def execute(self, sql, params=()):
         import re
         s = re.sub(r"DATE_ADD\(NOW\(\),\s*INTERVAL\s*(\d+)\s*MINUTE\)", r"datetime('now', '+\1 minutes')", sql, flags=re.I)
+        s = s.replace("DATE_SUB(NOW(), INTERVAL 5 MINUTE)", "datetime('now', '-5 minutes')")
         s = s.replace("%s", "?").replace("NOW()", "CURRENT_TIMESTAMP").replace("FOR UPDATE", "")
         self.cursor.execute(s, params)
         return self
@@ -105,6 +106,20 @@ class Connection:
 
 
 class WorkerEvidenceTests(unittest.TestCase):
+    def test_worker_respects_lease_grace_and_retry_ceiling(self):
+        conn = Connection()
+        self.addCleanup(conn.db.close)
+        conn.db.execute("UPDATE ml_jobs SET attempts=1, lease_expires_at=datetime('now', '-4 minutes')")
+        self.assertIsNone(ml_worker.claim_job(conn), 'Do not race a worker inside the five-minute grace period')
+        conn.db.execute("UPDATE ml_jobs SET lease_expires_at=datetime('now', '-6 minutes')")
+        self.assertEqual(2, ml_worker.claim_job(conn)['attempts'])
+        conn.db.execute("UPDATE ml_jobs SET attempts=3, lease_expires_at=datetime('now', '-4 minutes')")
+        self.assertIsNone(ml_worker.claim_job(conn))
+        self.assertEqual('running', conn.db.execute('SELECT status FROM ml_jobs').fetchone()[0])
+        conn.db.execute("UPDATE ml_jobs SET lease_expires_at=datetime('now', '-6 minutes')")
+        self.assertIsNone(ml_worker.claim_job(conn))
+        self.assertEqual('failed', conn.db.execute('SELECT status FROM ml_jobs').fetchone()[0])
+
     def test_m5_demo_reads_fifty_products_and_refuses_missing_coverage(self):
         conn = Connection('retailmind_demo_m5_test')
         self.addCleanup(conn.db.close)

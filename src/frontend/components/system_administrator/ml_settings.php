@@ -341,6 +341,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                 </div>
             </div>
 
+            <?php require __DIR__ . '/../report/forecast_scheduler_health.php'; ?>
             <?php if ($latestCandidate): ?>
                 <div class="candidate-card">
                     <details class="forecast-details"><summary>Candidate data &amp; model version</summary>

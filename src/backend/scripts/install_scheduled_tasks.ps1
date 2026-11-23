@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     One-click setup for RetailMind Windows Scheduled Tasks and daily background services.
 .DESCRIPTION
@@ -14,6 +14,7 @@ param(
     [string]$PhpPath,
     [string]$PythonPath,
     [string]$ProjectRoot,
+    [string]$ModelStoragePath,
     [string]$ServiceAccount = 'NT AUTHORITY\SYSTEM',
     [switch]$TestRun,
     [switch]$Force
@@ -101,7 +102,8 @@ if ($pythonBinary) {
 # 4. Enable store email alerts in database
 Write-Host "[4/5] Verifying database and activating Store Email Alerts..." -ForegroundColor Gray
 $enableAlertsPhp = "require 'src/backend/includes/auth.php'; save_key_value_settings(`$pdo, 'store_settings', ['store_email_alerts_enabled' => '1'], 1); `$st = get_store_settings(`$pdo); echo 'STORE_EMAIL:' . (`$st['store_email'] ?? '') . '|ALERTS:' . (`$st['store_email_alerts_enabled'] ?? '');"
-$dbStatus = & $phpBinary -d display_errors=0 -r $enableAlertsPhp 2>$null
+Push-Location -LiteralPath $projectRoot
+try { $dbStatus = & $phpBinary -d display_errors=0 -r $enableAlertsPhp 2>$null } finally { Pop-Location }
 if ($LASTEXITCODE -eq 0 -and $dbStatus -match 'ALERTS:1') {
     Write-Host "      ✓ Database connected and store_email_alerts_enabled set to 1." -ForegroundColor Green
 } else {
@@ -119,26 +121,12 @@ if ($isSystemAccount) {
     $principal = New-ScheduledTaskPrincipal -UserId $ServiceAccount -LogonType ServiceAccount -RunLevel Limited
 }
 
-# Task A: RetailMind ML Scheduler (Every 5 minutes + At Startup)
+# Task A: Install the forecasting runner with the resolved runtime paths.
 $mlTaskName = 'RetailMind ML Scheduler'
 $mlScript = Join-Path $projectRoot 'src/backend/scripts/install_forecasting_scheduler.ps1'
-if (Test-Path -LiteralPath $mlScript) {
-    if (Get-ScheduledTask -TaskName $mlTaskName -ErrorAction SilentlyContinue) {
-        Unregister-ScheduledTask -TaskName $mlTaskName -Confirm:$false
-    }
-    $mlAction = New-ScheduledTaskAction -Execute $powershellBinary -Argument (
-        '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "{0}" -Run' -f $mlScript
-    ) -WorkingDirectory $projectRoot
-    $mlStartupTrigger = New-ScheduledTaskTrigger -AtStartup
-    $mlRepeatTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5)
-    $mlSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew `
-        -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
-
-    Register-ScheduledTask -TaskName $mlTaskName -Action $mlAction -Trigger @($mlStartupTrigger, $mlRepeatTrigger) `
-        -Settings $mlSettings -Principal $principal `
-        -Description 'RetailMind background forecasting scheduler (runs every 5 minutes non-interactively).' | Out-Null
-    Write-Host "      ✓ Registered task: $mlTaskName (Every 5 mins)" -ForegroundColor Green
-}
+if (-not (Test-Path -LiteralPath $mlScript)) { throw "Missing forecasting installer: $mlScript" }
+if (-not $pythonBinary) { throw 'Forecasting requires Python. Supply -PythonPath; forecasting installation cannot be skipped.' }
+& $mlScript -ProjectRoot $projectRoot -PhpPath $phpBinary -PythonPath $pythonBinary -ServiceAccount $ServiceAccount -ModelStoragePath $ModelStoragePath -Force:$Force
 
 # Task B: RetailMind Daily Notifications & Stock Brief (Daily at 3:00 AM Asia/Manila)
 $dailyTaskName = 'RetailMind Daily Notifications'

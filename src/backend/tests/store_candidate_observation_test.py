@@ -45,7 +45,7 @@ class SQLiteCursor:
         self.cursor.close()
 
     def execute(self, sql, params=()):
-        clean_sql = (sql.replace("%s", "?")
+        clean_sql = (sql.replace("DATE_SUB(NOW(), INTERVAL 5 MINUTE)", "datetime('now', '-5 minutes')").replace("%s", "?")
                         .replace("NOW()", "CURRENT_TIMESTAMP")
                         .replace("FOR UPDATE", "")
                         .replace("DATE_ADD(NOW(), INTERVAL 30 MINUTE)", "datetime('now', '+30 minutes')")

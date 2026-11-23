@@ -474,7 +474,8 @@ file_put_contents($diagFile, json_encode($outageEntry));
 
 $signals = $signalSource->store();
 $assert(($signals['forecasting_failure']['value'] ?? 0) === 1, 'Preserved local diagnostic from database outage produces failure signal');
-$assert(str_contains($signals['forecasting_failure']['explanation'] ?? '', 'connection refused'), 'Signal explanation contains preserved outage diagnostic');
+$assert(str_contains($signals['forecasting_failure']['explanation'] ?? '', 'DB_UNAVAILABLE'), 'Signal explanation gives the preserved diagnostic reference');
+$assert(!str_contains($signals['forecasting_failure']['explanation'] ?? '', 'connection refused'), 'Raw connection diagnostics remain in the scheduler log');
 
 // 7d. A preserved diagnostic older than a day is history, not a current outage.
 file_put_contents($diagFile, json_encode([[
