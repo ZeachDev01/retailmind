@@ -39,8 +39,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $result = $service->import($preview['rows'], (int)$_SESSION['user_id']);
             unset($_SESSION['forecast_import_preview']);
-            $readiness = get_forecasting_readiness($pdo);
             $message = "Imported {$result['inserted']} daily totals; skipped {$result['skipped']} existing totals or days with POS sales. Request model retraining separately to use the new history.";
+            $readiness = get_forecasting_readiness($pdo);
         } else {
             unset($_SESSION['forecast_import_preview']);
             $file = $_FILES['csv_file'] ?? null;
@@ -60,7 +60,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['forecast_import_preview'] = ['store_id' => $storeId, 'created_at' => time()] + $rows;
         }
     } catch (RuntimeException $exception) {
-        if ($exception instanceof PDOException) {
+        if ($message !== '') {
+            error_log('Post-import readiness failed: ' . $exception->getMessage());
+            $error = 'History was imported, but Product Data Readiness could not be checked. Open Data Readiness to try again.';
+        } elseif ($exception instanceof PDOException) {
             error_log('Forecast import failed: ' . $exception->getMessage());
             $error = 'The import could not be saved. No rows were imported. Check the database setup and try again.';
         } else {
@@ -234,7 +237,7 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
         <section class="dashboard-section" aria-labelledby="preview-heading" style="margin-top: 1.5rem;">
             <div class="section-header">
                 <div>
-                    <h2 id="preview-heading">Preview: <?= $preview['accepted'] ?> accepted · <?= $preview['skipped'] ?> skipped · <?= count($preview['invalid']) ?> invalid</h2>
+                    <h2 id="preview-heading">Preview: <?= $preview['accepted'] ?> accepted &middot; <?= $preview['skipped'] ?> skipped &middot; <?= count($preview['invalid']) ?> invalid</h2>
                     <p class="section-description">Showing first <?= min(20, count($preview['rows'])) ?> of <?= count($preview['rows']) ?> rows. Confirmation rechecks existing totals and POS sales.</p>
                 </div>
                 <div class="preview-summary-meta">
@@ -242,7 +245,7 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
                 </div>
             </div>
             <?php if ($preview['invalid']): ?>
-                <div class="alert tag-warning" role="alert" aria-label="Invalid CSV rows">
+                <div class="alert tag-warning" role="alert" data-rm-alert-processed="1" aria-label="Invalid CSV rows">
                     <div><strong>Correct invalid rows and upload again before confirming.</strong>
                         <ul><?php foreach (array_slice($preview['invalid'], 0, 20) as $invalid): ?><li><?= htmlspecialchars($invalid) ?></li><?php endforeach; ?></ul>
                     </div>

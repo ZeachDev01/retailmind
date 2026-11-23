@@ -63,8 +63,17 @@ const fixture = action => {
             await Promise.all([page.waitForResponse(response => response.url() === importUrl && response.request().method() === 'POST'), page.getByRole('button', { name: 'Preview and validate' }).click()]);
             await page.waitForFunction(() => document.querySelector('main')?.getAttribute('aria-busy') !== 'true');
         };
+        const confirm = async count => {
+            const [response] = await Promise.all([
+                page.waitForResponse(response => response.url() === importUrl && response.request().method() === 'POST'),
+                page.getByRole('button', { name: `Import ${count} Daily Totals`, exact: true }).click(),
+            ]);
+            assert.match(await response.text(), /Imported \d+ daily totals/, 'Confirmation must save history');
+            await page.locator('main .alert[role="status"]').waitFor({ state: 'attached' });
+        };
         await upload('sale_date,sku,quantity\n2026-01-01,UNKNOWN,5\n');
         assert.match(await page.locator('[aria-label="Invalid CSV rows"]').innerText(), /not an active product/);
+        assert.equal(await page.locator('[aria-label="Invalid CSV rows"]').isVisible(), true, 'Row corrections stay visible while editing');
         assert.equal(await page.locator('[name="confirm_import"]').count(), 0, 'Invalid rows block confirmation');
         const invalidToken = await page.locator('[name="csrf_token"]').first().inputValue();
         const invalidConfirm = await context.request.post(importUrl, { form: { confirm_import: '1', csrf_token: invalidToken } });
@@ -76,24 +85,31 @@ const fixture = action => {
         await upload(csv);
         assert.match(await page.locator('#preview-heading').innerText(), /35 accepted.*1 skipped.*0 invalid/);
         assert.equal(await page.getByRole('table', { name: 'CSV Sales History Preview' }).locator('tbody tr').count(), 20, 'Preview must be limited to 20 rows');
-        await page.getByRole('button', { name: 'Import 36 Daily Totals', exact: true }).click();
-        await page.locator('main .alert[role="status"]').waitFor();
+        await confirm(36);
         assert.match(await page.locator('main .alert[role="status"]').innerText(), /Imported 35 daily totals/);
         assert.match(await page.locator('[aria-label="Product Data Readiness after import"]').innerText(), /0 of 1 Products eligible.*More history needed/s);
         await upload(csv);
         assert.match(await page.locator('#preview-heading').innerText(), /0 accepted.*36 skipped.*0 invalid/);
-        await page.getByRole('button', { name: 'Import 36 Daily Totals', exact: true }).click();
-        await page.locator('main .alert[role="status"]').waitFor();
+        await confirm(36);
         assert.match(await page.locator('main .alert[role="status"]').innerText(), /Imported 0 daily totals; skipped 36/);
+        const recentCsv = 'sale_date,sku,quantity\n' + Array.from({ length: 140 }, (_, day) => {
+            const date = new Date();
+            date.setDate(date.getDate() - 140 + day);
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')},THEME-ITEM,5`;
+        }).join('\n');
+        await upload(recentCsv);
+        await confirm(140);
+        await page.locator('[aria-label="Product Data Readiness after import"]').waitFor();
+        assert.match(await page.locator('[aria-label="Product Data Readiness after import"]').innerText(), /1 of 1 Products eligible.*Ready to train/s);
         await page.goto(origin + '/components/report/data_readiness.php');
         await page.getByRole('button', { name: 'About training eligibility', exact: true }).click();
         assert.match(await page.locator('.main-content').innerText(), /Closures, unknown observations, and Stockout Days do not add usable days/);
         assert.equal(await page.locator('.forecast-studio-nav a[href*="forecast_import.php"]').count(), 1, 'Readiness gives the Administrator a direct import action');
         const imported = JSON.parse(fixture('forecast_import_state'));
-        assert.equal(imported.forecast_sales_imports.length, 35);
+        assert.equal(imported.forecast_sales_imports.length, 175);
         assert(!imported.forecast_sales_imports.some(row => row.sale_date === '2025-12-31'), 'POS overlap is excluded from imported evidence');
         assert(imported.forecast_sales_imports.every(row => Number(row.imported_by) === 1), 'Administrator owns persisted import attribution');
-        assert.deepEqual(imported.audits.map(Number), [1, 1], 'Import audit identifies acting Administrator');
+        assert.deepEqual(imported.audits.map(Number), [1, 1, 1], 'Import audit identifies acting Administrator');
         assert.deepEqual(imported.stock_movements, importBefore.stock_movements, 'Imports create no inventory movements');
         assert.deepEqual(imported.model_training_runs, importBefore.model_training_runs, 'Imports create no training run history');
         const after = JSON.parse(fixture('state'));

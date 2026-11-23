@@ -53,6 +53,7 @@ check(str_contains($preview['invalid'][0], 'Row 3:') && str_contains($preview['i
 $policy = new RoleCapabilityPolicy();
 check($policy->allows('super_admin', RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY), 'Super Administrator must be able to import history');
 check($policy->allows('admin', RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY), 'Administrator must be able to import history');
+check(!$policy->allows('admin', RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY, null, true), 'History import remains local-only');
 foreach (['inventory_manager', 'cashier'] as $role) {
     check(!$policy->allows($role, RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY), "{$role} must not import forecast history");
 }
