@@ -26,6 +26,7 @@ final class RoleCapabilityPolicy
     public const GENERATE_FORECASTS = 'generate_forecasts';
     public const RETRAIN_MODELS = 'retrain_models';
     public const CONFIGURE_MODELS = 'configure_models';
+    public const CONFIGURE_TRAINING_SETTINGS = 'configure_training_settings';
     public const APPROVE_MODELS = 'approve_models';
     public const REPLACE_MODELS = 'replace_models';
     public const ROLL_BACK_MODELS = 'roll_back_models';
@@ -48,6 +49,7 @@ final class RoleCapabilityPolicy
             self::GENERATE_FORECASTS,
             self::RETRAIN_MODELS,
             self::CONFIGURE_MODELS,
+            self::CONFIGURE_TRAINING_SETTINGS,
             self::APPROVE_MODELS,
             self::REPLACE_MODELS,
             self::ROLL_BACK_MODELS,
@@ -69,6 +71,7 @@ final class RoleCapabilityPolicy
             self::MANAGE_REGISTERS,
             self::VIEW_FORECASTS,
             self::GENERATE_FORECASTS,
+            self::CONFIGURE_TRAINING_SETTINGS,
             // Scoped model review, approval/replacement, and rollback for the
             // local Administrator (ADR-0022). Retains technical setup authority
             // (CONFIGURE_MODELS, RETRAIN_MODELS) with the Super Administrator.
@@ -122,6 +125,7 @@ final class RoleCapabilityPolicy
                 self::GENERATE_FORECASTS,
                 self::RETRAIN_MODELS,
                 self::CONFIGURE_MODELS,
+                self::CONFIGURE_TRAINING_SETTINGS,
                 self::APPROVE_MODELS,
                 self::REPLACE_MODELS,
                 self::ROLL_BACK_MODELS,

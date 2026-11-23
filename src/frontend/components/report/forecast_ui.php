@@ -42,6 +42,7 @@ function forecast_workflow(string $current): void
     } elseif ($role === 'admin') {
         $pages = [
             ['data_readiness.php', 'Data readiness', 'database-check', 'report'],
+            ['ml_settings.php', 'Model training', 'cpu', 'system_administrator'],
             ['model_review.php', 'Model review', 'clipboard-check', 'administrator'],
             ['predictions.php', 'Demand forecast', 'graph-up-arrow', 'report'],
             ['forecast_exceptions.php', 'Exceptions', 'exclamation-triangle', 'report'],

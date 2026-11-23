@@ -1,6 +1,22 @@
 <?php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
-require_capability(\App\Authorization\RoleCapabilityPolicy::CONFIGURE_MODELS);
+require_capability(\App\Authorization\RoleCapabilityPolicy::CONFIGURE_TRAINING_SETTINGS);
+
+// Each settings action accepts only its own fields, including crafted requests.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $settingFields = [
+        'save_schedule' => ['schedule_weekly_retrain_day', 'schedule_hour', 'schedule_minute', 'schedule_period'],
+        'save_model_quality' => ['ml_max_wape_7d', 'ml_max_wape_14d', 'ml_max_wape_28d'],
+    ];
+    $action = is_string($_POST['action'] ?? null) ? $_POST['action'] : '';
+    if (isset($settingFields[$action])) {
+        csrf_verify();
+        if (array_diff(array_keys($_POST), ['action', 'csrf_token', ...$settingFields[$action]])) {
+            http_response_code(403);
+            exit('Only the weekly training schedule and candidate error limits can be changed here.');
+        }
+    }
+}
 
 $message = '';
 $messageClass = '';
@@ -150,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     $updates = [];
     $errors = [];
     foreach ($definitions as $key => $definition) {
-        $value = trim((string)($_POST[$key] ?? ''));
+        $value = is_string($_POST[$key] ?? null) ? trim($_POST[$key]) : '';
         $settings[$key] = $value;
         if ($definition['type'] === 'number') {
             $step = (string)($definition['step'] ?? '1');
@@ -172,11 +188,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     }
 
     if (!$errors) {
-        $governance->setThresholds(array_map(static fn($value): float => (float)$value / 100, $updates), (int)$_SESSION['user_id']);
-        log_activity($pdo, (int)$_SESSION['user_id'], 'ML settings update', 'Demand Forecasting', null, null, $updates);
-        $settings = $loadLimits();
-        $message = 'Forecast settings saved. Training Eligibility remains fixed; saving does not train or approve a model.';
-        $messageClass = 'tag-success';
+        try {
+            $pdo->beginTransaction();
+            $governance->setThresholds(array_map(static fn($value): float => (float)$value / 100, $updates), (int)$_SESSION['user_id']);
+            log_activity($pdo, (int)$_SESSION['user_id'], 'ML settings update', 'Demand Forecasting', null, null, $updates);
+            $pdo->commit();
+            $settings = $loadLimits();
+            $message = 'Forecast settings saved. Training Eligibility remains fixed; saving does not train or approve a model.';
+            $messageClass = 'tag-success';
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $message = \App\Support\OperatorAlert::message($e, 'Could not save candidate error limits. Retry.');
+            $messageClass = 'tag-warning';
+        }
     } else {
         $message = 'Settings were not saved. Review the highlighted fields below.';
         $messageClass = 'tag-warning';
