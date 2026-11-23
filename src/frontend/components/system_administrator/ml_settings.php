@@ -611,7 +611,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                             <td><?= $job['status'] === 'succeeded' ? htmlspecialchars(ucfirst($job['candidate_qualification'] ?? 'incomplete')) . ' - approval separate' : 'Not evaluated' ?></td>
                             <td><?php if ($job['status'] === 'failed'): ?>
                                 Diagnostic reference: <code><?= htmlspecialchars($job['diagnostic_reference']) ?></code>
-                                <?php elseif (!empty($job['model_version'])): ?><code><?= htmlspecialchars($job['model_version']) ?></code>
+                                <?php elseif (!empty($job['model_version'])): ?><a href="../report/forecast_analytics.php?training_run_id=<?= (int)$job['training_run_id'] ?>"><?= htmlspecialchars($job['model_version']) ?></a>
                                 <?php else: ?><?= htmlspecialchars($job['safe_explanation']) ?><?php endif; ?></td>
                         </tr>
                     <?php endforeach; ?>

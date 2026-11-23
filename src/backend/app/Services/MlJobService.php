@@ -223,12 +223,13 @@ class MlJobService
             } elseif ($trigger === 'model_retraining') {
                 try {
                     $cnt = 0;
-                    $runs = $this->pdo->query("SELECT model_version,metrics_json FROM model_training_runs WHERE status='completed'");
+                    $runs = $this->pdo->query("SELECT training_run_id,model_version,metrics_json FROM model_training_runs WHERE status='completed'");
                     foreach ($runs->fetchAll(PDO::FETCH_ASSOC) as $run) {
                         $evidence = json_decode((string)($run['metrics_json'] ?? ''), true);
                         if ((int)($evidence['metadata']['job_id'] ?? 0) !== $jobId) continue;
                         $cnt++;
                         $row['model_version'] = $run['model_version'];
+                        $row['training_run_id'] = (int)$run['training_run_id'];
                         $row['trained_product_ids'] = array_map('intval', $evidence['metadata']['products'] ?? []);
                         $row['candidate_qualification'] = $evidence['metadata']['outcome'] ?? $evidence['outcome'] ?? 'incomplete';
                         break;

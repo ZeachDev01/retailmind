@@ -85,6 +85,9 @@ try {
         const job = fixture('state').jobs[0];
         assert.match(await page.locator('.ml-action-bar .ml-job-status').innerText(),new RegExp('#' + job.job_id + '.*Queued'));
         assert.equal(Number(job.requester_id),role === 'admin' ? 1 : 2);
+        const audit = fixture('state').audit.at(-1);
+        assert.equal(Number(audit.record_id),Number(job.job_id));
+        assert.equal(Number(audit.user_id),role === 'admin' ? 1 : 2);
         const duplicate = await context.request.post(url,{form});
         assert.match(await duplicate.text(),/already queued or running/);
         assert.equal(fixture('state').jobs.length,1);
@@ -112,7 +115,12 @@ try {
             assert.match(await page.locator('main').innerText(),/ERR-TEST-502/);
             assert.doesNotMatch(await page.locator('main').innerText(),/DO-NOT-EXPOSE|Traceback/);
         }
-        fixture('clear_jobs'); fixture('not_ready');
+        fixture('clear_jobs');
+        fixture('fail_audit');
+        const auditDenied = await context.request.post(url,{form});
+        assert.match(await auditDenied.text(),/Could not complete the model action/);
+        assert.equal(fixture('state').jobs.length,0,'HTTP audit failure cannot leave queued work');
+        fixture('allow_audit'); fixture('not_ready');
         const denied = await context.request.post(url,{form});
         assert.match(await denied.text(),/No Product is ready for training/);
         assert.equal(fixture('state').jobs.length,0);
