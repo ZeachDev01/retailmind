@@ -132,12 +132,13 @@ $adminForecastingBtn = $adminXpath->query('//nav[@aria-label="Main navigation"]/
 $assert($adminForecastingBtn->length === 1, 'Administrator has dedicated Forecasting navigation group');
 
 $adminForecastingLinks = $adminXpath->query('//nav[@aria-label="Main navigation"]//div[contains(@class,"dropdown")][button[@title="Forecasting"]]//a');
-$assert($adminForecastingLinks->length === 6, 'Administrator Forecasting group has exactly 6 items');
+$assert($adminForecastingLinks->length === 7, 'Administrator Forecasting group has exactly 7 items');
 
 $expectedAdminOrder = [
     ['title' => 'Import Sales History', 'path' => app_url('components/system_administrator/forecast_import.php')],
     ['title' => 'Data Readiness', 'path' => app_url('components/report/data_readiness.php')],
     ['title' => 'Model Training', 'path' => app_url('components/system_administrator/ml_settings.php')],
+    ['title' => 'Forecast Analytics', 'path' => app_url('components/report/forecast_analytics.php')],
     ['title' => 'Model Review & Approval', 'path' => app_url('components/administrator/model_review.php')],
     ['title' => 'Demand Forecast', 'path' => app_url('components/report/predictions.php')],
     ['title' => 'Forecast Exceptions', 'path' => app_url('components/report/forecast_exceptions.php')],
@@ -172,8 +173,8 @@ $storeReportsForecasting = $adminXpath->query(
 $assert($storeReportsForecasting->length === 0, 'Store Reports has no duplicate forecasting links');
 
 // Training settings are operational; other technical links keep their own permissions.
-$adminTechnicalLinks = $adminXpath->query('//nav[@aria-label="Main navigation"]//a[contains(@href, "forecast_analytics.php")]');
-$assert($adminTechnicalLinks->length === 0, 'Administrator navigation excludes analytics');
+$adminTechnicalLinks = $adminXpath->query('//nav[@aria-label="Main navigation"]//a[contains(@href, "forecast_analytics.php") or contains(@href, "forecast_import.php")]');
+$assert($adminTechnicalLinks->length === 2, 'Administrator navigation includes candidate analytics and sales history import');
 
 // Ensure replay/demo/prototype entries are not in normal production menu
 $adminReplay = $adminXpath->query('//nav[@aria-label="Main navigation"]//a[contains(@href, "forecast_replay.php") or contains(@title, "Replay") or contains(@title, "Demo")]');

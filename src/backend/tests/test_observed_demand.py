@@ -46,6 +46,11 @@ class ObservedDemandTests(unittest.TestCase):
         data.loc[data.date >= "2023-02-26", "units_sold"] = 100
         result = train_and_evaluate(data)
         first = result["metadata"]["folds"][0]
+        daily = result["metadata"]["held_out_daily"]
+        self.assertEqual(len(daily), 84)
+        self.assertEqual(daily[0], {"product_id": 1, "forecast_origin": "2023-02-25",
+                                   "target_date": "2023-02-26", "actual_units": 100.0,
+                                   "predicted_units": 10, "baseline_units": 10})
         self.assertEqual(first["origin"], "2023-02-25")
         self.assertEqual(first["training_label_end"], "2023-02-25")
         self.assertEqual(first["evaluations"]["7"]["mae"], 630.0)
