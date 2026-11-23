@@ -3,6 +3,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const { randomBytes } = require('node:crypto');
 const net = require('node:net');
 const { chromium } = require('playwright');
+const { expect } = require('@playwright/test');
 if (process.env.RUN_DB_TESTS !== '1') {
     console.log('Candidate Analytics: skipped (set RUN_DB_TESTS=1; disposable database required)');
     process.exit(0);
@@ -34,8 +35,10 @@ const state = () => JSON.parse(fixture('state', true));
         const before = state();
         browser = await chromium.launch({ headless: true });
         for (const role of ['admin', 'super_admin', 'inventory_manager', 'cashier']) {
-            const context = await browser.newContext();
+            const context = await browser.newContext({deviceScaleFactor:2});
             const page = await context.newPage({ viewport: {width: 1440, height: 1000} });
+            const pageErrors = [];
+            page.on('pageerror', error => pageErrors.push(error.message));
             await page.goto(origin + '/?login=1');
             await page.locator('#landing-login-username').fill('theme_' + role);
             await page.locator('#landing-login-password').fill(data.password);
@@ -60,11 +63,33 @@ const state = () => JSON.parse(fixture('state', true));
             assert.match(await page.locator('main').textContent(), /Gate Failed/);
             assert.equal(await page.getByRole('table', {name:'Candidate held-out daily evidence',exact:true}).locator('tbody tr').first().innerText(), '1\t2016-04-24\t2016-04-25\t17\t28\t16');
             assert.ok(!(await page.locator('main').innerText()).includes('1,234.00 units'));
+            assert.equal(await page.locator('#analytics-evidence').inputValue(),'historical');
+            assert.equal(await page.locator('#actualChart').count(),1,'Historical comparison feeds selected evidence');
+            await page.locator('#analytics-tab-best').click();
+            assert.equal(await page.locator('#analytics-panel-best tbody tr:not(.table-ghost-row)').count(),2,'Historical rankings include all recorded Products');
+            await page.locator('#analytics-tab-features').click();
+            assert.equal(await page.locator('#featureChart').count(),1,'Recorded input influence is used');
+            await page.locator('#analytics-tab-trend').click();
+            assert.equal(await page.locator('#trendChart').count(),1,'Nested 28-day candidate WAPE reaches the trend');
+            await page.locator('#analytics-group').selectOption('week');
+            await page.locator('#analytics-order').selectOption('desc');
+            await Promise.all([page.waitForNavigation(),page.getByRole('button',{name:'Apply view',exact:true}).click()]);
+            await expect(page.locator('#historical-chart-summary')).toContainText('2 weekly totals');
+            await page.locator('#analytics-group').selectOption('month');
+            await Promise.all([page.waitForNavigation(),page.getByRole('button',{name:'Apply view',exact:true}).click()]);
+            await expect(page.locator('#historical-chart-summary')).toContainText('2 monthly totals');
+            await page.locator('#analytics-evidence').selectOption('store');
+            await Promise.all([page.waitForNavigation(),page.getByRole('button',{name:'View evidence',exact:true}).click()]);
+            assert.equal(await page.locator('#actualChart').count(),0,'M5 comparisons never appear as Store outcomes');
+            assert.match(await page.locator('#analytics-panel-actual').innerText(),/Ready for your first comparison/);
+            await page.locator('#analytics-evidence').selectOption('historical');
+            await Promise.all([page.waitForNavigation(),page.getByRole('button',{name:'View evidence',exact:true}).click()]);
             for (const theme of ['light','dark']) {
                 await page.evaluate(mode => document.documentElement.dataset.theme = mode, theme);
                 for (const width of [1440,390]) {
                     await page.setViewportSize({width,height:844});
                     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Analytics fits ' + width);
+                    assert.ok(await page.locator('#historicalChart').evaluate(canvas=>Math.abs(canvas.width/devicePixelRatio-canvas.getBoundingClientRect().width)<2),'Canvas stays sized to its container on retina and resize');
                     if (role === 'admin') {
                         require('node:fs').mkdirSync('.scratch/candidate-analytics',{recursive:true});
                         await page.screenshot({path:'.scratch/candidate-analytics/' + theme + '-' + width + '.png',fullPage:true});
@@ -80,6 +105,7 @@ const state = () => JSON.parse(fixture('state', true));
             assert.equal((await page.goto(url + '?model_version=unrelated_approved')).status(),404);
             await page.goto(url);
             assert.equal(await page.locator('#analytics-run').inputValue(),String(ids.missing));
+            assert.deepEqual(pageErrors, [], 'Analytics navigation has no script errors');
             await context.close();
         }
         assert.deepEqual(state(), before, 'Viewing candidate evidence preserves activation, observations, jobs, stock and sales');
