@@ -92,9 +92,10 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Operational Audit: `components/system_administrator/audit_logs.php`
   - Shared audit history uses Category (Super Administrator), Module, and Action selectors. Choices respect audit permissions; changing Category narrows Modules, and changing Module narrows Actions.
   - Verification: `audit_modules_test.php`, `audit_history_filters_browser_test.js`
-- **Forecasting & Approvals**: `components/administrator/model_review.php`, `components/report/predictions.php`, `forecast_exceptions.php`
+- **Forecasting & Approvals**: `components/administrator/model_review.php`, `components/report/forecast_analytics.php`, `components/report/predictions.php`, `forecast_exceptions.php`
   - Backing JS: `forecast-notices.js`
   - Backend Services: `App\Forecasting\StoreModelGovernanceService`, `CandidateEvaluationService`
+  - Candidate Analytics: local Administrator and Super Administrator select completed `training_run_id` / `model_version`; persisted fold evaluation and original-date `metadata.held_out_daily` remain separate from final candidate fits, Store observations and independently fitted replay. Missing snapshots remain unavailable. Verification: `candidate_analytics_browser_test.js`, `test_observed_demand.py`, `test_observed_worker.py` (persisted original-date evidence and pinned M5 provenance).
   - Status derivation: `App\Attention\DatabaseAttentionSignalSource` (signals) → `AttentionRuleService` (keys, severity) → `StoreOperationsDashboardWorkspace` (Store status card, dashboard exceptions) → `DemandForecastService::getOperationalIssues` (Predictions page notices)
   - Setup state: `App\Forecasting\ForecastSetupStatus` (`collecting` / `ready` / `active`)
   - Contract Tests: `forecasting_notices_contract.php`, `store_forecasting_operational_workflow_test.php`
