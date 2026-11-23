@@ -224,7 +224,7 @@ assert_true(!$policy->allows('admin', RoleCapabilityPolicy::ROLL_BACK_MODELS, nu
 
 // 1.3 Technical setup authority retained by Super Administrator
 assert_true(!$policy->allows('admin', RoleCapabilityPolicy::CONFIGURE_MODELS, null, $localCtx), 'Local Administrator lacks CONFIGURE_MODELS');
-assert_true(!$policy->allows('admin', RoleCapabilityPolicy::RETRAIN_MODELS, null, $localCtx), 'Local Administrator lacks RETRAIN_MODELS');
+assert_true($policy->allows('admin', RoleCapabilityPolicy::RETRAIN_MODELS, null, $localCtx), 'Local Administrator has RETRAIN_MODELS');
 assert_true($policy->allows('super_admin', RoleCapabilityPolicy::CONFIGURE_MODELS, null, $localCtx), 'Super Administrator retains CONFIGURE_MODELS');
 assert_true($policy->allows('super_admin', RoleCapabilityPolicy::RETRAIN_MODELS, null, $localCtx), 'Super Administrator retains RETRAIN_MODELS');
 

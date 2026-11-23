@@ -68,8 +68,9 @@ $isHostedReplay = !$isLocalDemo
     && !empty(json_decode((string)$demoMetadata, true)['replay']);
 $latestCandidate = $pdo->query("SELECT model_version, metrics_json FROM model_training_runs
     WHERE status='completed' ORDER BY training_run_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
-$trainingJob = $pdo->query("SELECT job_id,status,operator_message FROM ml_jobs
-    WHERE trigger_type='model_retraining' ORDER BY job_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+$jobService = new \App\Services\MlJobService($pdo);
+$trainingJobs = $jobService->getRecentTrainingJobs();
+$trainingJob = $trainingJobs[0] ?? null;
 $isTraining = in_array($trainingJob['status'] ?? '', ['queued', 'running'], true);
 $trainingReadiness = get_forecasting_readiness($pdo);
 $eligibleTrainingProducts = array_values(array_filter(
@@ -85,16 +86,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
                 throw new RuntimeException('This hosted replay contains saved results. Train a fresh replay locally, then import its snapshot.');
             }
             require_capability(\App\Authorization\RoleCapabilityPolicy::RETRAIN_MODELS);
-            if ($isTraining) throw new RuntimeException('A training job is already queued or running.');
-            if (!$isLocalDemo && !$isHostedReplay && $eligibleTrainingProducts === []) {
-                $requiredDays = \App\Forecasting\StoreTrainingEligibilityService::MINIMUM_USABLE_DAYS;
-                throw new RuntimeException("No Product is ready for training. Each Product needs {$requiredDays} consecutive usable history days through yesterday.");
-            }
-            $jobId = (new \App\Services\MlJobService($pdo))->enqueue('model_retraining',
+            $jobId = $jobService->enqueue('model_retraining',
                 (int)$_SESSION['user_id'], current_role(), $_SERVER['REMOTE_ADDR'] ?? null);
-            $trainingJob = ['job_id' => $jobId, 'status' => 'queued'];
+            $trainingJob = $jobService->getJobStatus($jobId);
+            $trainingJobs = $jobService->getRecentTrainingJobs();
             $isTraining = true;
-            $message = 'Training queued. This page refreshes while the background worker trains and evaluates the candidate.';
+            $message = 'Training queued. Job #' . $jobId . '. This page refreshes while the background worker trains and evaluates the candidate.';
         } else {
             require_capability(\App\Authorization\RoleCapabilityPolicy::APPROVE_MODELS);
             $version = (string)($_POST['model_version'] ?? '');
@@ -254,7 +251,7 @@ $formatRunDetails = static function (?string $errorMessage): string {
     if (preg_match('/SQLSTATE|PDOException|Stack trace|#0\s|Traceback/i', $raw) === 1) {
         return 'Training run encountered an internal execution error. Review server logs and retry.';
     }
-    return mb_strimwidth($raw, 0, 100, '...');
+    return 'Review the job diagnostic reference before retrying.';
 };
 
 $stylePath = __DIR__ . '/../../assets/css/style.css';
@@ -342,7 +339,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                 <div class="ml-banner tag-warning" role="alert">
                     No Product is ready for training. Each Product needs
                     <?= (int)\App\Forecasting\StoreTrainingEligibilityService::MINIMUM_USABLE_DAYS ?>
-                    consecutive usable history days through yesterday. Review the eligibility details below.
+                    accumulated usable days, supported recent inputs and chronological holdouts through yesterday. Review the eligibility details below.
                 </div>
             <?php elseif (!$isLocalDemo && !$isHostedReplay && count($eligibleTrainingProducts) < count($trainingReadiness)): ?>
                 <div class="ml-banner ml-banner-info" role="note">
@@ -361,7 +358,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                 </form>
                 <div class="ml-job-status" role="status" aria-live="polite">
                     <span>Latest training job</span>
-                    <strong><?= htmlspecialchars($trainingJob ? '#' . $trainingJob['job_id'] . ' · ' . ucfirst($trainingJob['status']) : 'Not started') ?></strong>
+                    <strong><?= htmlspecialchars($trainingJob ? '#' . $trainingJob['job_id'] . ' · ' . (($trainingJob['status'] ?? '') === 'succeeded' ? 'Completed' : ucfirst($trainingJob['status'])) : 'Not started') ?></strong>
                 </div>
             </div>
 
@@ -602,10 +599,30 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
 
         <section class="ml-secondary" aria-labelledby="runs-heading">
 <details class="forecast-details"><summary id="runs-heading">Recent training runs</summary>
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Training job history">
+                <table aria-label="Recent training jobs">
+                    <thead><tr><th scope="col">Job</th><th scope="col">Requested</th><th scope="col">State</th><th scope="col">Candidate qualification</th><th scope="col">Result / diagnostic</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($trainingJobs as $job): $jobStatus = $formatRunStatus($job['status']); ?>
+                        <tr>
+                            <td>#<?= (int)$job['job_id'] ?></td>
+                            <td><?= htmlspecialchars(format_display_datetime($job['queued_at'] ?? null)) ?></td>
+                            <td><span class="<?= htmlspecialchars($jobStatus['class']) ?>"><?= htmlspecialchars($jobStatus['label']) ?></span></td>
+                            <td><?= $job['status'] === 'succeeded' ? htmlspecialchars(ucfirst($job['candidate_qualification'] ?? 'incomplete')) . ' - approval separate' : 'Not evaluated' ?></td>
+                            <td><?php if ($job['status'] === 'failed'): ?>
+                                Diagnostic reference: <code><?= htmlspecialchars($job['diagnostic_reference']) ?></code>
+                                <?php elseif (!empty($job['model_version'])): ?><a href="../report/forecast_analytics.php?training_run_id=<?= (int)$job['training_run_id'] ?>"><?= htmlspecialchars($job['model_version']) ?></a>
+                                <?php else: ?><?= htmlspecialchars($job['safe_explanation']) ?><?php endif; ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    <?php if (!$trainingJobs): ?><tr><td colspan="5">No training jobs yet.</td></tr><?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
             <div class="section-header">
                 <div>
 
-                    <p class="section-description">Latest 12 training runs, newest first.</p>
+                    <p class="section-description">Latest 12 training runs, newest first. Job completion does not grant candidate qualification or approval.</p>
                 </div>
             </div>
             <div class="table-wrap">

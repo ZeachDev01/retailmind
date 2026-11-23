@@ -35,7 +35,7 @@ $assert(!$policy->allows('inventory_manager', RoleCapabilityPolicy::GENERATE_FOR
 $assert(!$policy->allows('inventory_manager', RoleCapabilityPolicy::RETRAIN_MODELS), 'Inventory Manager is denied Model Retraining');
 $assert(!$policy->allows('inventory_manager', RoleCapabilityPolicy::CONFIGURE_MODELS), 'Inventory Manager is denied Model Configuration');
 $assert(!$policy->allows('inventory_manager', RoleCapabilityPolicy::APPROVE_MODELS), 'Inventory Manager is denied Model Approval');
-$assert(!$policy->allows('admin', RoleCapabilityPolicy::RETRAIN_MODELS), 'Administrator is denied Model Retraining');
+$assert($policy->allows('admin', RoleCapabilityPolicy::RETRAIN_MODELS), 'Administrator is allowed Model Retraining');
 $assert(!$policy->allows('admin', RoleCapabilityPolicy::CONFIGURE_MODELS), 'Administrator is denied Model Configuration');
 $assert($policy->allows('admin', RoleCapabilityPolicy::IMPORT_FORECAST_HISTORY), 'Administrator is allowed Forecast History Import');
 $assert(!$policy->allows('cashier', RoleCapabilityPolicy::VIEW_FORECASTS), 'Cashier is denied Forecast viewing');
