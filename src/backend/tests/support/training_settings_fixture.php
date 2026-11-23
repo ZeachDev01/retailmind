@@ -18,4 +18,3 @@ foreach (['platform_settings', 'ml_settings', 'ml_jobs', 'model_training_runs'] 
 }
 $state['audit'] = $pdo->query("SELECT user_id, action, new_value FROM activity_log WHERE action IN ('ML settings update', 'ML schedule update') ORDER BY log_id")->fetchAll(PDO::FETCH_ASSOC);
 echo json_encode($state, JSON_THROW_ON_ERROR);
-

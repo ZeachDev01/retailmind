@@ -122,5 +122,3 @@ const state = () => JSON.parse(fixture('state', true));
         fixture('cleanup');
     }
 })().catch(error => { console.error(error); process.exitCode = 1; });
-
-
