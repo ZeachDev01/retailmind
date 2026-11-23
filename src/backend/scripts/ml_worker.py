@@ -106,7 +106,7 @@ def recover_expired_leases(conn):
                 operator_message = 'Job failed: lease expired and maximum retries (3) exceeded.',
                 diagnostic_reference = 'LEASE_TIMEOUT_EXHAUSTED'
             WHERE status = 'running' 
-              AND lease_expires_at < NOW()
+              AND lease_expires_at <= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
               AND attempts >= 3
         """)
         conn.commit()
@@ -120,7 +120,7 @@ def claim_job(conn):
                 SELECT job_id, trigger_type, attempts, model_version, evidence_cutoff 
                 FROM ml_jobs 
                 WHERE status = 'queued' 
-                   OR (status = 'running' AND lease_expires_at < NOW() AND attempts < 3)
+                   OR (status = 'running' AND lease_expires_at <= DATE_SUB(NOW(), INTERVAL 5 MINUTE) AND attempts < 3)
                 ORDER BY queued_at ASC 
                 LIMIT 1 
                 FOR UPDATE
@@ -130,7 +130,7 @@ def claim_job(conn):
                 SELECT job_id, trigger_type, attempts 
                 FROM ml_jobs 
                 WHERE status = 'queued' 
-                   OR (status = 'running' AND lease_expires_at < NOW() AND attempts < 3)
+                   OR (status = 'running' AND lease_expires_at <= DATE_SUB(NOW(), INTERVAL 5 MINUTE) AND attempts < 3)
                 ORDER BY queued_at ASC 
                 LIMIT 1 
                 FOR UPDATE
@@ -200,7 +200,6 @@ def process_job(conn, job):
             else:
                 raise ValueError(f"Unknown job trigger type: {trigger}")
 
-            renew_lease(conn, job_id)
             cursor.execute("""
                 UPDATE ml_jobs 
                 SET status = 'succeeded', 

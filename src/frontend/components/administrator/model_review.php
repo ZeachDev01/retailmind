@@ -166,6 +166,7 @@ $reviewBars = static function (array $rows) use ($reviewEscape): void {
         <?php forecast_workflow('review'); ?>
 
         <div class="model-review-content">
+            <?php require __DIR__ . '/../report/forecast_scheduler_health.php'; ?>
             <?php if ($message): ?>
                 <div id="review-feedback" class="alert <?= $reviewEscape($messageClass) ?>" role="status"><?= $reviewEscape($message) ?></div>
             <?php endif; ?>

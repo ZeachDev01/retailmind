@@ -203,6 +203,10 @@ $pdo->exec("UPDATE ml_jobs SET status = 'running', attempts = 1, lease_expires_a
 $scheduler->recoverExpiredLeases(new DateTime('2024-06-10 09:15:00', new DateTimeZone('Asia/Manila')));
 $activeLease = $pdo->query("SELECT status FROM ml_jobs WHERE job_id = 101")->fetch(PDO::FETCH_ASSOC);
 assert_same('running', $activeLease['status'], 'Running job with valid lease is not touched');
+$scheduler->recoverExpiredLeases(new DateTime('2024-06-10 10:04:59', new DateTimeZone('Asia/Manila')));
+assert_same('running', $pdo->query('SELECT status FROM ml_jobs WHERE job_id = 101')->fetchColumn(), 'ADR 0023 keeps a five-minute lease grace period');
+$scheduler->recoverExpiredLeases(new DateTime('2024-06-10 10:05:00', new DateTimeZone('Asia/Manila')));
+assert_same('queued', $pdo->query('SELECT status FROM ml_jobs WHERE job_id = 101')->fetchColumn(), 'Recovery begins after the five-minute grace period');
 
 // --- 7. Blocked condition handling ---
 $pdo->exec("DELETE FROM ml_jobs; UPDATE platform_settings SET setting_value = '' WHERE setting_key = 'ml_approved_model_version';");
