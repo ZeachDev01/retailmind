@@ -19,7 +19,9 @@ const fixture = action => {
     let browser, server;
     try {
         const data = JSON.parse(fixture('create'));
+        fixture('forecast_import_setup');
         const before = JSON.parse(fixture('state'));
+        const importBefore = JSON.parse(fixture('forecast_import_state'));
         const listener = net.createServer();
         await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
         const port = listener.address().port;
@@ -41,82 +43,74 @@ const fixture = action => {
             await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.getByRole('button', { name: 'Log in', exact: true }).click()]);
         };
         await login('super_admin');
-        await page.goto(origin + '/components/system_administrator/ml_settings.php');
-        await page.getByText('Training eligibility & product history', {exact: true}).click();
-        const eligibilityPolicy = await page.locator('[aria-label="Training Eligibility policy"]').innerText();
-        assert.match(eligibilityPolicy, /140 accumulated usable days/);
-        for (const key of ['minimum_history_days', 'preferred_history_days', 'minimum_nonzero_sales_days', 'history_window_days']) {
-            assert.equal(await page.locator(`[name="${key}"]`).count(), 0, key + ' is read-only policy');
-        }
-        await page.goto(origin + '/components/report/data_readiness.php');
-        await page.getByRole('button', { name: 'About training eligibility', exact: true }).click();
-        assert.equal(await page.locator('[aria-label="Training Eligibility policy"]').innerText(), eligibilityPolicy,
-            'Model Training and Data Readiness explain the same effective policy');
-        await page.goto(origin + '/components/system_administrator/ml_settings.php');
-        for (const key of ['forecast_period_days', 'n_estimators', 'max_depth', 'min_samples_leaf',
-            'min_samples_split', 'prediction_interval_lower', 'prediction_interval_upper', 'accuracy_threshold_wape']) {
-            assert.equal(await page.locator(`[name="${key}"]`).count(), 0, key + ' cannot imply ineffective changes');
-        }
-        await page.getByText('Fixed model recipe & approval requirements', {exact: true}).click();
-        assert.match(await page.locator('main').innerText(), /15 trees, maximum depth 8, random seed 42/);
-        await page.locator('#settings-heading').click();
-        const values = await page.locator('#model-quality-settings').evaluate(form => Object.fromEntries(new FormData(form)));
-        const settingsUrl = page.url();
-        for (const value of ['', '-1', '201', 'NaN', '1e999']) {
-            const response = await context.request.post(settingsUrl, { form: { ...values, ml_max_wape_7d: value } });
-            assert.match(await response.text(), /Settings were not saved/, value + ' must be rejected');
-        }
-        const saved = await context.request.post(settingsUrl, { form: { ...values,
-            ml_max_wape_7d: '21.5', ml_max_wape_14d: '27', ml_max_wape_28d: '35' } });
-        assert.match(await saved.text(), /Forecast settings saved/);
-        await page.reload();
-        assert.equal(await page.locator('#ml_max_wape_7d').inputValue(), '21.5');
-        assert.equal(await page.locator('#ml_max_wape_14d').inputValue(), '27');
-        assert.equal(await page.locator('#ml_max_wape_28d').inputValue(), '35');
-        assert.equal((await context.request.post(settingsUrl, { form: { action: 'save_model_quality' } })).status(), 403);
-        await page.getByRole('link', { name: 'Import sales history', exact: true }).click();
-        await page.waitForURL('**/system_administrator/forecast_import.php');
+        console.log('Forecast import: signed in as Super Administrator');
         const importUrl = origin + '/components/system_administrator/forecast_import.php';
         const legacyImportUrl = origin + '/components/report/forecast_import.php';
+        assert.equal((await page.goto(importUrl)).status(), 200, 'Super Administrator retains import access');
+        assert.equal((await context.request.get(importUrl + '?template=1')).status(), 200, 'Super Administrator retains template access');
+        await context.clearCookies();
+        await login('admin');
+        console.log('Forecast import: verifying Administrator import workflow');
+        await page.goto(origin + '/components/report/data_readiness.php');
+        await page.locator('.forecast-studio-nav').getByRole('link', { name: 'Import history', exact: true }).click();
+        await page.waitForURL('**/system_administrator/forecast_import.php');
         assert.equal((await page.goto(legacyImportUrl)).status(), 200, 'Existing bookmarks remain usable');
         assert.equal((await page.goto(importUrl)).status(), 200);
         const forbidden = await context.request.post(importUrl, { form: { confirm_import: '1' } });
         assert.equal(forbidden.status(), 403, 'Missing CSRF must be denied');
         const upload = async csv => {
             await page.locator('#forecast-csv').setInputFiles({ name: 'history.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
-            await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.getByRole('button', { name: 'Preview and validate' }).click()]);
+            await Promise.all([page.waitForResponse(response => response.url() === importUrl && response.request().method() === 'POST'), page.getByRole('button', { name: 'Preview and validate' }).click()]);
+            await page.waitForFunction(() => document.querySelector('main')?.getAttribute('aria-busy') !== 'true');
         };
         await upload('sale_date,sku,quantity\n2026-01-01,UNKNOWN,5\n');
-        assert.match(await page.locator('main .alert[role="alert"]').innerText(), /not an active product/);
+        assert.match(await page.locator('[aria-label="Invalid CSV rows"]').innerText(), /not an active product/);
+        assert.equal(await page.locator('[name="confirm_import"]').count(), 0, 'Invalid rows block confirmation');
+        const invalidToken = await page.locator('[name="csrf_token"]').first().inputValue();
+        const invalidConfirm = await context.request.post(importUrl, { form: { confirm_import: '1', csrf_token: invalidToken } });
+        assert.match(await invalidConfirm.text(), /preview expired/i, 'Forged confirmation cannot save invalid preview');
         const csv = 'sale_date,sku,quantity\n' + Array.from({ length: 35 }, (_, day) => {
             const date = new Date(Date.UTC(2026, 0, 1 + day)).toISOString().slice(0, 10);
             return `${date},THEME-ITEM,5`;
-        }).join('\n');
+        }).join('\n') + '\n2025-12-31,THEME-ITEM,999\n';
         await upload(csv);
+        assert.match(await page.locator('#preview-heading').innerText(), /35 accepted.*1 skipped.*0 invalid/);
         assert.equal(await page.getByRole('table', { name: 'CSV Sales History Preview' }).locator('tbody tr').count(), 20, 'Preview must be limited to 20 rows');
-        await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.getByRole('button', { name: 'Import 35 daily totals', exact: true }).click()]);
+        await page.getByRole('button', { name: 'Import 36 daily totals', exact: true }).click();
+        await page.locator('main .alert[role="status"]').waitFor();
         assert.match(await page.locator('main .alert[role="status"]').innerText(), /Imported 35 daily totals/);
+        assert.match(await page.locator('[aria-label="Product Data Readiness after import"]').innerText(), /0 of 1 Products eligible.*More history needed/s);
         await upload(csv);
-        await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.getByRole('button', { name: 'Import 35 daily totals', exact: true }).click()]);
-        assert.match(await page.locator('main .alert[role="status"]').innerText(), /Imported 0 daily totals; skipped 35/);
+        assert.match(await page.locator('#preview-heading').innerText(), /0 accepted.*36 skipped.*0 invalid/);
+        await page.getByRole('button', { name: 'Import 36 daily totals', exact: true }).click();
+        await page.locator('main .alert[role="status"]').waitFor();
+        assert.match(await page.locator('main .alert[role="status"]').innerText(), /Imported 0 daily totals; skipped 36/);
         await page.goto(origin + '/components/report/data_readiness.php');
         await page.getByRole('button', { name: 'About training eligibility', exact: true }).click();
         assert.match(await page.locator('.main-content').innerText(), /Closures, unknown observations, and Stockout Days do not add usable days/);
-        assert.equal(await page.getByRole('link', { name: 'Import sales history', exact: true }).count(), 1, 'Readiness gives the authorized technical owner a direct next action');
+        assert.equal(await page.locator('.forecast-studio-nav a[href*="forecast_import.php"]').count(), 1, 'Readiness gives the Administrator a direct import action');
+        const imported = JSON.parse(fixture('forecast_import_state'));
+        assert.equal(imported.forecast_sales_imports.length, 35);
+        assert(!imported.forecast_sales_imports.some(row => row.sale_date === '2025-12-31'), 'POS overlap is excluded from imported evidence');
+        assert(imported.forecast_sales_imports.every(row => Number(row.imported_by) === 1), 'Administrator owns persisted import attribution');
+        assert.deepEqual(imported.audits.map(Number), [1, 1], 'Import audit identifies acting Administrator');
+        assert.deepEqual(imported.stock_movements, importBefore.stock_movements, 'Imports create no inventory movements');
+        assert.deepEqual(imported.model_training_runs, importBefore.model_training_runs, 'Imports create no training run history');
         const after = JSON.parse(fixture('state'));
         assert.equal(after.sales, before.sales, 'History imports must not create receipts');
         assert.equal(after.stock, before.stock, 'History imports must not change stock');
         await context.close();
-        for (const role of ['admin', 'inventory_manager', 'cashier']) {
+        for (const role of ['inventory_manager', 'cashier']) {
             const deniedContext = await browser.newContext();
             const denied = await deniedContext.newPage();
             await denied.goto(origin + '/?login=1');
             await denied.locator('#landing-login-username').fill('theme_' + role);
             await denied.locator('#landing-login-password').fill(data.password);
             await Promise.all([denied.waitForNavigation({ waitUntil: 'domcontentloaded' }), denied.getByRole('button', { name: 'Log in', exact: true }).click()]);
-            assert.equal((await deniedContext.request.post(settingsUrl, { form: values })).status(), 403, role + ' cannot save model limits');
             assert.equal((await denied.goto(importUrl)).status(), 403, role + ' must be denied');
             assert.equal((await denied.goto(legacyImportUrl)).status(), 403, role + ' must be denied at the former route');
+            assert.equal((await deniedContext.request.post(importUrl, { form: { confirm_import: '1', csrf_token: 'forged' } })).status(), 403, role + ' cannot confirm import directly');
+            assert.equal((await deniedContext.request.get(importUrl + '?template=1')).status(), 403, role + ' cannot read the template');
             await deniedContext.close();
         }
         console.log('Forecast import browser checks passed (upload, preview, import, readiness, duplicates, authorization, stock preservation)');

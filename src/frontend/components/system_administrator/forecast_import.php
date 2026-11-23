@@ -27,17 +27,19 @@ if (isset($_GET['template'])) {
 }
 
 $message = '';
+$readiness = null;
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     try {
         if (isset($_POST['confirm_import'])) {
             $preview = $_SESSION['forecast_import_preview'] ?? null;
-            if (!$preview || $preview['store_id'] !== $storeId || time() - $preview['created_at'] > 1800) {
+            if (!$preview || !empty($preview['invalid']) || $preview['store_id'] !== $storeId || time() - $preview['created_at'] > 1800) {
                 throw new RuntimeException('The preview expired. Upload your CSV again.');
             }
             $result = $service->import($preview['rows'], (int)$_SESSION['user_id']);
             unset($_SESSION['forecast_import_preview']);
+            $readiness = get_forecasting_readiness($pdo);
             $message = "Imported {$result['inserted']} daily totals; skipped {$result['skipped']} existing totals or days with POS sales. Request model retraining separately to use the new history.";
         } else {
             unset($_SESSION['forecast_import_preview']);
@@ -51,11 +53,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stream = fopen($file['tmp_name'], 'r');
             if (!$stream) throw new RuntimeException('The uploaded file could not be read.');
             try {
-                $rows = ForecastHistoryImportService::parse($stream, $service->products(), date('Y-m-d'));
+                $rows = $service->preview(ForecastHistoryImportService::parsePreview($stream, $service->products(), date('Y-m-d')));
             } finally {
                 fclose($stream);
             }
-            $_SESSION['forecast_import_preview'] = ['store_id' => $storeId, 'created_at' => time(), 'rows' => $rows];
+            $_SESSION['forecast_import_preview'] = ['store_id' => $storeId, 'created_at' => time()] + $rows;
         }
     } catch (RuntimeException $exception) {
         if ($exception instanceof PDOException) {
@@ -144,8 +146,22 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
         <?php if ($message): ?>
             <div class="alert tag-success" role="status">
                 <i class="bi bi-check-circle" aria-hidden="true"></i>
-                <span><?= htmlspecialchars($message) ?></span>
+                <span><?= htmlspecialchars($message) ?> <a href="<?= htmlspecialchars(app_url('components/report/data_readiness.php')) ?>">View Product Data Readiness</a></span>
             </div>
+        <?php endif; ?>
+
+        <?php if ($readiness !== null): ?>
+            <section class="dashboard-section" aria-label="Product Data Readiness after import">
+                <h2>Product Data Readiness</h2>
+                <p><?= count(array_filter($readiness, static fn(array $row): bool => !empty($row['training_eligible']))) ?> of <?= count($readiness) ?> Products eligible for training.</p>
+                <div class="table-wrap"><table aria-label="Product training eligibility after import">
+                    <thead><tr><th scope="col">Product</th><th scope="col">Readiness</th><th scope="col">Reason</th></tr></thead>
+                    <tbody><?php foreach (array_slice($readiness, 0, 20) as $row): $state = forecast_readiness_state($row); ?>
+                        <tr><td><?= htmlspecialchars($row['product_name']) ?></td><td><?= htmlspecialchars($state['label']) ?></td><td><?= htmlspecialchars($state['reason']) ?></td></tr>
+                    <?php endforeach; ?></tbody>
+                </table></div>
+                <a href="<?= htmlspecialchars(app_url('components/report/data_readiness.php')) ?>">View all Product Data Readiness</a>
+            </section>
         <?php endif; ?>
 
         <?php if ($error): ?>
@@ -218,13 +234,20 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
         <section class="dashboard-section" aria-labelledby="preview-heading" style="margin-top: 1.5rem;">
             <div class="section-header">
                 <div>
-                    <h2 id="preview-heading">Preview: <?= count($preview['rows']) ?> daily totals</h2>
-                    <p class="section-description">Showing first <?= min(20, count($preview['rows'])) ?> of <?= count($preview['rows']) ?> rows. All rows were validated.</p>
+                    <h2 id="preview-heading">Preview: <?= $preview['accepted'] ?> accepted · <?= $preview['skipped'] ?> skipped · <?= count($preview['invalid']) ?> invalid</h2>
+                    <p class="section-description">Showing first <?= min(20, count($preview['rows'])) ?> of <?= count($preview['rows']) ?> rows. Confirmation rechecks existing totals and POS sales.</p>
                 </div>
                 <div class="preview-summary-meta">
-                    <span class="decision-pill ok"><i class="bi bi-check-lg" aria-hidden="true"></i> Validated</span>
+                    <span class="decision-pill ok"><i class="bi bi-check-lg" aria-hidden="true"></i> Previewed</span>
                 </div>
             </div>
+            <?php if ($preview['invalid']): ?>
+                <div class="alert tag-warning" role="alert" aria-label="Invalid CSV rows">
+                    <div><strong>Correct invalid rows and upload again before confirming.</strong>
+                        <ul><?php foreach (array_slice($preview['invalid'], 0, 20) as $invalid): ?><li><?= htmlspecialchars($invalid) ?></li><?php endforeach; ?></ul>
+                    </div>
+                </div>
+            <?php endif; ?>
             <div class="table-wrap">
                 <table aria-label="CSV Sales History Preview">
                     <thead>
@@ -233,6 +256,7 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
                             <th scope="col">SKU</th>
                             <th scope="col">Product</th>
                             <th scope="col" class="u-num-col">Units sold</th>
+                            <th scope="col">Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -242,6 +266,7 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
                             <td><code><?= htmlspecialchars($row['sku']) ?></code></td>
                             <td><?= htmlspecialchars($row['product_name']) ?></td>
                             <td class="u-num-col"><?= number_format($row['quantity']) ?></td>
+                            <td><?= htmlspecialchars($row['status']) ?></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
@@ -250,9 +275,11 @@ $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
             <form method="post" style="margin-top: 1.25rem;">
                 <?= csrf_field() ?>
                 <div class="form-actions" style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+                    <?php if (!$preview['invalid']): ?>
                     <button type="submit" class="btn" name="confirm_import" value="1">
                         Import <?= count($preview['rows']) ?> Daily Totals
                     </button>
+                    <?php endif; ?>
                     <a class="btn btn-secondary" href="?cancel=1">
                         Discard Preview
                     </a>
