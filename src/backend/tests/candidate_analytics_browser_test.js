@@ -58,14 +58,17 @@ const state = () => JSON.parse(fixture('state', true));
             assert.match(await section.innerText(), /External Demo: M5 original daily sales/);
             assert.match(await section.innerText(), /separate from the final candidate/);
             assert.match(await page.locator('main').textContent(), /Gate Failed/);
-            assert.equal(await page.getByRole('table', {name:'Candidate held-out daily evidence',exact:true}).locator('tbody tr:not(.empty-row)').first().innerText(), '1\t2016-04-24\t2016-04-25\t17\t28\t16');
+            assert.equal(await page.getByRole('table', {name:'Candidate held-out daily evidence',exact:true}).locator('tbody tr').first().innerText(), '1\t2016-04-24\t2016-04-25\t17\t28\t16');
             assert.ok(!(await page.locator('main').innerText()).includes('1,234.00 units'));
-            for (const width of [1440,390]) {
-                await page.setViewportSize({width,height:844});
-                assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Analytics fits ' + width);
-                if (role === 'admin') {
-                    require('node:fs').mkdirSync('.scratch/candidate-analytics',{recursive:true});
-                    await page.screenshot({path:'.scratch/candidate-analytics/' + width + '.png',fullPage:true});
+            for (const theme of ['light','dark']) {
+                await page.evaluate(mode => document.documentElement.dataset.theme = mode, theme);
+                for (const width of [1440,390]) {
+                    await page.setViewportSize({width,height:844});
+                    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Analytics fits ' + width);
+                    if (role === 'admin') {
+                        require('node:fs').mkdirSync('.scratch/candidate-analytics',{recursive:true});
+                        await page.screenshot({path:'.scratch/candidate-analytics/' + theme + '-' + width + '.png',fullPage:true});
+                    }
                 }
             }
             await page.locator('#analytics-run').selectOption(String(ids.missing));

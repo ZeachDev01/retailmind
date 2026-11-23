@@ -19,6 +19,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
+from m5_sales_experiment import SOURCE_URL as M5_SOURCE_URL, SOURCE_REVISION as M5_SOURCE_REVISION
 from feature_pipeline import (FEATURE_COLUMNS, FEATURE_VERSION, build_feature_matrix,
                               history_at, normalize_history, train_and_evaluate)
 
@@ -470,16 +471,26 @@ def run_model_retraining(conn, cursor, job_id):
         """, (version, horizon, metrics['mae'], metrics['rmse'], wape,
               metrics['baseline_mae'], metrics['baseline_rmse'], baseline, outcome,
               metrics['missing_metric_reason'], meta['data_window_start'], meta['data_window_end']))
+    source = context.get('source') or {}
+    experiment = source.get('experiment') or {}
+    evidence_label = 'Store evidence known at each completed-day cutoff'
+    if context['dataset_kind'] == 'demo':
+        evidence_label = 'Demo evidence; provenance unverified'
+        if source.get('source_kind') == 'uci_online_retail':
+            evidence_label = 'External Demo: UCI Online Retail; not Store accuracy'
+        elif (source.get('source_kind') == 'm5_daily'
+              and experiment.get('source_url') == M5_SOURCE_URL
+              and experiment.get('source_revision') == M5_SOURCE_REVISION
+              and experiment.get('seed') == 42
+              and re.fullmatch(r'[a-f0-9]{64}', experiment.get('source_sha256', ''))):
+            evidence_label = 'External Demo: M5 original daily sales; not Store accuracy'
     meta.update(context)
     meta.update({
         'model_name': model_name, 'model_version': version, 'job_id': job_id,
         'created_at': datetime.now(timezone.utc).isoformat(),
         'outcome': 'passed' if all(o == 'passed' for o in outcomes) else
                    'incomplete' if 'incomplete' in outcomes else 'failed',
-        'evidence_label': ('External Demo: UCI Online Retail; not Store accuracy'
-                           if (context.get('source') or {}).get('source_kind') == 'uci_online_retail'
-                           else 'Demo evidence; provenance unverified') if context['dataset_kind'] == 'demo'
-                          else 'Store evidence known at each completed-day cutoff',
+        'evidence_label': evidence_label,
     })
     cursor.execute("""
         INSERT INTO model_training_runs

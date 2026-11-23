@@ -252,7 +252,7 @@ const fixture = action => {
         assert.equal(await page.locator('.page-subtitle').count(), 0, 'Demand Forecast relies on its status panel instead of a page subtitle');
         const adminStudioNav = page.locator('.forecast-studio-nav');
         assert.equal(await adminStudioNav.count(), 1, 'Administrator uses the shared forecasting studio navigation');
-        assert.equal(await adminStudioNav.locator('a').count(), 6, 'Administrator sees six permitted forecasting destinations');
+        assert.equal(await adminStudioNav.locator('a').count(), 7, 'Administrator sees seven permitted forecasting destinations');
         for (const label of ['Data readiness', 'Model review', 'Demand forecast', 'Exceptions']) {
             assert.ok((await adminStudioNav.innerText()).includes(label), 'Administrator navigation includes ' + label);
         }
@@ -580,7 +580,7 @@ const fixture = action => {
                 assert.equal(await page.locator('[name="retrain_frequency_days"], [name="retrain_new_sales_records"], [name="schedule_daily_forecast_time"]').count(), 0, 'Only weekly training is editable');
                 const scheduleForm = page.locator('form').filter({has: page.locator('[name="action"][value="save_schedule"]')});
                 const scheduleUrl = page.url();
-                const trainingStatus = await page.locator('.ml-job-status').innerText();
+                const trainingStatus = await page.locator('.ml-job-status:not([data-scheduler-state])').innerText();
                 const timeHelp = page.getByRole('button', {name: 'About training time', exact: true});
                 await page.mouse.move(0, 0);
                 await timeHelp.scrollIntoViewIfNeeded();
@@ -610,7 +610,7 @@ const fixture = action => {
                     assert.equal(await page.locator('#effective-training-schedule').innerText(), `Every Wednesday at ${display}, Philippine time (Asia/Manila).`);
                     assert.equal(await page.locator('#schedule_hour').inputValue(), hour);
                     assert.equal(await page.locator('#schedule_period').inputValue(), period);
-                    assert.equal(await page.locator('.ml-job-status').innerText(), trainingStatus, 'Saving does not queue training');
+                    assert.equal(await page.locator('.ml-job-status:not([data-scheduler-state])').innerText(), trainingStatus, 'Saving does not queue training');
                 }
                 const scheduleValues = await scheduleForm.evaluate(form => Object.fromEntries(new FormData(form)));
                 assert.equal((await page.context().request.post(scheduleUrl, {form: {...scheduleValues, csrf_token: ''}})).status(), 403, 'Schedule saves require CSRF');
