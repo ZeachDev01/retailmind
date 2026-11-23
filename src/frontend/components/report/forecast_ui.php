@@ -43,6 +43,7 @@ function forecast_workflow(string $current): void
         $pages = [
             ['forecast_import.php', 'Import history', 'cloud-arrow-up', 'system_administrator'],
             ['data_readiness.php', 'Data readiness', 'database-check', 'report'],
+            ['ml_settings.php', 'Model training', 'cpu', 'system_administrator'],
             ['model_review.php', 'Model review', 'clipboard-check', 'administrator'],
             ['predictions.php', 'Demand forecast', 'graph-up-arrow', 'report'],
             ['forecast_exceptions.php', 'Exceptions', 'exclamation-triangle', 'report'],

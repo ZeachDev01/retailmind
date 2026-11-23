@@ -76,13 +76,13 @@ const fixture = action => {
         await upload(csv);
         assert.match(await page.locator('#preview-heading').innerText(), /35 accepted.*1 skipped.*0 invalid/);
         assert.equal(await page.getByRole('table', { name: 'CSV Sales History Preview' }).locator('tbody tr').count(), 20, 'Preview must be limited to 20 rows');
-        await page.getByRole('button', { name: 'Import 36 daily totals', exact: true }).click();
+        await page.getByRole('button', { name: 'Import 36 Daily Totals', exact: true }).click();
         await page.locator('main .alert[role="status"]').waitFor();
         assert.match(await page.locator('main .alert[role="status"]').innerText(), /Imported 35 daily totals/);
         assert.match(await page.locator('[aria-label="Product Data Readiness after import"]').innerText(), /0 of 1 Products eligible.*More history needed/s);
         await upload(csv);
         assert.match(await page.locator('#preview-heading').innerText(), /0 accepted.*36 skipped.*0 invalid/);
-        await page.getByRole('button', { name: 'Import 36 daily totals', exact: true }).click();
+        await page.getByRole('button', { name: 'Import 36 Daily Totals', exact: true }).click();
         await page.locator('main .alert[role="status"]').waitFor();
         assert.match(await page.locator('main .alert[role="status"]').innerText(), /Imported 0 daily totals; skipped 36/);
         await page.goto(origin + '/components/report/data_readiness.php');
