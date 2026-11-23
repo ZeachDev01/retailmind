@@ -1,25 +1,6 @@
 # M5 forecasting demonstration
 
-The current integrated #499 walkthrough was rehearsed on **2026-11-23** at [Demo login, port 8097](http://127.0.0.1:8097/?login=1). It uses `retailmind_demo_m5_501_20261123` on loopback MariaDB 3307, external model/session/recovery storage in `C:/Users/Mike/AppData/Local/retailmind-demos/scheduler-501-20261123`, and code served from `.worktrees/integration-499`. The original #421 Demo on port 8093 remains preserved.
-
-## Current four-role walkthrough
-
-Use **four separate browser profiles or contexts**, one per account: `demo_super_admin`, `demo_admin`, `demo_inventory_manager`, and `demo_cashier`. The password remains in external `C:/Users/Mike/AppData/Local/retailmind-demos/m5-421-20261103/environment.json`, field `DEMO_PASSWORD`.
-
-1. Super Administrator shows technical access and scheduler health; keep the other three sessions signed in.
-2. Administrator opens Import Sales History, selects the external three-row `m5-import-preview.csv`, and clicks **Preview and Validate**. Show accepted/skipped/invalid counts; do not confirm or reimport the full sample. Open Data Readiness, then Model Training to inspect weekly scheduling and candidate error limits without changing them.
-3. Administrator requests **Train candidate model**, identifies the new job ID, and shows queued/running/completed separately from qualification. This rehearsal's live request was **job 10 / run 6**, completed with failed quality checks. The real SYSTEM task was exported and removed afterward; register a uniquely named isolated task using the supported installer before requesting another live job. Preserve explicit integration root, `.venv` Python, isolated database and external model storage.
-4. While that job runs, open [prior Analytics run 4](http://127.0.0.1:8097/components/report/forecast_analytics.php?training_run_id=4) and [prior Demo review run 4](http://127.0.0.1:8097/components/administrator/model_review.php?training_run_id=4). Identify **prior job 8 / run 4**, requested by Super Administrator, separately from the new Admin request. Its provenance remains unverified and daily candidate predictions are unavailable; the historical replay is separate. New [run 6 Analytics](http://127.0.0.1:8097/components/report/forecast_analytics.php?training_run_id=6) has its own recorded held-out evidence.
-5. Inventory Manager opens Replenishment Recommendations for `M5-FOODS_1_122`: distinguish stock-rule suggestions from unapproved historical expected sales. The first rehearsal showed stock 0, stock-rule 30, historical 28 for original 2016 dates. The normal Stock Receiving scan → quantity → Review → Save added 30 units, reference `M5-505-1795419280309`.
-6. Cashier opens a shift on **Demo Front Counter**, scans the same item, reviews checkout, pays and shows the receipt. Rehearsed **shift 1 / sale 1 / receipt 1**, one piece at illustrative PHP 10.00, left **29 on hand**. These records remain. Do not claim the next run starts at zero or repeat the opt-in mutation test on the already sold clone.
-
-The Demo originally had no priced item or Fiscal Period. Normal Product editing supplied the illustrative PHP 10.00 price; Admin created November 2026 Fiscal Period 1. Neither value comes from M5. No limits were lowered, model approved, operational forecasts generated or purchase order created. Historical evaluation supplies no usable prospective Store observation days and cannot activate a Store model or enable buying guidance.
-
-See [exact run, scheduler, receiving, receipt and preservation evidence](../verification/m5-four-role-rehearsal-505-20261123.md), including repaired attempts, the clone schema upgrade and performance regression check. The opt-in reusable browser test is `src/backend/tests/m5_four_role_rehearsal_browser_test.js`; it requires an isolated unsold/unreceived baseline and retains its genuine records.
-
-## Archived #421 preparation
-
-The sections below describe the earlier November 4 preparation and its original results, not the integrated port-8097 runtime or its new Admin jobs. Historical checkout paths may have changed; do not use them to start another process against the integrated clone. The original port-8093 app is preserved at `.worktrees/demo-m5-421`.
+Verified locally for #421 on 2026-11-04 (Asia/Manila). This is the fresh isolated Demo; October databases, passwords and Laragon paths in earlier guide revisions are obsolete.
 
 ## Open the prepared Demo
 
