@@ -63,12 +63,12 @@ try {
         fixture('ready');
         const context = await browser.newContext();
         const page = await context.newPage();
-        await page.goto(origin + '/?login=1');
+        await page.goto(origin + '/?login=1',{waitUntil:'domcontentloaded'});
         await page.locator('#landing-login-username').fill('theme_' + role);
         await page.locator('#landing-login-password').fill(login.password);
         await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}), page.getByRole('button',{name:'Log in',exact:true}).click()]);
         const url = origin + '/components/system_administrator/ml_settings.php';
-        const response = await page.goto(url);
+        const response = await page.goto(url,{waitUntil:'domcontentloaded'});
         if (['cashier','inventory_manager'].includes(role)) {
             assert.equal(response.status(),403);
             assert.equal((await context.request.post(url,{form:{action:'train'}})).status(),403);
