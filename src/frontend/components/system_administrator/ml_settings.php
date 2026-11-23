@@ -529,7 +529,6 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
             </details>
         </section>
 
-        <?php if (!$isLocalDemo): ?>
         <section class="ml-secondary" aria-labelledby="settings-heading"><details class="forecast-details"<?= $fieldErrors ? ' open' : '' ?>><summary id="settings-heading">Forecast &amp; model parameters</summary>
             <div class="section-header">
                 <div>
@@ -595,7 +594,6 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                 </div>
             </form>
         </details></section>
-        <?php endif; ?>
 
         <section class="ml-secondary" aria-labelledby="runs-heading">
 <details class="forecast-details"><summary id="runs-heading">Recent training runs</summary>
