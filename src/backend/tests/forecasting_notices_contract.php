@@ -525,6 +525,26 @@ $assert(\App\Forecasting\ForecastSetupStatus::state('rf_prod_v1', 0) === 'active
 // 8b. Once history is ready, the same BLOCKED job becomes a setup warning.
 $pdo->exec("UPDATE platform_settings SET setting_value = 'rf_prod_v1' WHERE setting_key = 'ml_approved_model_version'");
 
+// --- Phase 9: Action needed means warning-or-higher; informational readiness is status, not work ---
+$pdo->exec("INSERT INTO notifications (user_id, type, title, message, attention_key, attention_severity, attention_count, attention_destination, is_read, created_at, workspace, inapp_enabled) VALUES
+    (2, 'system', 'Store training is not ready yet', 'Cold start in progress.', 'store.forecasting.coldstart', 'info', 2, 'components/system_administrator/ml_settings.php', 0, '2026-11-01 10:00:00', 'admin', 1),
+    (2, 'attention', 'Store training is blocked by missing history', 'Fixable demand-history gaps.', 'store.forecasting.readiness', 'warning', 2, 'components/system_administrator/ml_settings.php', 0, '2026-11-01 10:00:00', 'admin', 1)");
+$pdo->exec("INSERT INTO attention_states (user_id, attention_key, fingerprint, notification_level, is_active, first_detected_at, last_detected_at, resolved_at) VALUES
+    (2, 'store.forecasting.coldstart', 'fp-coldstart', 1000, 1, '2026-11-01 10:00:00', '2026-11-01 10:00:00', NULL),
+    (2, 'store.forecasting.readiness', 'fp-readiness', 2000, 1, '2026-11-01 10:00:00', '2026-11-01 10:00:00', NULL)");
+
+$requiredTitles = array_column($notificationService->requiredWork(2, 'admin'), 'title');
+$assert(in_array('Store training is blocked by missing history', $requiredTitles, true), 'A warning-level readiness condition stays in Action needed');
+$assert(!in_array('Store training is not ready yet', $requiredTitles, true), 'An informational cold-start status is excluded from Action needed');
+
+// A legacy row recorded before severities existed keeps legacy behavior.
+$pdo->exec("INSERT INTO notifications (user_id, type, title, message, attention_key, attention_severity, attention_destination, is_read, created_at, workspace, inapp_enabled) VALUES
+    (2, 'system', 'Legacy condition', 'No severity recorded.', 'store.forecasting.legacy', NULL, 'components/system_administrator/ml_settings.php', 0, '2026-11-01 10:00:00', 'admin', 1)");
+$pdo->exec("INSERT INTO attention_states (user_id, attention_key, fingerprint, notification_level, is_active, first_detected_at, last_detected_at, resolved_at) VALUES
+    (2, 'store.forecasting.legacy', 'fp-legacy', 1000, 1, '2026-11-01 10:00:00', '2026-11-01 10:00:00', NULL)");
+$requiredTitles = array_column($notificationService->requiredWork(2, 'admin'), 'title');
+$assert(in_array('Legacy condition', $requiredTitles, true), 'A pre-severity legacy condition is not dropped from Action needed');
+
 if ($failures) {
     fwrite(STDERR, "\nForecasting notices contract failed (" . count($failures) . " errors):\n- " . implode("\n- ", $failures) . "\n");
     exit(1);

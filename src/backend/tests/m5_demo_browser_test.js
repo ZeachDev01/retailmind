@@ -110,6 +110,7 @@ c.close();print(json.dumps(r,default=str))
         for (const route of ['report/data_readiness.php', 'report/predictions.php', 'report/forecast_exceptions.php', 'inventory_management/product_investigation.php?product_id=1']) {
             await inspect(page, route);
             if (route.includes('data_readiness')) {
+                await page.getByRole('button', { name: 'About training eligibility', exact: true }).click();
                 eligibilityPolicy = await page.getByRole('region', { name: 'Training Eligibility policy', exact: true }).innerText();
                 await expect(page.locator('main')).toContainText('Unsupported recent inputs');
             }

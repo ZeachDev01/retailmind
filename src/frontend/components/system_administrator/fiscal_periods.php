@@ -326,7 +326,11 @@ if ($hasStoreConfigurationNav) {
                         </span>
                     </h2>
                 </div>
-                <form method="POST" class="fiscal-period-form">
+                <div class="fiscal-mode-switch" role="group" aria-label="Period creation mode" hidden>
+                    <button type="button" data-fiscal-mode="single" aria-pressed="true"><i class="bi bi-plus-lg" aria-hidden="true"></i> Single period</button>
+                    <button type="button" data-fiscal-mode="generate" aria-pressed="false"><i class="bi bi-calendar-plus" aria-hidden="true"></i> Generate a schedule</button>
+                </div>
+                <form method="POST" class="fiscal-period-form" data-fiscal-mode-panel="single">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(generate_csrf_token()) ?>">
                     <input type="hidden" name="action" value="create">
                     <div class="fiscal-period-form-grid">
@@ -346,7 +350,7 @@ if ($hasStoreConfigurationNav) {
                     </div>
                 </form>
 
-                <div class="fiscal-generate">
+                <div class="fiscal-generate" data-fiscal-mode-panel="generate">
                     <div class="fiscal-subheading">
                         <h3><i class="bi bi-calendar-plus" aria-hidden="true"></i> Generate a schedule</h3>
                         <span class="info-tooltip">
@@ -508,5 +512,23 @@ if ($hasStoreConfigurationNav) {
         </main>
     </div>
     <script src="<?= htmlspecialchars(app_url('assets/js/info-tooltip.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/info-tooltip.js')) ?>" defer></script>
+    <script>
+        (() => {
+            const modeSwitch = document.querySelector('.fiscal-mode-switch');
+            const section = document.querySelector('.fiscal-period-create');
+            if (!modeSwitch || !section) return;
+            const setMode = mode => {
+                modeSwitch.querySelectorAll('[data-fiscal-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.fiscalMode === mode)));
+                section.querySelectorAll('[data-fiscal-mode-panel]').forEach(panel => { panel.hidden = panel.dataset.fiscalModePanel !== mode; });
+            };
+            modeSwitch.hidden = false;
+            section.classList.add('is-mode-switchable');
+            modeSwitch.addEventListener('click', event => {
+                const button = event.target.closest('[data-fiscal-mode]');
+                if (button) setMode(button.dataset.fiscalMode);
+            });
+            setMode('single');
+        })();
+    </script>
 </body>
 </html>

@@ -1132,14 +1132,12 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                     </div>
                 <?php elseif ($selectedReport === 'gross_profit'): ?>
                     <div class="form-group period-controls-group" id="period_group">
-                        <label>Period</label>
-                        <div class="period-controls" role="group" aria-label="Report period">
-                            <a href="?report=gross_profit&period=today" class="period-btn <?= $activePeriod === 'today' ? 'is-active' : '' ?>" data-period="today">Today</a>
-                            <a href="?report=gross_profit&period=week" class="period-btn <?= $activePeriod === 'week' ? 'is-active' : '' ?>" data-period="week">This Week</a>
-                            <a href="?report=gross_profit&period=month" class="period-btn <?= $activePeriod === 'month' ? 'is-active' : '' ?>" data-period="month">This Month</a>
-                            <span class="period-btn <?= $activePeriod === 'custom' ? 'is-active' : '' ?>" data-period="custom">Custom</span>
-                        </div>
-                        <input type="hidden" name="period" id="period_input" value="<?= htmlspecialchars($activePeriod) ?>">
+                        <label for="period_input">Period</label>
+                        <select name="period" id="period_input">
+                            <?php foreach (['today' => 'Today', 'week' => 'This Week', 'month' => 'This Month', 'custom' => 'Custom dates'] as $key => $label): ?>
+                                <option value="<?= $key ?>" <?= $activePeriod === $key ? 'selected' : '' ?>><?= $label ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                 <?php else: ?>
                     <div class="form-group" id="granularity_group" <?= $selectedReport !== 'sales_period' ? 'style="display:none;"' : '' ?>>
@@ -1330,6 +1328,8 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                                         <?php if (empty($reportData['rows'])): ?>
                                             <tr>
                                                 <td colspan="6" class="empty-table-message" style="text-align:center; padding: 2.5rem 1rem; color: var(--muted);">
+                                                    <i class="bi bi-cash-stack" aria-hidden="true" style="display:block; font-size:1.75rem; margin-bottom:.35rem; color: var(--theme-info-text, #1d4ed8);"></i>
+                                                    <strong style="display:block; color: var(--text); font-size:1.05rem; margin-bottom:.25rem;">No profit data yet</strong>
                                                     No sales or refund activity in the selected period.
                                                 </td>
                                             </tr>
@@ -1455,7 +1455,12 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                     </div>
                     <div class="section-header">
                         <div>
-                            <h2><?= htmlspecialchars($selectedReport === 'sales_period' ? 'Sales report' : $reportCatalog[$selectedReport]) ?></h2>
+                            <h2><?= htmlspecialchars($selectedReport === 'sales_period' ? 'Sales report' : $reportCatalog[$selectedReport]) ?><?php if ($selectedReport === 'inventory_valuation'): ?>
+                                <span class="info-tooltip no-print">
+                                    <button class="info-tooltip-trigger" type="button" aria-label="How Inventory Valuation is computed" aria-describedby="valuation-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
+                                    <span class="tooltip-box" id="valuation-help" role="tooltip">Value is computed per batch from recorded purchase costs, not the catalog price: the recorded receiving amount prorated by remaining units (PHP 100 for 24 pcs; 12 left = PHP 50), else the batch or receiving unit cost. Catalog cost shows only as Estimated Value; units with no recorded cost land in Cost Missing Qty. Current-stock snapshot: date filters do not apply.</span>
+                                </span>
+                            <?php endif; ?></h2>
                             <div class="report-meta">
                                 <?php if (in_array($selectedReport, ['low_stock', 'inventory_valuation'], true)): ?>
                                     <span>Current stock</span>
@@ -1484,9 +1489,34 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                     <?php endif; ?>
 
                     <?php if (!$reportData['rows']): ?>
-                        <div class="report-empty-state">
-                            <h3>No records found</h3>
-                            <p>Try a different <?= $hideDates ? 'product or category' : 'date range, product, or category' ?>, then generate the report again.</p>
+                        <?php [$emptyIcon, $emptyTitle, $emptyMessage] = match ($selectedReport) {
+                            // Per-report empty state: [icon, title, message].
+                            'sales_period' => ['receipt', 'No sales recorded', 'No sales were recorded for this period yet.'],
+                            'sales_product' => ['box-seam', 'No product sales', 'No product sales match this period and filters.'],
+                            'fast_moving' => ['trophy', 'No sales to rank', 'No product sales match this period and filters.'],
+                            'slow_moving' => ['hourglass-split', 'No products to rank', 'No products match the selected filters.'],
+                            'sales_category' => ['tag', 'No category sales', 'No category sales match this period and filters.'],
+                            'sales_cashier' => ['person-badge', 'No cashier sales', 'No cashier sales were recorded for this period.'],
+                            'refunds' => ['arrow-counterclockwise', 'No refunds issued', 'No refunds were recorded for this period.'],
+                            'gcash_transactions' => ['phone', 'No GCash transactions', 'No GCash exchanges match this period and filters.'],
+                            'low_stock' => ['clipboard-check', 'Stock levels look healthy', 'Every product is currently above its reorder level.'],
+                            'inventory_valuation' => ['calculator', 'Nothing to value', 'No products match the selected filters.'],
+                            'stock_movements' => ['arrow-left-right', 'No stock movements', 'No stock movements were recorded in this period.'],
+                            'adjustments' => ['pencil-square', 'No adjustments reported', 'No inventory adjustments were reported in this period.'],
+                            'count_variance' => ['card-checklist', 'No counts recorded', 'No inventory counts were recorded in this period.'],
+                            'forecast_actual' => ['graph-up', 'No forecast results yet', 'No completed forecast periods fall within this range.'],
+                            'expiration' => ['calendar-x', 'No expiring batches', 'No in-stock batches have recorded expiration dates.'],
+                            default => ['inbox', 'No records found', 'Try a different date range, product, or category, then generate the report again.'],
+                        }; ?>
+                        <div class="report-empty-state analytics-empty-state">
+                            <span class="analytics-empty-art" aria-hidden="true">
+                                <span class="analytics-empty-shape analytics-empty-shape-back"></span>
+                                <span class="analytics-empty-shape analytics-empty-shape-front"></span>
+                                <span class="analytics-empty-dot"></span>
+                                <span class="analytics-empty-icon"><i class="bi bi-<?= htmlspecialchars($emptyIcon) ?>"></i></span>
+                            </span>
+                            <h3><?= htmlspecialchars($emptyTitle) ?></h3>
+                            <p><?= htmlspecialchars($emptyMessage) ?></p>
                             <a href="#report" class="report-adjust-filters no-print">Adjust report filters</a>
                         </div>
                     <?php else: ?>
@@ -1502,8 +1532,11 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
                             <tbody>
                                 <?php foreach ($reportData['rows'] as $row): ?>
                                     <tr>
-                                        <?php foreach ($reportData['headers'] as $header): ?>
-                                            <td><?= htmlspecialchars((string)($row[$header] ?? '')) ?></td>
+                                        <?php foreach ($reportData['headers'] as $header):
+                                            $cell = (string)($row[$header] ?? '');
+                                            $tag = $cell === 'Out of stock' ? 'tag-danger' : ($cell === 'Low stock' ? 'tag-warning' : '');
+                                        ?>
+                                            <td><?= $tag !== '' ? '<span class="' . $tag . '">' . htmlspecialchars($cell) . '</span>' : htmlspecialchars($cell) ?></td>
                                         <?php endforeach; ?>
                                     </tr>
                                 <?php endforeach; ?>
@@ -1524,6 +1557,7 @@ $printGeneratedLabel = $printGeneratedAt->format('M j, Y · g:i A');
         </div>
     </main>
 </div>
+<script src="<?= htmlspecialchars(app_url('assets/js/info-tooltip.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/info-tooltip.js')) ?>"></script>
 <script>
 const reportSelect = document.getElementById('report');
 const granularityGroup = document.getElementById('granularity_group');
@@ -1558,14 +1592,18 @@ if (gcashPeriod) {
     [fromInput, toInput].forEach(input => input.addEventListener('change', () => { gcashPeriod.value = 'custom'; }));
 }
 if (fromInput && toInput && periodInput) {
-    const onDateChange = () => {
-        periodInput.value = 'custom';
-        document.querySelectorAll('.period-btn').forEach(btn => {
-            btn.classList.toggle('is-active', btn.getAttribute('data-period') === 'custom');
-        });
-    };
+    const onDateChange = () => { periodInput.value = 'custom'; };
     fromInput.addEventListener('change', onDateChange);
     toInput.addEventListener('change', onDateChange);
+    // Presets resubmit so the server recomputes from/to; Custom just points at the date fields.
+    periodInput.addEventListener('change', () => {
+        if (periodInput.value === 'custom') {
+            fromInput.focus();
+            return;
+        }
+        const form = document.getElementById('report-filter-form');
+        if (form) form.submit();
+    });
 }
 </script>
 </body>

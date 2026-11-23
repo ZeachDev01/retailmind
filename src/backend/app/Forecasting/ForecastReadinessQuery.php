@@ -186,6 +186,7 @@ final class ForecastReadinessQuery
             $row['usable_days_remaining'] = max(0, $requiredUsableDays - $accumulatedUsable);
             $row['days_with_sales'] = (int)($elig['days_with_sales'] ?? 0);
             $row['genuine_zero_days'] = (int)($elig['genuine_zero_days'] ?? 0);
+            $row['missing_evidence_days'] = (int)($elig['missing_evidence_days'] ?? 0);
             $row['calendar_history_days'] = (int)($elig['calendar_span_days'] ?? 0);
             $row['eligibility_blockers'] = $elig['blockers'] ?? ['Training Eligibility could not be checked.'];
             $row['eligibility_actions'] = $elig['actions'] ?? ['Check demand history and retry.'];

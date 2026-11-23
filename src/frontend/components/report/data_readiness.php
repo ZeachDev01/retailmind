@@ -11,24 +11,6 @@ $recentReadyCount = count(array_filter($rows, static fn(array $row): bool => !em
 $testingReadyCount = count(array_filter($rows, static fn(array $row): bool => !empty($row['has_holdout_coverage'])));
 $isHistoricalDemo = !empty(get_key_value_settings($pdo, 'platform_settings', ['demo_import_metadata' => ''])['demo_import_metadata']);
 
-$counts = [
-    'total' => count($rows),
-    'Forecast Generated' => 0,
-    'Ready for training' => 0,
-    'Ready for Forecasting' => 0,
-    'Insufficient Data' => 0,
-    'Model Requires Retraining' => 0,
-];
-
-foreach ($rows as $row) {
-    $st = $row['forecast_status'] ?? 'Insufficient Data';
-    if (isset($counts[$st])) {
-        $counts[$st]++;
-    } else {
-        $counts[$st] = 1;
-    }
-}
-
 // Filter handling
 $search = trim((string)($_GET['search'] ?? ''));
 $statusFilter = trim((string)($_GET['status'] ?? ''));
@@ -155,15 +137,6 @@ function build_query(array $params): string {
             pointer-events: none;
             cursor: not-allowed;
         }
-        .forecast-definitions-section + .forecast-definitions-section {
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid var(--border-color, #e2e8f0);
-        }
-        .forecast-definitions-section h3 {
-            margin: 0 0 0.5rem;
-            font-size: 1rem;
-        }
     </style>
     <?php require_once __DIR__ . '/../report/forecast_ui.php'; ?>
 </head>
@@ -197,6 +170,12 @@ function build_query(array $params): string {
         <section class="dashboard-section" aria-label="Product readiness management">
             <div class="section-header">
                 <h2>Product readiness</h2>
+                <div class="forecast-readiness-policy">
+                    <span class="info-tooltip">
+                        <button class="info-tooltip-trigger" type="button" aria-label="About training eligibility" aria-describedby="training-eligibility-policy"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
+                        <span class="tooltip-box" id="training-eligibility-policy" role="tooltip"><?php require __DIR__ . '/training_eligibility_policy.php'; ?></span>
+                    </span>
+                </div>
             </div>
 
             <form method="GET" action="" class="filter-toolbar" role="search" aria-label="Filter products">
@@ -321,24 +300,6 @@ function build_query(array $params): string {
                 </nav>
             <?php endif; ?>
         </section>
-        <details class="forecast-details">
-            <summary>Definitions &amp; statuses</summary>
-            <section class="forecast-definitions-section">
-                <h3>Training eligibility</h3>
-                <?php require __DIR__ . '/training_eligibility_policy.php'; ?>
-            </section>
-            <section class="forecast-definitions-section">
-                <h3>Status counts</h3>
-                <div class="forecast-overview" aria-label="Readiness overview stats">
-                    <div><small>Products</small><strong><?= number_format($counts['total']) ?></strong></div>
-                    <div><small>Forecast generated</small><strong><?= number_format($counts['Forecast Generated']) ?></strong></div>
-                    <div><small>Ready for training</small><strong><?= number_format($counts['Ready for training'] + $counts['Ready for Forecasting']) ?></strong></div>
-                    <div><small>Data checks blocked</small><strong><?= number_format($counts['Insufficient Data']) ?></strong></div>
-                    <div><small>Needs retraining</small><strong><?= number_format($counts['Model Requires Retraining']) ?></strong></div>
-                </div>
-            </section>
-        </details>
-
     </main>
 </div>
 <div class="rm-drawer-overlay" id="readiness-drawer" aria-hidden="true">

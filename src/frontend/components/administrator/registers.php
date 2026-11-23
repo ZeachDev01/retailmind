@@ -151,7 +151,6 @@ $remoteAccessStatus = (string)((new \App\Services\CloudflareTunnelService())->ge
 
         <section class="dashboard-section" aria-labelledby="store-registers-heading">
             <h2 id="store-registers-heading"><i class="bi bi-hdd-network" aria-hidden="true"></i> Store Checkout Stations <span class="register-count">(<?= count($allRegisters) ?>)</span></h2>
-            <p class="section-description">A disabled station blocks new Shifts; existing cashier Shifts stay active.</p>
 
             <?php if ($allRegisters === []): ?>
                 <div class="empty-state">

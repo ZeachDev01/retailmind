@@ -197,20 +197,15 @@ class NotificationService
         )] : [];
         $readiness = [];
         $eligible = [];
+        $readinessSignal = null;
         try {
             require_once __DIR__ . '/../Forecasting/ForecastReadinessQuery.php';
+            require_once __DIR__ . '/../Forecasting/TrainingReadinessSignal.php';
             $readiness = (new \App\Forecasting\ForecastReadinessQuery($this->pdo))->rows();
             $eligible = array_filter($readiness, static fn(array $item): bool => !empty($item['training_eligible']));
-            if ($readiness !== [] && $eligible === []) {
-                $message = 'No Product is ready for training. Each Product needs '
-                    . \App\Forecasting\StoreTrainingEligibilityService::MINIMUM_USABLE_DAYS
-                    . ' consecutive usable history days through yesterday.';
-                $trainingItems[] = new \App\Attention\AttentionItem(
-                    'platform-training.readiness', 'warning', 'ml_health',
-                    'Store training is not ready', $message, $now,
-                    'components/system_administrator/ml_settings.php', count($readiness), true,
-                    'system', null, 'training_readiness'
-                );
+            if ($readiness !== []) {
+                $readinessSignal = \App\Forecasting\TrainingReadinessSignal::signal($readiness, count($eligible));
+                $trainingItems[] = self::trainingReadinessItem('platform-training.', 'ml_health', 'system', $readinessSignal, $now);
             }
         } catch (\Throwable $exception) {
             error_log('Training readiness notification skipped: ' . $exception->getMessage());
@@ -250,16 +245,8 @@ class NotificationService
             $attentionCenter->getAttention(0, 'admin'),
             static fn(\App\Attention\AttentionItem $item): bool => str_starts_with($item->key, 'store.forecasting.')
         ));
-        if ($readiness !== [] && $eligible === []) {
-            $adminForecastingItems[] = new \App\Attention\AttentionItem(
-                'store.forecasting.readiness', 'warning', 'forecasting',
-                'Store training is not ready',
-                'No Product is ready for training. Each Product needs '
-                    . \App\Forecasting\StoreTrainingEligibilityService::MINIMUM_USABLE_DAYS
-                    . ' consecutive usable history days through yesterday.',
-                $now, 'components/system_administrator/ml_settings.php', count($readiness), true,
-                'attention', null, 'training_readiness'
-            );
+        if ($readinessSignal !== null) {
+            $adminForecastingItems[] = self::trainingReadinessItem('store.forecasting.', 'forecasting', 'attention', $readinessSignal, $now);
         }
         if ($stalledItem !== null) {
             $adminForecastingItems[] = new \App\Attention\AttentionItem(
@@ -300,11 +287,23 @@ class NotificationService
             WHERE s.user_id = ? AND s.is_active = 1 AND n.workspace = ? AND n.inapp_enabled = 1
                 AND s.attention_key <> 'platform.settings.changed'
                 AND s.attention_key NOT LIKE 'oversight.stock.%' AND s.attention_key NOT LIKE 'oversight.expiry.%'
+                AND COALESCE(n.attention_severity, '') <> 'info'
                 AND n.notification_id = (SELECT MAX(n2.notification_id) FROM notifications n2
                     WHERE n2.user_id = n.user_id AND n2.attention_key = n.attention_key)
             ORDER BY n.created_at DESC");
         $stmt->execute([$userId, $workspace]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /** One shared readiness condition per audience; the key stays stable per state. */
+    private static function trainingReadinessItem(string $keyPrefix, string $category, string $notificationType, array $signal, \DateTimeImmutable $now): \App\Attention\AttentionItem
+    {
+        return new \App\Attention\AttentionItem(
+            $keyPrefix . $signal['key'], $signal['severity'], $category,
+            $signal['title'], $signal['message'], $now,
+            'components/system_administrator/ml_settings.php', $signal['count'], $signal['required'],
+            $notificationType, null, 'training_readiness'
+        );
     }
 
     /** Shared eligibility and wording for transaction checks and scheduled delivery. */

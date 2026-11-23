@@ -202,7 +202,7 @@ const {chromium} = require('playwright');
                             assert(await page.locator('.report-empty-state').evaluate(el => el.scrollWidth <= el.clientWidth), 'Empty recovery is readable without scrolling');
                         }
                         if (variant === 'profit') {
-                            assert.equal(await page.locator('.period-btn.is-active').evaluate(el => getComputedStyle(el).color), 'rgb(255, 255, 255)', 'Selected period keeps white text');
+                            assert.equal(await page.locator('#period_input').inputValue(), 'today', 'Selected period reflects in the dropdown');
                         }
                         if (variant !== 'error') {
                             assert.equal(await page.locator('.report-filters .report-actions').count(), 1, 'Exports are grouped with the report chooser');
@@ -272,12 +272,19 @@ const {chromium} = require('playwright');
             assert(backHref.includes('to=2026-10-17'), 'Back to dashboard href must preserve to date');
 
             // 2. Period Controls
-            const todayBtn = page.locator('.period-btn[data-period="today"]');
-            assert(await todayBtn.isVisible(), 'Today period button visible');
-            assert.equal(await todayBtn.evaluate(el => el.classList.contains('is-active')), true, 'Today button is active');
-            assert(await page.locator('.period-btn[data-period="week"]').isVisible(), 'This Week period button visible');
-            assert(await page.locator('.period-btn[data-period="month"]').isVisible(), 'This Month period button visible');
-            assert(await page.locator('.period-btn[data-period="custom"]').isVisible(), 'Custom period button visible');
+            const periodSelect = page.locator('#period_input');
+            assert(await periodSelect.isVisible(), 'Period dropdown visible');
+            assert.equal(await periodSelect.inputValue(), 'today', 'Today period is selected');
+            assert.deepEqual(
+                await periodSelect.locator('option').evaluateAll(options => options.map(option => option.value)),
+                ['today', 'week', 'month', 'custom'],
+                'Period offers Today, This Week, This Month and Custom'
+            );
+
+            // Preset selection resubmits the form so the server recomputes the dates
+            await periodSelect.selectOption('week');
+            await page.waitForURL(/period=week/, {timeout: 5000});
+            assert(await periodSelect.isVisible(), 'Period dropdown still visible after preset resubmit');
 
             // 3. Desktop Split Verification: Table Left, Summary Right
             const tablePanel = page.locator('.gp-table-panel');
@@ -635,11 +642,11 @@ const {chromium} = require('playwright');
             const focusedId = await page.evaluate(() => document.activeElement.id);
             assert.equal(focusedId, 'back-to-dashboard', 'Back to dashboard link must be focusable');
 
-            // Verify period buttons can be focused and have accessible labels
-            const periodBtn = page.locator('.period-btn[data-period="week"]');
-            await periodBtn.focus();
-            const periodFocused = await page.evaluate(() => document.activeElement.getAttribute('data-period'));
-            assert.equal(periodFocused, 'week', 'Period button must be focusable');
+            // Verify period dropdown can be focused
+            const periodDropdown = page.locator('#period_input');
+            await periodDropdown.focus();
+            const periodFocused = await page.evaluate(() => document.activeElement.id);
+            assert.equal(periodFocused, 'period_input', 'Period dropdown must be focusable');
 
             // Verify return help details summary can be focused and toggled via keyboard Enter
             const summaryEl = page.locator('#profit-return-help summary');

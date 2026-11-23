@@ -112,11 +112,6 @@
 }
 .report-generation-page .report-run-btn:hover { filter: brightness(1.06); box-shadow: 0 10px 22px rgba(37, 99, 235, .28); transform: translateY(-1px); }
 .report-generation-page .report-run-btn:active { transform: translateY(0); }
-.report-generation-page .period-controls { display: flex; box-shadow: none; border-color: var(--muted); }
-.report-generation-page .period-btn { flex: 1; min-height: 44px; padding: .5rem; font-size: .8rem; white-space: nowrap; }
-.report-generation-page span.period-btn { cursor: default; }
-.report-generation-page .period-controls .period-btn.is-active,
-.report-generation-page .period-controls .period-btn.is-active:hover { background: var(--theme-action, #2563eb); color: #fff; }
 .report-generation-page .section-header { align-items: center; gap: 1rem; margin-bottom: 1rem; }
 .report-generation-page .section-header h2 {
     display: flex;
@@ -133,6 +128,45 @@
     border-radius: 999px;
     background: linear-gradient(180deg, var(--primary, #2563eb), #60a5fa);
 }
+
+/* Info tooltip: how the Inventory Valuation value is computed (title icon only). */
+.report-generation-page .info-tooltip { position: relative; display: inline-flex; vertical-align: middle; }
+.report-generation-page .info-tooltip-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: .9rem;
+    cursor: pointer;
+}
+.report-generation-page .info-tooltip-trigger:hover,
+.report-generation-page .info-tooltip-trigger:focus-visible { color: var(--primary); }
+.report-generation-page .tooltip-box {
+    display: none;
+    position: fixed;
+    width: min(280px, 78vw);
+    padding: .65rem .8rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card-bg, #fff);
+    color: var(--text);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .12);
+    font-size: .82rem;
+    font-weight: 400;
+    line-height: 1.5;
+    text-align: left;
+    white-space: normal;
+    z-index: 1200;
+}
+.report-generation-page .info-tooltip:not([data-dismissed]):hover .tooltip-box,
+.report-generation-page .info-tooltip:not([data-dismissed]):focus-within .tooltip-box { display: block; }
 .report-generation-page .report-meta { margin-top: .5rem; gap: .5rem 1rem; font-variant-numeric: tabular-nums; }
 .report-generation-page .report-meta > span:not(.badge) {
     padding: 0;
@@ -231,6 +265,9 @@
 .report-generation-page .report-empty-state h3 { margin: 0 0 .5rem; color: var(--text); font-size: 1rem; }
 .report-generation-page .report-empty-state p { margin: 0 auto .5rem; max-width: 65ch; }
 .report-generation-page .report-adjust-filters { display: inline-flex; align-items: center; min-height: 44px; color: var(--theme-info-text, #1d4ed8); text-decoration: underline; text-underline-offset: 3px; }
+/* Per-report empty states reuse the analytics art pattern; tighten typography. */
+.report-generation-page .report-empty-state.analytics-empty-state h3 { margin: 0; font-size: 1.1rem; }
+.report-generation-page .report-empty-state.analytics-empty-state p { margin: 0; max-width: 42ch; }
 .report-generation-page .gross-profit-layout-c { grid-template-columns: minmax(0, 1fr) 320px; gap: 1.5rem; }
 .report-generation-page .gp-summary-panel { position: static; border-left: 1px solid var(--border); padding-left: 1.5rem; }
 .report-generation-page .gp-glance-card { padding: 0; background: none; border: 0; border-radius: 0; box-shadow: none; }
@@ -259,9 +296,6 @@
 .report-gross-profit .page-heading { align-items: center; gap: 1.5rem; }
 .report-gross-profit .page-heading h1 { font-size: clamp(1.6rem, 2.5vw, 2rem); letter-spacing: -.035em; }
 .report-gross-profit .report-filter-grid label { font-size: .8125rem; font-weight: 600; }
-.report-gross-profit .period-controls { padding: 3px; gap: 2px; border-radius: 10px; background: var(--theme-surface-soft, #f8fafc); }
-.report-gross-profit .period-btn { border: 0; border-radius: 6px; min-height: 38px; }
-.report-gross-profit .period-btn:focus-visible { outline-offset: -3px; }
 .report-gross-profit .section-header { padding-bottom: 1.25rem; border-bottom: 1px solid var(--border); }
 .report-gross-profit .back-to-dashboard-btn { border: 1px solid var(--border); background: var(--theme-surface, #fff); color: var(--text); }
 .report-gross-profit .back-to-dashboard-btn:hover { background: var(--theme-surface-soft, #f8fafc); }
@@ -303,7 +337,6 @@
 .report-gross-profit .glance-margin-badge strong { font-size: 1rem; }
 .report-gross-profit .profit-exclusion-note { font-size: .8125rem; }
 @media (prefers-reduced-motion: reduce) {
-    .report-generation-page .period-btn,
     .report-generation-page .gp-product-table tr,
     .report-generation-page .back-to-dashboard-btn { transition: none; }
 }
@@ -718,6 +751,7 @@
         border: 1px dashed #cbd5e1 !important;
         border-radius: 4px;
         padding: 18px 14px;
+        min-height: 0;
         break-inside: avoid;
     }
     .report-generation-page .report-empty-state h3 { color: #0f172a !important; font-size: 10pt; }

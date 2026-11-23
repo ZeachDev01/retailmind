@@ -49,7 +49,7 @@ const fixture = action => {
             assert.equal(await page.locator(`[name="${key}"]`).count(), 0, key + ' is read-only policy');
         }
         await page.goto(origin + '/components/report/data_readiness.php');
-        await page.getByText('How training eligibility works', {exact: true}).click();
+        await page.getByRole('button', { name: 'About training eligibility', exact: true }).click();
         assert.equal(await page.locator('[aria-label="Training Eligibility policy"]').innerText(), eligibilityPolicy,
             'Model Training and Data Readiness explain the same effective policy');
         await page.goto(origin + '/components/system_administrator/ml_settings.php');
@@ -100,7 +100,7 @@ const fixture = action => {
         await Promise.all([page.waitForNavigation({ waitUntil: 'domcontentloaded' }), page.getByRole('button', { name: 'Import 35 daily totals', exact: true }).click()]);
         assert.match(await page.locator('main .alert[role="status"]').innerText(), /Imported 0 daily totals; skipped 35/);
         await page.goto(origin + '/components/report/data_readiness.php');
-        await page.getByText('How training eligibility works', {exact: true}).click();
+        await page.getByRole('button', { name: 'About training eligibility', exact: true }).click();
         assert.match(await page.locator('.main-content').innerText(), /Closures, unknown observations, and Stockout Days do not add usable days/);
         assert.equal(await page.getByRole('link', { name: 'Import sales history', exact: true }).count(), 1, 'Readiness gives the authorized technical owner a direct next action');
         const after = JSON.parse(fixture('state'));

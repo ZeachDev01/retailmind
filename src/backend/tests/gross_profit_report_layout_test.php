@@ -345,11 +345,11 @@ try {
     $assert(str_contains($htmlRecorded, 'id="profit-return-help"'), 'Must render Restockable / Damaged returns help');
     $assert(str_contains($htmlRecorded, 'id="profit-exclusion-note"'), 'Must render operating-expense exclusion note');
 
-    // Period controls present and today active
-    $assert(str_contains($htmlRecorded, 'data-period="today"'), 'Period controls have Today');
-    $assert(str_contains($htmlRecorded, 'data-period="week"'), 'Period controls have This Week');
-    $assert(str_contains($htmlRecorded, 'data-period="month"'), 'Period controls have This Month');
-    $assert(str_contains($htmlRecorded, 'data-period="custom"'), 'Period controls have Custom');
+    // Period dropdown present with every preset
+    $assert(str_contains($htmlRecorded, '<select name="period" id="period_input">'), 'Period renders as a dropdown');
+    foreach (['today', 'week', 'month', 'custom'] as $preset) {
+        $assert(str_contains($htmlRecorded, '<option value="' . $preset . '"'), 'Period offers preset ' . $preset);
+    }
 
     // 4B. Incomplete State
     $incompleteState = $recordedState;

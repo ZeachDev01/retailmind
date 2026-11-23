@@ -269,6 +269,11 @@
 .forecast-readiness-visual meter::-webkit-meter-bar { background: var(--border, #e5e7eb); border: 0; }
 .forecast-readiness-visual meter::-webkit-meter-optimum-value { background: var(--primary, #2563eb); }
 .forecast-readiness-visual meter::-moz-meter-bar { background: var(--primary, #2563eb); }
+
+.forecast-readiness-policy .tooltip-box { width: min(340px, 86vw); }
+.forecast-readiness-policy .tooltip-box h2 { margin-bottom: .4rem; }
+.forecast-readiness-policy .tooltip-box p { margin: 0; }
+.forecast-readiness-policy .tooltip-box p + p { margin-top: .5rem; }
 .forecast-import-steps { display: flex; flex-wrap: wrap; gap: 1rem 2rem; padding: 0 0 1rem; list-style: none; border-bottom: 1px solid var(--border, #e5e7eb); }
 .forecast-import-steps li { display: flex; align-items: center; gap: .5rem; font-size: .9rem; }
 .forecast-import-steps span { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--theme-info-surface, #eff6ff); color: var(--theme-info-text, #1e40af); font-weight: 700; }

@@ -295,6 +295,54 @@
     letter-spacing: -0.01em;
 }
 
+/* Creation-mode switcher: revealed by JS; without JS both forms stay visible */
+.fiscal-mode-switch {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    max-width: 100%;
+    margin-bottom: 1rem;
+    padding: 0.25rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--theme-surface-soft, #f8fafc);
+}
+
+.fiscal-mode-switch[hidden],
+.fiscal-period-create [data-fiscal-mode-panel][hidden] {
+    display: none;
+}
+
+.fiscal-mode-switch button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 38px;
+    padding: 0.3rem 0.9rem;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.84rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.fiscal-mode-switch button:hover {
+    color: var(--text);
+}
+
+.fiscal-mode-switch button[aria-pressed="true"] {
+    background: var(--primary);
+    color: #fff;
+}
+
+.fiscal-mode-switch button:focus-visible {
+    outline: 3px solid var(--primary);
+    outline-offset: 2px;
+}
+
 .fiscal-period-form-grid {
     display: grid;
     grid-template-columns: minmax(200px, 1.25fr) repeat(2, minmax(160px, 0.8fr)) auto;
@@ -322,6 +370,12 @@
     margin-top: 1.15rem;
     padding-top: 1rem;
     border-top: 1px solid var(--border);
+}
+
+.fiscal-period-create.is-mode-switchable .fiscal-generate {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
 }
 
 .fiscal-subheading {
@@ -789,7 +843,8 @@
 
 @media print {
     .fiscal-period-page .info-tooltip,
-    .fiscal-rollover-control {
+    .fiscal-rollover-control,
+    .fiscal-mode-switch {
         display: none;
     }
 }

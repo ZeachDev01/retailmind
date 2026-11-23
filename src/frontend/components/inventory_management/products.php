@@ -1685,7 +1685,6 @@ foreach ($products as $product) {
             <header class="rm-modal-header">
                 <div>
                     <h2 id="add-product-title">Add Product</h2>
-                    <p>Enter the essentials. Expand settings when needed.</p>
                 </div><button type="button" class="rm-close" data-close-modal aria-label="Close add product"><i class="bi bi-x-lg"></i></button>
             </header>
             <form method="POST" id="add-product-form" data-retry="<?= htmlspecialchars(json_encode($productCreateRetry), ENT_QUOTES, 'UTF-8') ?>" novalidate enctype="multipart/form-data"<?= $productHandoff ? ' data-no-navigation data-inventory-draft-id="' . $handoffProductDraftId . '"' : '' ?>>
@@ -1702,7 +1701,6 @@ foreach ($products as $product) {
 <div class="product-create-layout">
 <section class="product-create-lookup" aria-labelledby="create-barcode-heading">
 <h3 class="planning-section-title" id="create-barcode-heading">Barcode lookup</h3>
-<p class="field-help">Select the barcode field, then scan with your barcode scanner or type the code.</p>
 <div class="form-group">
     <label for="create-barcode-type">Barcode type</label>
     <select id="create-barcode-type">
@@ -1736,7 +1734,7 @@ foreach ($products as $product) {
 <div class="form-group product-create-photo">
     <label for="product-image-input">Product photo</label>
     <input type="file" name="product_image" id="product-image-input" accept="image/jpeg,image/png,image/gif,image/webp" aria-describedby="product-photo-help">
-    <small class="field-help" id="product-photo-help">JPEG, PNG, GIF or WebP. Up to 5 MB.</small>
+    <small class="field-help" id="product-photo-help">Up to 5 MB.</small>
     <input type="hidden" name="catalog_photo">
     <input type="hidden" name="catalog_photo_barcode">
     <input type="hidden" name="catalog_photo_source">
@@ -1822,14 +1820,13 @@ foreach ($products as $product) {
                                     <label for="cost-price">Cost Price per Piece (&#8369;) *</label>
                                     <input type="number" step="0.01" min="0" max="99999999.99" name="cost_price" id="cost-price" required aria-describedby="pack-price-suggested">
                                     <small class="field-error">Enter a cost of zero or more.</small>
-                                    <small class="field-help" id="pack-price-suggested" aria-live="polite">Your purchase cost for one piece.</small>
+                                    <small class="field-help" id="pack-price-suggested" aria-live="polite" hidden></small>
                                 </div>
 <div>
 <div class="form-group">
                                     <label for="selling-price">Selling Price per Piece (&#8369;) *</label>
                                     <input type="number" step="0.01" min="0.01" max="99999999.99" name="selling_price" id="selling-price" required>
                                     <small class="field-error">Selling price must not be lower than cost.</small>
-                                    <small class="field-help">What the customer pays for one piece.</small>
                                 </div>
 <details class="pricing-markup" id="create-markup-tools">
     <summary>Use markup</summary>
@@ -1860,11 +1857,11 @@ foreach ($products as $product) {
 <div class="form-group">
     <label for="units-per-package">Items per Receiving Package</label>
     <input type="number" min="1" id="units-per-package" name="units_per_package" value="<?= $productHandoff ? '' : '1' ?>" <?= $productHandoff ? '' : 'required' ?> step="1" max="2147483647">
-    <small class="field-help">Individual items in one receiving package, e.g. 24 bottles per carton. This may differ from a Sales Pack.</small>
+    <small class="field-help">e.g. 24 per carton. May differ from a Sales Pack.</small>
     <button type="button" class="btn btn-quiet" id="create-carton-item-scan" hidden>Enter or scan Individual Item</button>
     <?php if ($productHandoff): ?><small class="field-error">Enter a whole number of items per receiving package.</small><?php endif; ?>
 </div>
-<div class="form-group"><label for="create-receiving-barcode">Receiving Package Barcode (optional)</label><input id="create-receiving-barcode" name="case_barcode" maxlength="80" placeholder="Outer carton, case, or box barcode"><small class="field-help">For receiving stock, not checkout. If you receive the same Sales Pack you sell, enter its barcode only under Sales Pack Barcode.</small></div>
+<div class="form-group"><label for="create-receiving-barcode">Receiving Package Barcode (optional)</label><input id="create-receiving-barcode" name="case_barcode" maxlength="80" placeholder="Outer carton, case, or box barcode"><small class="field-help">For receiving stock, not checkout.</small></div>
 </div>
 </details>
 <label class="u-checkbox-label" for="create-sell-packs"><input type="checkbox" id="create-sell-packs" name="sell_sealed_packs" aria-controls="sales-pack-fields"> Also sell sealed packs</label><div id="sales-pack-fields" hidden>
@@ -1886,7 +1883,7 @@ foreach ($products as $product) {
                                 </div>
                             </div>
                             <p class="pricing-readout" id="pack-price-calc-preview" aria-live="polite"></p>
-                            </div><p class="field-help">If a pack is received and sold unchanged, register its barcode only as a Sales Pack barcode.</p>
+                            </div>
 <?php if ($productHandoff): ?>
 <div class="form-group" id="product-return-mode" hidden>
     <label for="return-quantity-mode">Quantity type for this delivery</label>
@@ -1915,7 +1912,6 @@ foreach ($products as $product) {
                                 <div id="stock-pieces-wrapper">
                                     <label for="initial-stock-quantity">Starting pieces</label>
                                     <input id="initial-stock-quantity" type="number" name="initial_stock_quantity" min="0" max="2147483647" step="1" value="0" required>
-                                    <small class="field-help" id="stock-help-pieces">How many items do you have now? Enter 0 if you have none.</small>
                                 </div>
                                 <div id="stock-sales-packs-wrapper" hidden>
                                     <div class="form-grid">
@@ -3439,9 +3435,11 @@ foreach ($products as $product) {
             const preview = document.getElementById('pack-price-suggested');
             const costPrice = document.getElementById('cost-price');
             if (costEntryMode.value !== 'pack') {
-                preview.textContent = 'Your purchase cost for one piece.';
+                preview.textContent = '';
+                preview.hidden = true;
                 return;
             }
+            preview.hidden = false;
             const validCost = purchasePackCost.value !== '' && purchasePackCost.validity.valid;
             const validSize = purchasePackSize.value !== '' && purchasePackSize.validity.valid;
             const valid = validCost && validSize;

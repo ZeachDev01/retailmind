@@ -410,7 +410,7 @@ const fixture = action => {
                 }
             }
             if (route.includes('data_readiness')) {
-                await page.getByText('Definitions & statuses', {exact: true}).click();
+                await page.getByRole('button', {name: 'About training eligibility', exact: true}).click();
                 eligibilityPolicy = await page.getByRole('region', {name: 'Training Eligibility policy', exact: true}).innerText();
             }
             for (const width of [1440, 390, 320]) {
