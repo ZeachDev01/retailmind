@@ -90,24 +90,9 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
         const summary = report.getByRole('table', {name: 'Stock Movement summary', exact: true});
         const productRows = await summary.getByRole('rowheader').allInnerTexts();
         assert.deepEqual(productRows.map(text => text.split('\n')[0]), names, 'Summary includes each matching product in list order');
-        const details = report.locator('.sr-report-product');
-        assert.deepEqual(await details.getByRole('heading', {level: 3}).allInnerTexts(), names, 'Details follow the same order');
-        assert.equal(await details.getByRole('heading', {name: 'Stock flow · Latest 30 days', exact: true}).count(), names.length);
-        assert.equal(await details.getByText('Calculation basis', {exact: true}).count(), names.length);
-        assert.equal(await details.locator('.sr-history-note:visible').count(), names.length);
-    }
-    async function assertPeriodDetails(details, example) {
-        const table = details.getByRole('table');
-        assert.match(await table.getByRole('columnheader', {name: /Units sold/}).innerText(), /base units/i);
-        assert.equal(await table.getByRole('columnheader', {name: 'Selling days', exact: true}).count(), 1);
-        const rows = table.locator('tbody').getByRole('row');
-        assert.equal(await rows.count(), 3);
-        for (const [index, range] of periodRanges.entries()) {
-            const row = rows.nth(index);
-            const heading = (await row.getByRole('rowheader').innerText()).replace(/\s+/g, ' ');
-            assert.equal(heading, [range, example.coverage[index], index === 2 ? 'Latest 30 days' : ''].filter(Boolean).join(' '));
-            assert.deepEqual(await row.getByRole('cell').allInnerTexts(), [example.units[index], example.days[index]]);
-        }
+        const stockFlow = report.getByRole('table', {name: 'Stock flow for the latest 30 days', exact: true});
+        const flowRows = await stockFlow.getByRole('rowheader').allInnerTexts();
+        assert.deepEqual(flowRows.map(text => text.split('\n')[0]), names, 'Stock flow includes each matching product in list order');
     }
     async function assertRowSales(page, example) {
         const row = page.locator('[data-risk-row]:visible').filter({
@@ -274,7 +259,6 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
             const drawerDetails = page.locator('#movement-detail-body');
             const drawerChart = drawerDetails.locator('canvas[data-movement-weekly]');
             assert.equal(await drawerChart.count(), 1, 'The drawer shows one weekly chart');
-            assert.equal(await drawerDetails.locator('.sr-period-table').isVisible(), false, 'The screen drawer hides the print-only period table');
             assert.equal(await drawerChart.evaluate(canvas => window.Chart.getChart(canvas)?.data.labels.length), 13, 'The drawer chart carries 13 weekly buckets');
             assert.match(await drawerDetails.innerText(), /0 means no sales were recorded.*A dash.*means no figure is available.*Partial means.*Coverage unknown means/s);
             await page.locator('#movement-drawer').evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished)));
@@ -329,11 +313,10 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
             await report.waitForLoadState();
             await assertReportProducts(report, [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 13]);
             const summary = report.getByRole('table', {name: 'Stock Movement summary', exact: true});
-            assert.equal(await summary.getByRole('columnheader', {name: 'Units sold (base units)', exact: true}).count(), 1);
             assert.deepEqual(await summary.locator('thead tr').last().getByRole('columnheader').allInnerTexts(), periodRanges);
             const summaryHeadings = await summary.locator('thead tr').first().getByRole('columnheader').allInnerTexts();
             assert.deepEqual(summaryHeadings.map(text => text.replace(/\s+/g, ' ')), [
-                'Product', 'Stock', 'Units sold (base units)', 'Selling days Latest 30 days', 'Status', 'Trend'
+                'Product', 'Stock now', 'Units sold (base units) and selling days', 'Status', 'Trend'
             ]);
             for (const example of coverageExamples) {
                 const row = summary.getByRole('row').filter({
@@ -342,15 +325,19 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
                 const cells = (await row.getByRole('cell').allInnerTexts()).slice(1, 4);
                 assert.deepEqual(
                     cells.map(cell => cell.replace(/\s+/g, ' ')),
-                    example.units.map((units, index) => [units, example.coverage[index]].filter(Boolean).join(' '))
+                    example.units.map((units, index) => {
+                        const days = example.days[index];
+                        const sellingDays = days === '—' ? '' : days + (days === '1' ? ' selling day' : ' selling days');
+                        return [units, sellingDays, example.coverage[index]].filter(Boolean).join(' ');
+                    })
                 );
             }
-            for (const example of coverageExamples) {
-                const details = report.locator('.sr-report-product').filter({
-                    has: report.getByRole('heading', {name:'Movement Product ' + example.product, exact:true})
-                });
-                await assertPeriodDetails(details, example);
-            }
+            const stockFlow = report.getByRole('table', {name: 'Stock flow for the latest 30 days', exact: true});
+            assert.equal(await stockFlow.getByRole('columnheader', {name:'Returns to stock', exact:true}).count(), 1);
+            const product3Flow = stockFlow.getByRole('row').filter({
+                has: report.getByRole('rowheader', {name: /^Movement Product 3\b/})
+            });
+            assert.deepEqual(await product3Flow.getByRole('cell').allInnerTexts(), ['-11', '50', '-9', '0', '0', '30']);
             assert.equal(await report.getByText('0 means no sales were recorded.', {exact:false}).count(),1,'The report explains coverage once');
             assert.equal(await report.getByText('Forecast-only imports are excluded.', {exact:false}).count(),1,'The report includes the shared calculation basis');
             assert.equal(await report.locator('.sr-report-brand strong').innerText(),'Shalom Store');
@@ -361,7 +348,6 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
             assert.match(await report.locator('.sr-report-footer').innerText(),/Shalom Store.*RetailMind[\s\S]*End of report.*13 products/);
             assert.equal(await report.locator('dialog,template,.tooltip-box,canvas').count(),0,'Report uses static text and tables');
             assert.equal(await report.locator('.sr-period-label').innerText(), 'Aug 14, 2026 – Nov 11, 2026 · 90-day review');
-            assert.match(await report.locator('.sr-report-product').first().innerText(),/Returns to stock/);
             assert.ok(await report.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Report fits the viewport');
             if (width < 640) {
                 const scrollArea = report.getByRole('region', {name: 'Summary', exact: true});
@@ -372,11 +358,11 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
                 await report.screenshot({path:path.join(output,'stock-movement-report.png'),fullPage:true});
                 await report.pdf({path:path.join(output,'stock-movement-report.pdf'),printBackground:true,preferCSSPageSize:true});
                 await report.emulateMedia({media:'print'});
-                assert.equal(await report.locator('.sr-table thead').evaluate(el=>getComputedStyle(el).display),'table-header-group','Print repeats table headings');
-                assert.ok(await summary.locator('th,td').evaluateAll(cells =>
+                assert.deepEqual(await report.locator('.sr-table thead').evaluateAll(headers => headers.map(el => getComputedStyle(el).display)),['table-header-group', 'table-header-group'],'Print repeats table headings');
+                assert.ok(await report.locator('.sr-table :is(th,td)').evaluateAll(cells =>
                     cells.every(cell => cell.scrollWidth <= cell.clientWidth + 1 && cell.scrollHeight <= cell.clientHeight + 1)
                 ), 'Print keeps dates, values and coverage within their cells');
-                assert.equal(await report.locator('[data-risk-row]').first().evaluate(el=>getComputedStyle(el).display),'table-row','Print keeps tabular layout');
+                assert.equal(await summary.locator('tbody tr').first().evaluate(el=>getComputedStyle(el).display),'table-row','Print keeps tabular layout');
                 assert.equal(await report.locator('h1').evaluate(el=>getComputedStyle(el).color),'rgb(30, 58, 138)','Printed title retains Store report accent');
                 assert.notEqual(await report.locator('.sr-badge.sr-green').first().evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','Status color survives the shared print reset');
                 await report.screenshot({path:path.join(output,'stock-movement-report-print.png')});

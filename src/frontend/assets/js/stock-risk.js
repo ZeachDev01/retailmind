@@ -193,6 +193,10 @@
         report.document.title = 'Stock Movement Report';
         report.document.documentElement.lang = 'en';
         report.document.documentElement.dataset.theme = 'light';
+        const viewport = report.document.createElement('meta');
+        viewport.name = 'viewport';
+        viewport.content = 'width=device-width, initial-scale=1';
+        report.document.head.append(viewport);
         document.querySelectorAll('link[rel="stylesheet"],style').forEach(link => {
             const copy = link.cloneNode(true);
             if (link.href) copy.href = link.href;
@@ -208,34 +212,14 @@
         print.addEventListener('click', () => report.print());
         actions.append(print);
         const snapshot = root.querySelector('#movement-report-template').content.firstElementChild.cloneNode(true);
-        const summary = snapshot.querySelector('tbody');
-        const summaryRows = new Map(Array.from(summary.rows, row => [row.dataset.productId, row]));
         const matching = matchingRows();
-        summary.replaceChildren(...matching.map(row => summaryRows.get(row.dataset.productId)));
+        snapshot.querySelectorAll('tbody').forEach(tableBody => {
+            const reportRows = new Map(Array.from(tableBody.rows, row => [row.dataset.productId, row]));
+            tableBody.replaceChildren(...matching.map(row => reportRows.get(row.dataset.productId)));
+        });
         const generated = new Intl.DateTimeFormat('en-PH', {dateStyle:'medium', timeStyle:'short', timeZone:'Asia/Manila'}).format(new Date()) + ' PHT';
         snapshot.querySelector('.sr-report-stamp strong').textContent = generated;
         snapshot.querySelector('.sr-report-scope').textContent = stockFilter.selectedOptions[0].textContent + ' · Search: ' + (search.value.trim() || 'All') + ' · ' + matching.length + ' products · Quantities in base units';
-        const review = report.document.createElement('p');
-        review.className = 'sr-caption';
-        review.textContent = root.querySelector('#movement-period-help').textContent;
-        snapshot.append(review);
-        matching.forEach(row => {
-            const section = report.document.createElement('section');
-            section.className = 'sr-report-product';
-            section.append(root.querySelector('#risk-detail-' + row.dataset.productId).content.cloneNode(true));
-            section.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
-            section.querySelectorAll('[data-screen-only]').forEach(el => el.remove());
-            section.querySelector('.sr-coverage-note').remove();
-            section.querySelectorAll('details').forEach(el => { el.open = true; });
-            snapshot.append(section);
-        });
-        // Shared calculation limitations belong once in a complete report.
-        const basis = Array.from(snapshot.querySelector('.sr-report-product').querySelectorAll('.sr-basis')).map(el => el.textContent).join(' ');
-        snapshot.querySelectorAll('.sr-basis').forEach(el => el.remove());
-        const note = report.document.createElement('p');
-        note.className = 'sr-caption';
-        note.textContent = basis;
-        snapshot.append(note);
         const footer = report.document.createElement('footer');
         footer.className = 'sr-report-footer';
         const store = report.document.createElement('span');

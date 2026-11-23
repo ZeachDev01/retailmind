@@ -39,7 +39,7 @@ The drawer reconstructs yesterday's closing stock by reversing today's movements
 
 ## Report and compatibility
 
-Generate Report opens a print preview with Print / Save as PDF. It includes all matching products across pages in current sort order, respects stock/search filters, states dates and generation time, and includes the drawer details for each product. Shared calculation limitations appear once. Empty results disable report generation; blocked pop-ups produce a recovery message.
+Generate Report opens a print preview with Print / Save as PDF. The product breakdown and latest 30-day stock flow tables include all products that match the stock and search filters in the current sort order. The preview includes the review dates, generation time, and shared calculation notes. Empty results disable report generation. Blocked pop-ups produce a recovery message.
 
 The confirmed report redesign follows the Reports document style: configured Store name and available contact details, navy-accented title, Philippine-time generation stamp, review dates, filters, product count, prepared-by name when available, readable summary table, product details, and an end-of-report footer. The summary shows Units sold in base units for each of the three exact 30-day periods, oldest first, with coverage labels beside the counts. Stock, latest Selling days, Status, and Trend remain visible. A4 landscape preserves room for the summary, with repeating table headings and product details kept together. The existing direct preview and Print / Save as PDF flow remain; no new report-options step is introduced.
 

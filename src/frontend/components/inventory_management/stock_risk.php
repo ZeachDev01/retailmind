@@ -12,6 +12,12 @@ $criteria = [
 $movementLabels = ['fast' => 'Fast-Moving', 'slow' => 'Slow-Moving', 'dead' => 'Dead Stock', 'limited' => 'Limited history', 'stockout' => 'Stockout affected'];
 $coverageLabels = ['complete' => '', 'partial' => 'Partial', 'unavailable' => 'History unavailable', 'unknown' => 'Coverage unknown'];
 $coverageNote = '0 means no sales were recorded. A dash (—) means no figure is available. Partial means the product was created during the period. History unavailable means the period predates the product. Coverage unknown means the creation date is missing.';
+$stockFlowColumns = ['balance' => 'Opening (reconstructed)', 'received' => 'Received', 'sale_out' => 'Sales stock movement', 'returns' => 'Returns to stock', 'other' => 'Corrections / other', 'remaining' => 'Closing stock (yesterday)'];
+$calculationNotes = [
+    'Sales are recorded before refunds or reversals; returns to stock are separate. Corrections / other includes stock issues and supplier pullouts. Forecast-only imports are excluded. Quantities use base units, including pieces sold in packs.',
+    "Opening + received + sales stock movement + returns + corrections / other = closing. Balances are reconstructed from current recorded stock; missing movements and unrecorded losses can affect accuracy. Stock now includes today's recorded changes.",
+];
+$salesMismatchNote = 'Recorded sales and sales stock movements differ. Review the underlying records before relying on the balance.';
 $movementStore = ['store_name' => 'Shalom Store'];
 if (isset($pdo) && $pdo instanceof PDO && function_exists('get_store_settings')) {
     try {
@@ -124,16 +130,15 @@ $movementChartData = [
                 <p class="sr-report-scope"></p>
                 <?php if (trim((string)($_SESSION['display_name'] ?? '')) !== ''): ?><p class="sr-report-preparer">Prepared by <?= htmlspecialchars($_SESSION['display_name']) ?></p><?php endif; ?>
             </header>
-            <p class="sr-caption sr-coverage-note"><?= htmlspecialchars($coverageNote) ?></p>
+            <h2 class="sr-report-heading">Product breakdown</h2>
             <div class="sr-table-scroll" role="region" aria-label="Summary" tabindex="0">
                 <table class="sr-table" aria-label="Stock Movement summary">
-                    <colgroup span="2"></colgroup><colgroup span="3"></colgroup><colgroup span="3"></colgroup>
+                    <colgroup span="2"></colgroup><colgroup span="3"></colgroup><colgroup span="2"></colgroup>
                     <thead>
                         <tr>
                             <th rowspan="2" scope="col">Product</th>
-                            <th rowspan="2" scope="col" class="sr-num">Stock</th>
-                            <th colspan="3" scope="colgroup" class="sr-report-units">Units sold (base units)</th>
-                            <th rowspan="2" scope="col" class="sr-num">Selling days<span class="sr-caption">Latest 30 days</span></th>
+                            <th rowspan="2" scope="col" class="sr-num">Stock now</th>
+                            <th colspan="3" scope="colgroup" class="sr-report-units">Units sold (base units) and selling days</th>
                             <th rowspan="2" scope="col">Status</th>
                             <th rowspan="2" scope="col">Trend</th>
                         </tr>
@@ -149,18 +154,18 @@ $movementChartData = [
                             $trend = $row['trend'];
                             $trendIcon = $trend > 0 ? 'arrow-up-right' : ($trend < 0 ? 'arrow-down-right' : 'arrow-right');
                         ?>
-                        <tr data-risk-row data-product-id="<?= (int)$row['product_id'] ?>">
-                            <th scope="row"><div class="sr-product"><?= htmlspecialchars($row['product_name']) ?><span><?= htmlspecialchars($row['sku'] ?? '') ?></span></div></th>
+                        <tr data-product-id="<?= (int)$row['product_id'] ?>">
+                            <th scope="row"><div class="sr-product"><?= htmlspecialchars($row['product_name']) ?><span><?= htmlspecialchars(implode(' · ', array_filter([$row['sku'] ?? '', $row['category_name'] ?? 'Uncategorized'], 'strlen'))) ?></span></div></th>
                             <td class="sr-num"><?= number_format((int)$row['quantity_on_hand']) ?></td>
                             <?php foreach ($row['sales_periods'] as $salesPeriod):
                                 $coverageLabel = $coverageLabels[$salesPeriod['coverage']];
                             ?>
                                 <td class="sr-num">
                                     <?= $salesPeriod['units_sold'] === null ? '—' : number_format($salesPeriod['units_sold']) ?>
+                                    <?php if ($salesPeriod['selling_days'] !== null): ?><span class="sr-caption"><?= $salesPeriod['selling_days'] ?> selling <?= $salesPeriod['selling_days'] === 1 ? 'day' : 'days' ?></span><?php endif; ?>
                                     <?php if ($coverageLabel !== ''): ?><span class="sr-caption"><?= htmlspecialchars($coverageLabel) ?></span><?php endif; ?>
                                 </td>
                             <?php endforeach; ?>
-                            <td class="sr-num"><?= $row['selling_days'] ?> <span class="sr-caption sr-report-days-total">/ 30</span></td>
                             <td><span class="sr-badge sr-<?= $color ?>"><i class="bi bi-<?= $icon ?>" aria-hidden="true"></i><?= htmlspecialchars($row['movement_label']) ?></span></td>
                             <td><span class="sr-trend"><?php if ($trend === null): ?><span aria-label="Trend unavailable">—</span><?php else: ?><i class="bi bi-<?= $trendIcon ?>" aria-hidden="true"></i><?= $trend > 0 ? 'Nisaka' : ($trend < 0 ? 'Nihinay' : 'Pareho') ?><?php endif; ?></span></td>
                         </tr>
@@ -168,6 +173,31 @@ $movementChartData = [
                     </tbody>
                 </table>
             </div>
+            <h2 class="sr-report-heading">Stock flow <span class="sr-caption">· Latest 30 days</span></h2>
+            <div class="sr-table-scroll" role="region" aria-label="Stock flow" tabindex="0">
+                <table class="sr-table" aria-label="Stock flow for the latest 30 days">
+                    <thead><tr>
+                        <th scope="col">Product</th>
+                        <?php foreach ($stockFlowColumns as $label): ?><th scope="col" class="sr-num"><?= htmlspecialchars($label) ?></th><?php endforeach; ?>
+                    </tr></thead>
+                    <tbody>
+                        <?php foreach ($riskRows as $row): ?>
+                            <tr data-product-id="<?= (int)$row['product_id'] ?>">
+                                <th scope="row"><div class="sr-product"><?= htmlspecialchars($row['product_name']) ?><span><?= htmlspecialchars($row['sku'] ?? '') ?></span>
+                                    <?php if (-$row['sale_out'] !== $row['recent_sales']): ?><span>Sales and stock movement differ</span><?php endif; ?>
+                                </div></th>
+                                <?php foreach ($stockFlowColumns as $key => $label): ?><td class="sr-num"><?= number_format($row[$key]) ?></td><?php endforeach; ?>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <section class="sr-report-notes">
+                <h2 class="sr-report-heading">Report notes</h2>
+                <p class="sr-caption">Three consecutive 30-day periods end yesterday in Philippine time. Today's sales are excluded.</p>
+                <p class="sr-caption"><?= htmlspecialchars($coverageNote) ?></p>
+                <?php foreach ($calculationNotes as $note): ?><p class="sr-caption"><?= htmlspecialchars($note) ?></p><?php endforeach; ?>
+            </section>
         </main>
     </template>
     <?php foreach ($riskRows as $row):
@@ -191,33 +221,14 @@ $movementChartData = [
             <p class="sr-caption sr-coverage-note"><?= htmlspecialchars($coverageNote) ?></p>
             <?php if ($row['trend'] !== null): ?><p class="sr-trend-basis"><?= $row['selling_days'] ?> selling days now · <?= number_format($row['previous_average'], 1) ?> average in the previous two periods.</p><?php endif; ?>
         </section>
-        <div class="sr-report-only">
-        <section class="sr-detail-section"><h4>Sales across 90 days</h4><table class="sr-period-table"><thead><tr><th scope="col">Period</th><th scope="col" class="sr-num">Units sold<span class="sr-caption">Base units</span></th><th scope="col" class="sr-num">Selling days</th></tr></thead><tbody>
-            <?php foreach ($row['sales_periods'] as $salesPeriod):
-                $latest = $salesPeriod['end'] === $movementPeriod['end'];
-                $coverageLabel = $coverageLabels[$salesPeriod['coverage']];
-            ?>
-            <tr <?= $latest ? 'class="sr-recent"' : '' ?>>
-                <th scope="row">
-                    <?= htmlspecialchars($salesPeriod['label']) ?>
-                    <?php if ($coverageLabel !== ''): ?><span class="sr-caption"><?= htmlspecialchars($coverageLabel) ?></span><?php endif; ?>
-                    <?php if ($latest): ?><span class="sr-caption">Latest 30 days</span><?php endif; ?>
-                </th>
-                <td class="sr-num"><?= $salesPeriod['units_sold'] === null ? '—' : number_format($salesPeriod['units_sold']) ?></td>
-                <td class="sr-num"><?= $salesPeriod['selling_days'] ?? '—' ?></td>
-            </tr>
-            <?php endforeach; ?>
-        </tbody></table>
-        </section>
-        </div>
         <section class="sr-detail-section"><h4>Stock flow <span class="sr-caption">· Latest 30 days</span></h4><dl class="sr-flow">
-            <?php foreach (['balance' => 'Opening (reconstructed)', 'received' => 'Received', 'sale_out' => 'Sales stock movement', 'returns' => 'Returns to stock', 'other' => 'Corrections / other', 'remaining' => 'Closing stock (yesterday)'] as $key => $label): ?>
+            <?php foreach ($stockFlowColumns as $key => $label): ?>
             <div><dt><?= $label ?></dt><dd><?= number_format($row[$key]) ?></dd></div>
             <?php endforeach; ?>
         </dl></section>
         <p class="sr-history-note"><?= htmlspecialchars($row['history_note']) ?></p>
-        <?php if (-$row['sale_out'] !== $row['recent_sales']): ?><p class="sr-history-note">Recorded sales and sales stock movements differ. Review the underlying records before relying on the balance.</p><?php endif; ?>
-        <details class="sr-calculation"><summary>Calculation basis</summary><p><?= htmlspecialchars($criterion) ?></p><p class="sr-basis">Sales are recorded before refunds or reversals; returns to stock are separate. Corrections / other includes stock issues and supplier pullouts. Forecast-only imports are excluded. Quantities use base units, including pieces sold in packs.</p><p class="sr-basis">Opening + received + sales stock movement + returns + corrections / other = closing. Balances are reconstructed from current recorded stock; missing movements and unrecorded losses can affect accuracy. Stock now includes today's recorded changes.</p></details>
+        <?php if (-$row['sale_out'] !== $row['recent_sales']): ?><p class="sr-history-note"><?= htmlspecialchars($salesMismatchNote) ?></p><?php endif; ?>
+        <details class="sr-calculation"><summary>Calculation basis</summary><p><?= htmlspecialchars($criterion) ?></p><?php foreach ($calculationNotes as $note): ?><p><?= htmlspecialchars($note) ?></p><?php endforeach; ?></details>
         <footer class="sr-caption sr-detail-footer">Through <?= htmlspecialchars((new DateTimeImmutable($movementPeriod['end']))->modify('-1 day')->format('M j, Y')) ?> · Philippine time</footer>
     </article></template>
     <?php endforeach; ?>
