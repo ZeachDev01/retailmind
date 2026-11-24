@@ -53,6 +53,10 @@ try {
         'CREATE TABLE inventory (product_id INTEGER, quantity_on_hand INTEGER)',
         'CREATE TABLE sale_reversals (status TEXT)',
         'CREATE TABLE inventory_adjustments (status TEXT)',
+        'CREATE TABLE stock_receiving (id INTEGER)',
+        'CREATE TABLE gcash_transactions (id INTEGER)',
+        'CREATE TABLE gcash_funding_movements (id INTEGER)',
+        'CREATE TABLE platform_settings (setting_key TEXT, setting_value TEXT)',
     ] as $sql) {
         $pdo->exec($sql);
     }
@@ -123,6 +127,52 @@ try {
     $empty = $workspace->load('super_admin', 30);
     $assert($empty['state'] === 'empty', 'A workspace without actionable conditions must expose an empty state');
     $assert($empty['attention'] === [], 'Resolved conditions must disappear from the workspace');
+
+    $pdo->exec('DELETE FROM backup_history; DELETE FROM model_training_runs');
+    \App\Forecasting\ForecastSetupStatus::forget($pdo);
+    $quietChecks = [
+        ['name' => 'Database', 'status' => 'healthy', 'category' => 'Core'],
+        ['name' => 'Application log', 'status' => 'warning', 'category' => 'Core'],
+        ['name' => 'Forecast model artifact', 'status' => 'info', 'category' => 'Forecasting'],
+    ];
+    $quietWorkspace = new DashboardWorkspace($pdo, $clock, new DashboardContractHealth($quietChecks), new RoleCapabilityPolicy());
+    $fresh = $quietWorkspace->load('super_admin');
+    $assert($fresh['state'] === 'empty', 'Fresh Store and log entries must not create attention');
+    $assert($fresh['headline']['latest_backup']['status'] === 'info', 'First backup before operations must be informational');
+    $assert($fresh['headline']['platform_health']['status'] === 'healthy', 'Log entries alone must not degrade platform health');
+    $assert($fresh['headline']['ml_health']['value'] === 'Gathering sales data', 'Forecast cold start must explain the waiting state');
+    $assert($fresh['continuity']['sales_flowing']['status'] === 'info', 'No first sale must not imply a fresh Store continuity failure');
+    $assert($fresh['continuity']['active_shifts']['status'] === 'info', 'No first shift must remain informational');
+
+    $pdo->exec("INSERT INTO sales VALUES ('2026-09-18 10:00:00')");
+    $operating = $quietWorkspace->load('super_admin');
+    $assert(in_array('platform.backup.stale', array_column($operating['attention'], 'key'), true), 'Operations without a first backup must require attention');
+    $pdo->exec('DELETE FROM sales');
+
+    foreach ([
+        [['name' => 'Email configuration', 'status' => 'warning', 'category' => 'Integrations'], 'platform.service.warning', 'warning'],
+        [['name' => 'Database migrations', 'status' => 'warning', 'category' => 'Core'], 'platform.database.setup', 'warning'],
+        [['name' => 'Database connection', 'status' => 'critical', 'category' => 'Core'], 'platform.service.unhealthy', 'critical'],
+        [['name' => 'Background Worker', 'status' => 'critical', 'category' => 'Forecasting'], 'platform.forecasting.failure', 'critical'],
+        [['name' => 'Background Worker', 'status' => 'warning', 'category' => 'Forecasting'], 'platform.forecasting.warning', 'warning'],
+    ] as [$check, $key, $severity]) {
+        $case = (new DashboardWorkspace($pdo, $clock, new DashboardContractHealth([$check]), new RoleCapabilityPolicy()))->load('super_admin');
+        $byKey = array_column($case['attention'], null, 'key');
+        $assert(($byKey[$key]['severity'] ?? '') === $severity, $key . ' must preserve the source severity');
+        $assert(!isset($byKey['platform.ml.stale-model']), 'A service failure must not be mislabeled as model age');
+        if ($severity === 'warning') {
+            $assert($case['headline']['critical_attention']['value'] === 0, 'Warnings must not inflate the critical count');
+        }
+    }
+
+    $pdo->exec('ALTER TABLE model_training_runs ADD COLUMN model_version TEXT');
+    $pdo->exec("INSERT INTO platform_settings VALUES ('ml_approved_model_version', 'store-approved')");
+    $pdo->exec("INSERT INTO model_training_runs VALUES ('completed', '2026-09-01 08:00:00', '2026-09-01 08:30:00', '{}', 'store-approved')");
+    $pdo->exec("INSERT INTO model_training_runs VALUES ('completed', '2026-09-18 08:00:00', '2026-09-18 08:30:00', '{}', 'demo-recent')");
+    \App\Forecasting\ForecastSetupStatus::forget($pdo);
+    $active = (new DashboardWorkspace($pdo, $clock, $healthy, new RoleCapabilityPolicy()))->load('super_admin');
+    $assert(in_array('platform.ml.stale-model', array_column($active['attention'], 'key'), true), 'Recent demo training must not hide an old approved Store model');
+    $assert($active['headline']['ml_health']['status'] === 'warning', 'Model age must agree between attention and headline');
 
     $pdo->exec('DROP TABLE attention_settings');
     $error = $workspace->load('super_admin', 30);

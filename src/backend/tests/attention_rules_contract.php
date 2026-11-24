@@ -108,6 +108,9 @@ try {
         $pdo->exec("INSERT INTO login_attempts VALUES ($attempt,0,'2026-09-18 09:10:00')");
     }
     $healthChecks = [['status' => 'critical', 'category' => 'Database']];
+    $pdo->exec("INSERT INTO attention_states VALUES (1, 'platform.settings.changed', 'old-settings-notice', 0, 1, '2026-09-18 08:00:00', '2026-09-18 08:00:00', NULL)");
+    $pdo->exec("INSERT INTO notifications (user_id, workspace, type, title, message, attention_key, email_pending, created_at)
+        VALUES (1, 'super_admin', 'attention', 'Platform Settings changed', 'Old notice', 'platform.settings.changed', 1, '2026-09-18 08:00:00')");
     $platformItems = $center->synchronize(1, 'super_admin', $healthChecks)->dashboardItems();
     $platformKeys = array_column($platformItems, 'key');
     $assert($platformItems[0]['severity'] === 'critical', 'Critical platform attention should sort before warnings');
@@ -117,8 +120,11 @@ try {
     }
     $assert(in_array('platform.backup.stale', $platformKeys, true), 'Stale backup should produce recovery attention');
     $assert(in_array('platform.service.unhealthy', $platformKeys, true), 'Service health should produce attention');
-    $assert(in_array('platform.ml.stale-model', $platformKeys, true), 'ML health should produce attention');
-    $assert(in_array('platform.settings.changed', $platformKeys, true), 'Platform Setting changes should produce attention');
+    $assert(!in_array('platform.ml.stale-model', $platformKeys, true), 'An unapproved model must not be called stale');
+    $assert(!in_array('platform.settings.changed', $platformKeys, true), 'Routine Platform Setting changes must not produce attention');
+    $assert((int)$pdo->query("SELECT is_active FROM attention_states WHERE attention_key = 'platform.settings.changed'")->fetchColumn() === 0, 'Existing settings notices must resolve during synchronization');
+    $oldSettingsNotice = $pdo->query("SELECT resolved_at, email_pending FROM notifications WHERE attention_key = 'platform.settings.changed'")->fetch(PDO::FETCH_ASSOC);
+    $assert(is_array($oldSettingsNotice) && (int)$oldSettingsNotice['email_pending'] === 0, 'Resolved settings notices must stop pending emails while retaining history');
     $assert(in_array('platform.recovery-account.active', $platformKeys, true), 'Recovery Account state should produce attention');
     foreach ($platformItems as $item) {
         $assert(isset($item['key'], $item['severity'], $item['category'], $item['title'], $item['explanation'], $item['detected_at'], $item['destination']), 'Every attention item should expose the stable contract');

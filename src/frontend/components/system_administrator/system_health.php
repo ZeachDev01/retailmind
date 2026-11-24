@@ -22,7 +22,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && ($_POST['action'] ?? '')
             $actorRole, (int)$_SESSION['user_id'], (string)($_POST['log_fingerprint'] ?? ''),
             (string)($_POST['review_result'] ?? ''), (string)($_POST['review_note'] ?? ''), get_client_ip_address()
         );
-        $_SESSION['application_log_review_message'] = 'Log review saved. This log version is acknowledged; new log entries and other unhealthy checks can still trigger a warning.';
+        $_SESSION['application_log_review_message'] = 'Log review saved. This log version is acknowledged. Log entries do not change platform health.';
         header('Location: ' . app_url('components/system_administrator/system_health.php') . '#application-log-review');
         exit;
     } catch (Throwable $exception) {
@@ -49,8 +49,8 @@ foreach ($checks as $check) {
 }
 
 $overall = $counts['critical'] > 0 ? 'critical' : ($counts['warning'] > 0 ? 'warning' : 'healthy');
-$labels = ['healthy' => 'Healthy', 'warning' => 'Needs attention', 'critical' => 'Critical'];
-$icons = ['healthy' => 'bi-check-circle-fill', 'warning' => 'bi-exclamation-triangle-fill', 'critical' => 'bi-x-octagon-fill'];
+$labels = ['healthy' => 'Healthy', 'info' => 'Information', 'warning' => 'Needs attention', 'critical' => 'Critical'];
+$icons = ['healthy' => 'bi-check-circle-fill', 'info' => 'bi-info-circle', 'warning' => 'bi-exclamation-triangle-fill', 'critical' => 'bi-x-octagon-fill'];
 $checkedAt = format_display_datetime(new DateTimeImmutable());
 $styleCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/style.css') ?: '1');
 $systemHealthCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/system-health.css') ?: '1');
@@ -110,7 +110,7 @@ $systemHealthCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/syste
                                         <div class="health-check-copy">
                                             <div class="health-check-title">
                                                 <strong><?= htmlspecialchars($check['name']) ?></strong>
-                                                <span class="health-status <?= htmlspecialchars($check['status']) ?>"><i class="bi <?= htmlspecialchars($icons[$check['status']] ?? 'bi-circle-fill') ?>" aria-hidden="true"></i> <?= htmlspecialchars($labels[$check['status']]) ?></span>
+                                                <span class="health-status <?= htmlspecialchars($check['status']) ?>"><i class="bi <?= htmlspecialchars($icons[$check['status']] ?? 'bi-circle-fill') ?>" aria-hidden="true"></i> <?= htmlspecialchars($check['name'] === 'Database migrations' && $check['status'] === 'warning' ? 'Setup incomplete' : $labels[$check['status']]) ?></span>
                                             </div>
                                             <p class="health-detail"><?= htmlspecialchars($check['detail']) ?></p>
                                         </div>
@@ -140,7 +140,7 @@ $systemHealthCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/syste
             </details>
             <section class="dashboard-section application-log-review" id="application-log-review" aria-labelledby="log-review-title">
                 <div class="section-header">
-                    <h2 id="log-review-title">Review application log</h2>
+                    <h2 id="log-review-title">Application log diagnostics</h2>
                     <a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/system_administrator/audit_logs.php')) ?>">View audit history</a>
                 </div>
                 <?php if ($logReviewMessage !== ''): ?>
@@ -152,11 +152,11 @@ $systemHealthCssVersion = (string)(@filemtime(__DIR__ . '/../../assets/css/syste
                 <?php if ($logSnapshot === null): ?>
                     <p class="system-health-empty" role="status">Application log details are currently unavailable. Check storage permissions for <strong>storage/logs/app.log</strong> and refresh checks.</p>
                 <?php elseif ($logSnapshot['size'] === 0): ?>
-                    <p class="system-health-empty" role="status">No application log entries need review.</p>
+                    <p class="system-health-empty" role="status">No application log entries are stored.</p>
                 <?php else: ?>
                     <pre class="application-log-excerpt" tabindex="0" aria-label="Recent application log entries"><?= htmlspecialchars($logSnapshot['excerpt']) ?></pre>
                     <?php if ($logSnapshot['acknowledged']): ?>
-                        <p class="alert tag-success" role="status" aria-live="polite" data-rm-alert-processed="1">This log version has been acknowledged. New entries will require another review.</p>
+                        <p class="alert tag-success" role="status" aria-live="polite" data-rm-alert-processed="1">This log version has been acknowledged. Review is optional and does not change platform health.</p>
                     <?php else: ?>
                         <?php
                         $hasFormError = (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $logReviewError !== '');

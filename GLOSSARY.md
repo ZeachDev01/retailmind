@@ -404,7 +404,7 @@ _Avoid_: Custom icon component, unstandardized badge color
 
 
 **Attention Item**:
-An actionable store-wide or platform-level condition (such as overdue high-value Stock Issues, unreviewed cash variances, or approaching Fiscal Period closures) highlighted on an Administrator or Super Administrator dashboard for review.
+An actionable store-wide or platform-level condition (such as overdue high-value Stock Issues, unreviewed cash variances, or approaching Fiscal Period closures) highlighted on an Administrator or Super Administrator dashboard for review. Normal waiting states and records of routine activity are not Attention Items.
 _Avoid_: Notification (when referring to dashboard alerts), Task, To-do
 
 **Store Email Alert**:

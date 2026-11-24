@@ -16,7 +16,6 @@ final class AttentionSettingsService
         'scheduled_backup_failure_count' => 1.0,
         'service_unhealthy_count' => 1.0,
         'ml_model_age_days' => 7.0,
-        'platform_setting_change_count' => 1.0,
         'recovery_account_active_count' => 1.0,
         'store_cash_variance_amount_max' => 1000.0,
         'store_inventory_overdue_hours_max' => 72.0,

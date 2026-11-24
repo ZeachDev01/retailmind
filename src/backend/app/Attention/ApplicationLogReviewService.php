@@ -23,20 +23,19 @@ final class ApplicationLogReviewService
         try {
             $snapshot = $this->snapshot();
             $status = 'healthy';
-            $detail = 'No logged application errors are currently stored.';
+            $detail = 'No application log entries are currently stored.';
             if ($snapshot['size'] > 0) {
                 $reviewed = $this->isAcknowledged($snapshot['fingerprint']);
-                $recent = $snapshot['modified_at'] >= $this->clock->now()->getTimestamp() - 86400;
-                $status = $recent && !$reviewed ? 'warning' : 'healthy';
+                $status = 'info';
                 $detail = $reviewed
-                    ? 'Current log version acknowledged. Review history is in Protected Audit Records; new log entries will require review.'
+                    ? 'Current log version acknowledged. Review history is in Protected Audit Records.'
                     : number_format($snapshot['size'] / 1024, 1) . ' KB — last updated ' . date('M d, Y g:i A', $snapshot['modified_at']);
             }
         } catch (\Throwable) {
-            $status = 'warning';
+            $status = 'info';
             $detail = 'The application log or its review history could not be checked. Refresh and check log access.';
         }
-        return ['name' => 'Application log', 'status' => $status, 'detail' => $detail, 'category' => 'Core'];
+        return ['name' => 'Application log', 'status' => $status, 'detail' => $detail, 'category' => 'Diagnostics'];
     }
 
     public function reviewSnapshot(string $actorRole): array

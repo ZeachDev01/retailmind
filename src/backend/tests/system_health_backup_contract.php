@@ -13,6 +13,10 @@ $pdo = new PDO('sqlite::memory:');
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 $recoveryPath = sys_get_temp_dir() . '/retailmind-health-' . bin2hex(random_bytes(6));
 mkdir($recoveryPath, 0700, true);
+foreach (['sales', 'stock_receiving', 'gcash_transactions', 'gcash_funding_movements', 'inventory_adjustments', 'cashier_shifts'] as $table) {
+    $pdo->exec("CREATE TABLE {$table} (id INTEGER)");
+}
+$pdo->exec('CREATE TABLE inventory (quantity_on_hand INTEGER)');
 putenv('BACKUP_STORAGE_PATH=' . $recoveryPath);
 file_put_contents($recoveryPath . '/backup-encryption.key', str_repeat('a', 64) . "\n");
 $pdo->exec('CREATE TABLE backup_history (
@@ -22,11 +26,23 @@ $pdo->exec('CREATE TABLE backup_history (
     envelope_version TEXT,
     created_at TEXT
 )');
+$backupCheck = static function () use ($pdo, $recoveryPath): array {
+    return array_values(array_filter((new SystemHealthService($pdo, $recoveryPath))->checks(),
+        static fn(array $check): bool => $check['name'] === 'Database backup'))[0];
+};
+$assert($backupCheck()['status'] === 'info', 'A fresh Store without activity must not require its first backup');
+$assert(str_contains($backupCheck()['detail'], 'No backup yet'), 'A first backup must be described as not yet created');
+$pdo->exec('INSERT INTO stock_receiving VALUES (1)');
+$assert($backupCheck()['status'] === 'warning', 'Recorded receiving must require a first backup');
+$pdo->exec('DELETE FROM stock_receiving');
+$pdo->exec('INSERT INTO inventory VALUES (10)');
+$assert($backupCheck()['status'] === 'warning', 'Opening stock must require a first backup');
+$pdo->exec('DELETE FROM inventory');
 $pdo->exec("INSERT INTO backup_history
     (filename, backup_type, status, envelope_version, created_at)
     VALUES ('database_20261109.rmpkg', 'manual', 'completed', 'RMSTORE2', datetime('now'))");
 
-$checks = (new SystemHealthService($pdo, dirname(__DIR__)))->checks();
+$checks = (new SystemHealthService($pdo, $recoveryPath))->checks();
 $backup = array_values(array_filter(
     $checks,
     static fn(array $check): bool => $check['name'] === 'Database backup'
@@ -38,7 +54,7 @@ $assert(str_contains($backup['detail'], 'Encrypted database backup verified at c
 $assert(!str_contains($backup['detail'], 'SQL backup'), 'Health detail must not describe the encrypted package as a plain SQL backup');
 
 unlink($recoveryPath . '/backup-encryption.key');
-$checks = (new SystemHealthService($pdo, dirname(__DIR__)))->checks();
+$checks = (new SystemHealthService($pdo, $recoveryPath))->checks();
 $backup = array_values(array_filter(
     $checks,
     static fn(array $check): bool => $check['name'] === 'Database backup'

@@ -42,6 +42,7 @@ $statusLabel = static fn(string $status): string => [
     'healthy' => 'Healthy',
     'warning' => 'Needs attention',
     'critical' => 'Critical',
+    'info' => 'Information',
     'active' => 'Active',
     'inactive' => 'Inactive',
     'sealed' => 'Sealed',
@@ -85,11 +86,12 @@ $warningAttentionCount = count(array_filter(
 ));
 $continuityIssueCount = count(array_filter(
     $dashboard['continuity'] ?? [],
-    static fn(array $item): bool => !($item['ok'] ?? false)
+    static fn(array $item): bool => !($item['ok'] ?? false) && ($item['status'] ?? '') !== 'info'
 ));
+$storeNotStarted = ($dashboard['continuity']['sales_flowing']['status'] ?? '') === 'info';
 
 $backup = $dashboard['headline']['latest_backup'] ?? ['status' => 'warning', 'value' => 'Not available'];
-$backupDate = $backup['value'] === 'Not available' ? 'Unavailable' : $formatDate((string)$backup['value']);
+$backupDate = $backup['value'] === 'Not available' ? 'No backup yet' : $formatDate((string)$backup['value']);
 
 $relativeTime = static function (?string $value): string {
     if ($value === null || $value === '') {
@@ -173,6 +175,7 @@ foreach (['platform_health', 'ml_health'] as $serviceKey) {
         'icon' => $serviceIcon,
         'destination' => $serviceDestination,
         'status' => (string)($dashboard['headline'][$serviceKey]['status'] ?? 'healthy'),
+        'value' => (string)($dashboard['headline'][$serviceKey]['value'] ?? ''),
         'detail' => (string)($dashboard['headline'][$serviceKey]['detail'] ?? ''),
     ];
 }
@@ -308,8 +311,8 @@ foreach (['platform_health', 'ml_health'] as $serviceKey) {
                         <div class="panel-header-title">
                             <h2 id="status-heading">Platform status</h2>
                         </div>
-                        <span class="continuity-chip <?= $continuityIssueCount === 0 ? 'is-good' : 'is-warn' ?>">
-                            <?= $continuityIssueCount === 0 ? 'Store continuity nominal' : $escape((string)$continuityIssueCount) . ' continuity gaps' ?>
+                        <span class="continuity-chip <?= $storeNotStarted ? 'is-info' : ($continuityIssueCount === 0 ? 'is-good' : 'is-warn') ?>">
+                            <?= $storeNotStarted ? 'Store not started' : ($continuityIssueCount === 0 ? 'Store continuity nominal' : $escape((string)$continuityIssueCount) . ' continuity gaps') ?>
                         </span>
                     </div>
 
@@ -327,9 +330,9 @@ foreach (['platform_health', 'ml_health'] as $serviceKey) {
                                     </div>
                                 </div>
                                 <div class="service-right">
-                                    <span class="service-badge <?= $isHealthy ? 'badge-healthy' : 'badge-attention' ?>">
+                                    <span class="service-badge <?= $isHealthy ? 'badge-healthy' : ($service['status'] === 'info' ? 'badge-info' : 'badge-attention') ?>">
                                         <span class="service-dot" aria-hidden="true"></span>
-                                        <?= $escape($statusLabel($service['status'])) ?>
+                                        <?= $escape($service['value'] ?: $statusLabel($service['status'])) ?>
                                     </span>
                                     <i class="bi bi-chevron-right chevron-icon" aria-hidden="true"></i>
                                 </div>
@@ -345,9 +348,9 @@ foreach (['platform_health', 'ml_health'] as $serviceKey) {
                                 </div>
                             </div>
                             <div class="service-right">
-                                <span class="service-badge <?= ($backup['status'] ?? '') === 'healthy' ? 'badge-healthy' : 'badge-attention' ?>">
+                                <span class="service-badge <?= ($backup['status'] ?? '') === 'healthy' ? 'badge-healthy' : (($backup['status'] ?? '') === 'info' ? 'badge-info' : 'badge-attention') ?>">
                                     <span class="service-dot" aria-hidden="true"></span>
-                                    <?= ($backup['status'] ?? '') === 'healthy' ? 'Current' : 'Outdated' ?>
+                                    <?= ($backup['status'] ?? '') === 'healthy' ? 'Current' : (($backup['status'] ?? '') === 'info' ? 'Not created yet' : 'Needs backup') ?>
                                 </span>
                                 <i class="bi bi-chevron-right chevron-icon" aria-hidden="true"></i>
                             </div>
@@ -359,7 +362,7 @@ foreach (['platform_health', 'ml_health'] as $serviceKey) {
                         <h3 class="record-section-title">Store continuity</h3>
                         <div class="continuity-list">
                             <?php foreach ($dashboard['continuity'] as $metric): ?>
-                                <div class="continuity-row <?= ($metric['ok'] ?? false) ? 'is-ok' : 'is-warn' ?>">
+                                <div class="continuity-row <?= ($metric['status'] ?? '') === 'info' ? 'is-info' : (($metric['ok'] ?? false) ? 'is-ok' : 'is-warn') ?>">
                                     <span class="continuity-dot" aria-hidden="true"></span>
                                     <div class="continuity-copy">
                                         <strong><?= $escape($metric['label']) ?></strong>

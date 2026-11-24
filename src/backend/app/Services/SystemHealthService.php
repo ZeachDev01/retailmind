@@ -47,12 +47,12 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
                 $available[] = (string)$migration['key'];
             }
             if (!Schema::tableExists($this->pdo, 'schema_migrations')) {
-                return $this->result('Database migrations', 'critical', 'Migration repository is missing. Run: php src/backend/scripts/migrate.php', 'Core');
+                return $this->result('Database migrations', 'warning', 'Setup incomplete. Import the database schema, then run: php src/backend/scripts/migrate.php', 'Core');
             }
             $applied = array_map('strval', $this->pdo->query('SELECT migration_key FROM schema_migrations')->fetchAll(PDO::FETCH_COLUMN));
             $pending = array_values(array_diff($available, $applied));
             return $pending
-                ? $this->result('Database migrations', 'warning', count($pending) . ' pending migration(s): ' . implode(', ', $pending), 'Core')
+                ? $this->result('Database migrations', 'warning', 'Setup incomplete. Apply ' . count($pending) . ' pending migration(s): php src/backend/scripts/migrate.php', 'Core')
                 : $this->result('Database migrations', 'healthy', count($available) . ' application migration(s) are applied.', 'Core');
         } catch (Throwable $e) {
             return $this->result('Database migrations', 'warning', 'Unable to determine migration status: ' . $e->getMessage(), 'Core');
@@ -114,7 +114,9 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
             if ($job['status'] === 'failed') {
                 // BLOCKED marks a missing prerequisite, not a worker crash.
                 if (str_starts_with((string)($job['diagnostic_reference'] ?? ''), 'BLOCKED:')) {
-                    return $this->result('Background Worker', 'warning', 'Waiting for an approved forecasting model; background forecasting is paused.', 'Forecasting');
+                    $collecting = \App\Forecasting\ForecastSetupStatus::snapshot($this->pdo)['state'] === 'collecting';
+                    return $this->result('Background Worker', $collecting ? 'info' : 'warning',
+                        $collecting ? 'Gathering sales data. Forecasting has not started yet.' : 'Sales history is ready. Train and approve a Store model to start forecasting.', 'Forecasting');
                 }
                 return $this->result('Background Worker', 'critical', 'The worker encountered an error during its last task. Check diagnostic logs.', 'Forecasting');
             }
@@ -130,10 +132,6 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
             $completedAt = $job['completed_at'];
             $ageHours = (time() - strtotime((string)$completedAt)) / 3600;
 
-            if ($ageHours > 48) {
-                return $this->result('Background Worker', 'warning', 'No worker activity in ' . round($ageHours) . ' hours. A scheduled task may have been missed.', 'Forecasting');
-            }
-
             return $this->result('Background Worker', 'healthy', 'Worker completed its last task ' . round($ageHours, 1) . ' hours ago.', 'Forecasting');
         } catch (Throwable $e) {
             return $this->result('Background Worker', 'warning', 'Unable to check worker health status.', 'Forecasting');
@@ -142,9 +140,13 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
 
     private function modelArtifactCheck(): array
     {
+        $setup = \App\Forecasting\ForecastSetupStatus::snapshot($this->pdo);
+        if ($setup['state'] === 'collecting') {
+            return $this->result('Forecast model artifact', 'info', 'Gathering sales data. No trained Store model is expected yet.', 'Forecasting');
+        }
         // Artifacts are nested per dataset: ml_models/<demo|store>/<identity hash>/*.joblib.
         $files = [];
-        $root = $this->backendPath . '/storage/ml_models';
+        $root = $this->backendPath . '/storage/ml_models/store';
         if (is_dir($root)) {
             $iterator = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)
@@ -156,7 +158,8 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
             }
         }
         if (!$files) {
-            return $this->result('Forecast model artifact', 'warning', 'No trained model artifact was found.', 'Forecasting');
+            return $this->result('Forecast model artifact', 'warning',
+                $setup['state'] === 'ready' ? 'Sales history is ready. Train and approve a Store model.' : 'No trained Store model artifact was found. Check model storage before generating forecasts.', 'Forecasting');
         }
         usort($files, static fn(string $a, string $b): int => filemtime($b) <=> filemtime($a));
         $latest = $files[0];
@@ -177,6 +180,9 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
         }
 
         if (!is_array($row) || $row === []) {
+            if (!\App\Backup\BackupReadiness::hasStoreActivity($this->pdo)) {
+                return $this->result('Database backup', 'info', 'No backup yet. The Store has no recorded operational activity.', 'Recovery');
+            }
             return $this->result('Database backup', 'warning', 'No completed verified encrypted database backup is recorded.', 'Recovery');
         }
 
@@ -201,9 +207,9 @@ final class SystemHealthService implements \App\Dashboard\PlatformHealthSource
         $configured = !empty($settings['brevo_api_key'])
             && filter_var((string)($settings['brevo_sender_email'] ?? ''), FILTER_VALIDATE_EMAIL) !== false
             && (function_exists('curl_init') || in_array('https', stream_get_wrappers(), true));
-        $message = 'Brevo API key and sender address are configured in Store Settings.';
+        $message = 'Brevo API key and sender address are configured in Platform Settings.';
         return $this->result('Email configuration', $configured ? 'healthy' : 'warning',
-            $configured ? $message : 'Add a Brevo API key and verified sender address in Store Settings.', 'Integrations');
+            $configured ? $message : 'Add a Brevo API key and verified sender address in Platform Settings.', 'Integrations');
     }
 
     private function applicationLogCheck(): array

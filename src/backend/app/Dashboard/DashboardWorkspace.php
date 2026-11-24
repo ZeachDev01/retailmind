@@ -108,8 +108,14 @@ final class DashboardWorkspace
         );
         $unsealedRecovery = $recovery !== [] && $recovery['status'] === 'active' && $recovery['sealed_at'] === null ? 1 : 0;
         $backupAge = $backup === [] ? 9999 : $this->ageDays((string)$backup['created_at'], $now);
-        $latestModel = $this->row("SELECT completed_at FROM model_training_runs WHERE status = 'completed' ORDER BY completed_at DESC LIMIT 1");
-        $modelAge = $latestModel === [] ? 9999 : $this->ageDays((string)($latestModel['completed_at'] ?? ''), $now);
+        $firstBackupPending = $backup === [] && !\App\Backup\BackupReadiness::hasStoreActivity($this->pdo);
+        $setup = \App\Forecasting\ForecastSetupStatus::snapshot($this->pdo);
+        $latestModel = $setup['state'] === 'active' ? $this->row(
+            "SELECT completed_at FROM model_training_runs WHERE status = 'completed' AND model_version = ? ORDER BY completed_at DESC LIMIT 1",
+            [$setup['approved_model']]
+        ) : [];
+        $modelDate = (string)($latestModel['completed_at'] ?? '');
+        $modelAge = $setup['state'] !== 'active' ? null : ($modelDate === '' ? 9999 : $this->ageDays($modelDate, $now));
         $privilegedAnomalies = $this->count(
             "SELECT COUNT(*) FROM users u JOIN roles r ON r.role_id = u.role_id
              WHERE r.role_name IN ('super_admin', 'admin') AND u.status = 'active' AND u.locked_until > ?",
@@ -120,9 +126,9 @@ final class DashboardWorkspace
             'backup' => [
                 'label' => 'Latest successful backup',
                 'value' => $backup === [] ? 'Not available' : (string)$backup['created_at'],
-                'status' => $backupAge > 7 ? 'critical' : 'healthy',
+                'status' => $firstBackupPending ? 'info' : ($backupAge > 7 ? 'critical' : 'healthy'),
                 'detail' => $backup === []
-                    ? 'No successful Database Backup is recorded.'
+                    ? ($firstBackupPending ? 'No backup yet. The Store has no recorded operational activity.' : 'No successful Database Backup is recorded.')
                     : $backupAge . ' ' . ($backupAge === 1 ? 'day' : 'days') . ' old.',
             ],
             'platform_health' => $this->healthHeadline('Platform health', $healthChecks, false),
@@ -153,12 +159,23 @@ final class DashboardWorkspace
                  WHERE status = 'closed' AND reviewed_at IS NULL AND cash_variance IS NOT NULL AND ABS(cash_variance) > 0"
             );
 
-        return [
+        $metrics = [
             'sales_flowing' => ['label' => 'Sales activity', 'ok' => $sales > 0, 'value' => $sales, 'detail' => $sales > 0 ? $sales . ' ' . ($sales === 1 ? 'sale was' : 'sales were') . ' recorded in the last 24 hours.' : 'No sales were recorded in the last 24 hours.'],
             'active_shifts' => ['label' => 'Cashier coverage', 'ok' => $shifts > 0, 'value' => $shifts, 'detail' => $shifts > 0 ? $shifts . ' Cashier ' . ($shifts === 1 ? 'shift is' : 'shifts are') . ' open.' : 'No Cashier shift is open.'],
             'severe_inventory_disruption' => ['label' => 'Out-of-stock products', 'ok' => $outOfStock === 0, 'value' => $outOfStock, 'detail' => $outOfStock === 0 ? 'No active products are out of stock.' : $outOfStock . ' active ' . ($outOfStock === 1 ? 'product is' : 'products are') . ' out of stock.'],
             'critical_controls' => ['label' => 'Pending operational reviews', 'ok' => $unresolvedControls === 0, 'value' => $unresolvedControls, 'detail' => $unresolvedControls === 0 ? 'No operational items are awaiting review.' : $unresolvedControls . ' operational ' . ($unresolvedControls === 1 ? 'item requires' : 'items require') . ' review.'],
         ];
+        if (!\App\Backup\BackupReadiness::hasStoreActivity($this->pdo)) {
+            foreach ([
+                'sales_flowing' => 'No sales yet. Store operations have not started.',
+                'active_shifts' => 'No Cashier shift has started yet.',
+                'severe_inventory_disruption' => 'No opening stock recorded yet.',
+            ] as $key => $detail) {
+                $metrics[$key]['status'] = 'info';
+                $metrics[$key]['detail'] = $detail;
+            }
+        }
+        return $metrics;
     }
 
     private function permittedActions(string $role): array
@@ -190,6 +207,7 @@ final class DashboardWorkspace
         $relevant = array_values(array_filter(
             $checks,
             static fn(array $check): bool => (($check['category'] ?? '') === 'Forecasting') === $forecasting
+                && ($check['name'] ?? '') !== 'Application log'
         ));
         $statuses = array_column($relevant, 'status');
         $status = in_array('critical', $statuses, true)
@@ -198,12 +216,16 @@ final class DashboardWorkspace
         if ($ageDays !== null && $ageDays > 7 && $status === 'healthy') {
             $status = 'warning';
         }
+        $collecting = $forecasting && $status === 'healthy' && in_array('info', $statuses, true);
+        $attentionChecks = count(array_filter($relevant, static fn(array $check): bool => in_array($check['status'] ?? 'healthy', ['warning', 'critical'], true)));
         return [
             'label' => $label,
-            'value' => $status === 'healthy' ? 'Healthy' : ($status === 'critical' ? 'Critical' : 'Needs attention'),
-            'status' => $status,
-            'detail' => count(array_filter($relevant, static fn(array $check): bool => ($check['status'] ?? 'healthy') !== 'healthy'))
-                . ' of ' . count($relevant) . ' checks require attention.',
+            'value' => $collecting ? 'Gathering sales data' : ($status === 'healthy' ? 'Healthy' : ($status === 'critical' ? 'Critical' : 'Needs attention')),
+            'status' => $collecting ? 'info' : $status,
+            'detail' => $collecting ? 'Forecasting has not started. Waiting for enough Store sales history.'
+                : ($ageDays !== null && $ageDays > 7 && $attentionChecks === 0
+                    ? 'The approved Store model is ' . $ageDays . ' days old. Review model freshness.'
+                    : $attentionChecks . ' of ' . count($relevant) . ' checks require attention.'),
         ];
     }
 

@@ -16,7 +16,10 @@ final class AttentionRuleService
         ['key' => 'platform.backup.scheduled-failure', 'signal' => 'scheduled_backup_failure_count', 'threshold' => 'scheduled_backup_failure_count', 'severity' => 'critical', 'category' => 'backup_recovery', 'title' => 'Scheduled Backup did not complete', 'destination' => 'components/system_administrator/backup_restore.php'],
         ['key' => 'platform.service.unhealthy', 'signal' => 'service_unhealthy_count', 'threshold' => 'service_unhealthy_count', 'severity' => 'critical', 'category' => 'system_health', 'title' => 'Platform service is unhealthy', 'destination' => 'components/system_administrator/system_health.php'],
         ['key' => 'platform.ml.stale-model', 'signal' => 'ml_model_age_days', 'threshold' => 'ml_model_age_days', 'severity' => 'warning', 'category' => 'ml_health', 'title' => 'Demand Forecast model is stale', 'destination' => 'components/system_administrator/ml_settings.php'],
-        ['key' => 'platform.settings.changed', 'signal' => 'platform_setting_change_count', 'threshold' => 'platform_setting_change_count', 'severity' => 'info', 'category' => 'platform_setting', 'title' => 'Platform Settings changed', 'destination' => 'components/system_administrator/system_settings.php'],
+        ['key' => 'platform.service.warning', 'signal' => 'service_warning_count', 'threshold' => 'service_unhealthy_count', 'severity' => 'warning', 'category' => 'system_health', 'title' => 'Platform check needs review', 'destination' => 'components/system_administrator/system_health.php'],
+        ['key' => 'platform.database.setup', 'signal' => 'database_setup_incomplete', 'fixed_threshold' => 1.0, 'severity' => 'warning', 'category' => 'system_health', 'title' => 'Database setup incomplete', 'destination' => 'components/system_administrator/system_health.php'],
+        ['key' => 'platform.forecasting.failure', 'signal' => 'forecasting_failure_count', 'fixed_threshold' => 1.0, 'severity' => 'critical', 'category' => 'ml_health', 'title' => 'Demand Forecast service failed', 'destination' => 'components/system_administrator/system_health.php'],
+        ['key' => 'platform.forecasting.warning', 'signal' => 'forecasting_warning_count', 'fixed_threshold' => 1.0, 'severity' => 'warning', 'category' => 'ml_health', 'title' => 'Demand Forecast check needs review', 'destination' => 'components/system_administrator/system_health.php'],
         ['key' => 'platform.recovery-account.active', 'signal' => 'recovery_account_active_count', 'threshold' => 'recovery_account_active_count', 'severity' => 'critical', 'category' => 'recovery_account', 'title' => 'Recovery Account is unsealed', 'destination' => 'components/system_administrator/audit_logs.php'],
     ];
 
@@ -87,8 +90,8 @@ final class AttentionRuleService
                 $this->date($signal['detected_at'] ?? null),
                 $rule['destination'],
                 array_key_exists('count', $signal) ? max(0, (int)$signal['count']) : null,
-                // Informational platform conditions stay optional; security and failure conditions are required.
-                !in_array($rule['key'], ['platform.settings.changed', 'platform.ml.stale-model'], true)
+                // Model freshness is advisory; security and failure conditions are required.
+                $rule['key'] !== 'platform.ml.stale-model'
             );
         }
 
@@ -131,10 +134,13 @@ final class AttentionRuleService
             'recovery_failure_count' => $current . ' Database Restore ' . ($value === 1.0 ? 'failure was' : 'failures were') . ' detected. Review threshold: ' . $limit . '.',
             'scheduled_backup_failure_count' => $current . ' Scheduled Backup ' . ($value === 1.0 ? 'failure was' : 'failures were') . ' detected in the last 24 hours. Review Backup history and the Windows task. Review threshold: ' . $limit . '.',
             'service_unhealthy_count' => $current . ' platform service ' . ($value === 1.0 ? 'check requires' : 'checks require') . ' attention. Review threshold: ' . $limit . '.',
+            'service_warning_count' => $current . ' platform ' . ($value === 1.0 ? 'check needs' : 'checks need') . ' review. Open System Health for the next action.',
+            'database_setup_incomplete' => 'Complete database setup. Import the schema if needed, then run: php src/backend/scripts/migrate.php',
+            'forecasting_failure_count' => 'A Demand Forecast service failed. Open System Health to diagnose the failure.',
+            'forecasting_warning_count' => 'A Demand Forecast check needs review. Open System Health for the next action.',
             'ml_model_age_days' => $value >= 9999
                 ? 'No recent successful Demand Forecast model run is recorded. Review threshold: ' . $limit . ' ' . ($threshold === 1.0 ? 'day.' : 'days.')
                 : 'The Demand Forecast model is ' . $current . ' ' . ($value === 1.0 ? 'day' : 'days') . ' old. Review threshold: ' . $limit . ' ' . ($threshold === 1.0 ? 'day.' : 'days.'),
-            'platform_setting_change_count' => $current . ' recent Platform Setting ' . ($value === 1.0 ? 'change requires' : 'changes require') . ' review. Review threshold: ' . $limit . '.',
             'forecasting_candidate_review' => 'A qualified candidate forecast model has passed technical checks and awaits local Administrator review.',
             'forecasting_failure' => 'Demand forecast generation failed. Inspect forecast exceptions or generate a new forecast.',
             'recovery_account_active_count' => $current . ' unsealed Recovery ' . ($value === 1.0 ? 'Account requires' : 'Accounts require') . ' review. Review threshold: ' . $limit . '.',

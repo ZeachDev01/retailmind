@@ -1081,6 +1081,7 @@ body.super-administrator-workspace {
 }
 .continuity-chip.is-good { background: var(--theme-success-surface, #dcfce7); color: var(--theme-success-text, #15803d); }
 .continuity-chip.is-warn { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #92400e); }
+.continuity-chip.is-info { background: var(--theme-surface-muted, #f1f5f9); color: var(--theme-text-secondary, #475569); }
 
 /* Attention queue: severity groups, plain-language rows */
 .attention-groups { display: grid; }
@@ -1199,6 +1200,8 @@ body.super-administrator-workspace {
 .badge-healthy .service-dot { background: #16a34a; }
 .badge-attention { background: var(--theme-warning-surface, #fef3c7); color: var(--theme-warning-text, #92400e); }
 .badge-attention .service-dot { background: #d97706; }
+.badge-info { background: var(--theme-surface-muted, #f1f5f9); color: var(--theme-text-secondary, #475569); }
+.badge-info .service-dot { background: currentColor; }
 .chevron-icon { font-size: .8rem; color: #94a3b8; transition: transform .16s ease; }
 .service-row:hover .chevron-icon { transform: translateX(2px); }
 
@@ -1229,6 +1232,7 @@ body.super-administrator-workspace {
     box-shadow: 0 0 0 2px rgba(22, 163, 74, .16);
 }
 .continuity-row.is-warn .continuity-dot { background: #d97706; box-shadow: 0 0 0 2px rgba(217, 119, 6, .18); }
+.continuity-row.is-info .continuity-dot { background: var(--theme-text-secondary, #475569); box-shadow: none; }
 .continuity-copy strong { display: block; color: var(--control-navy); font-size: .85rem; font-weight: 600; }
 .continuity-copy p { margin: .1rem 0 0; color: var(--control-muted); font-size: .78rem; line-height: 1.45; }
 

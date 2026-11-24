@@ -28,6 +28,9 @@ final class DatabaseAttentionSignalSource
             "SELECT created_at FROM backup_history WHERE status = 'completed' AND backup_type <> 'restore' ORDER BY created_at DESC LIMIT 1"
         );
         $backupAge = $this->ageDays($latestBackup['created_at'] ?? null);
+        if ($latestBackup === [] && !\App\Backup\BackupReadiness::hasStoreActivity($this->pdo)) {
+            $backupAge = 0;
+        }
         $recoveryFailures = $this->scalar(
             "SELECT COUNT(*) FROM backup_history WHERE status = 'failed' AND created_at >= ?",
             [$dayAgo]
@@ -36,28 +39,36 @@ final class DatabaseAttentionSignalSource
             "SELECT COUNT(*) FROM backup_history WHERE backup_type = 'scheduled' AND status = 'failed' AND created_at >= ?",
             [$dayAgo]
         );
-        $latestModel = $this->row(
-            "SELECT completed_at FROM model_training_runs WHERE status = 'completed' ORDER BY completed_at DESC LIMIT 1"
-        );
-        $modelAge = $this->ageDays($latestModel['completed_at'] ?? null);
-        $platformChanges = $this->scalar(
-            "SELECT COUNT(*) FROM activity_log WHERE category = 'platform_setting' AND created_at >= ?",
-            [$dayAgo]
-        );
+        $setup = \App\Forecasting\ForecastSetupStatus::snapshot($this->pdo);
+        $latestModel = $setup['state'] === 'active' ? $this->row(
+            "SELECT completed_at FROM model_training_runs WHERE status = 'completed' AND model_version = ? ORDER BY completed_at DESC LIMIT 1",
+            [$setup['approved_model']]
+        ) : [];
+        $modelAge = $setup['state'] === 'active' ? $this->ageDays($latestModel['completed_at'] ?? null) : 0;
         $recoveryAccount = $this->scalar(
             "SELECT COUNT(*) FROM recovery_accounts ra JOIN users u ON u.user_id = ra.user_id WHERE u.status = 'active' AND ra.sealed_at IS NULL"
         );
 
         $serviceFailures = 0;
+        $serviceWarnings = 0;
         $mlFailures = 0;
+        $mlWarnings = 0;
+        $setupIncomplete = 0;
         foreach ($healthChecks as $check) {
-            if (($check['status'] ?? 'healthy') === 'healthy') {
+            $status = $check['status'] ?? 'healthy';
+            if (!in_array($status, ['warning', 'critical'], true) || ($check['name'] ?? '') === 'Application log') {
+                continue;
+            }
+            if (($check['name'] ?? '') === 'Database migrations') {
+                $setupIncomplete++;
                 continue;
             }
             if (($check['category'] ?? '') === 'Forecasting') {
-                $mlFailures++;
+                if ($status === 'critical') $mlFailures++;
+                else $mlWarnings++;
             } else {
-                $serviceFailures++;
+                if ($status === 'critical') $serviceFailures++;
+                else $serviceWarnings++;
             }
         }
 
@@ -68,8 +79,11 @@ final class DatabaseAttentionSignalSource
             'recovery_failure_count' => $this->signal($recoveryFailures, (int)$recoveryFailures),
             'scheduled_backup_failure_count' => $this->signal($scheduledBackupFailures, (int)$scheduledBackupFailures),
             'service_unhealthy_count' => $this->signal($serviceFailures, $serviceFailures),
-            'ml_model_age_days' => $this->signal(max($modelAge, $mlFailures > 0 ? 9999 : 0)),
-            'platform_setting_change_count' => $this->signal($platformChanges, (int)$platformChanges),
+            'service_warning_count' => $this->signal($serviceWarnings, $serviceWarnings),
+            'database_setup_incomplete' => $this->signal($setupIncomplete),
+            'forecasting_failure_count' => $this->signal($mlFailures, $mlFailures),
+            'forecasting_warning_count' => $this->signal($mlWarnings, $mlWarnings),
+            'ml_model_age_days' => $this->signal($modelAge),
             'recovery_account_active_count' => $this->signal($recoveryAccount, (int)$recoveryAccount),
         ];
     }

@@ -337,6 +337,12 @@ html[data-theme="dark"] .system-health-page {
     border-color: var(--sh-success-border);
 }
 
+.health-status.info {
+    background: var(--theme-surface-muted, #f1f5f9);
+    color: var(--theme-text-secondary, #475569);
+    border-color: var(--theme-border, #cbd5e1);
+}
+
 .health-status.warning {
     background: var(--sh-warning-bg);
     color: var(--sh-warning-fg);
