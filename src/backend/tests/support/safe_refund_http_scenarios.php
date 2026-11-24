@@ -22,6 +22,7 @@ try {
         $body=file_get_contents('http://'.$address.'/'.($post?'':'?'.http_build_query($fields)),false,stream_context_create(['http'=>$options]));
         return [$http_response_header[0]??'',(string)$body];
     };
+    require __DIR__.'/refund_return_condition_scenarios.php';
     [$status,$body]=$request(['sale_id'=>11],1,'cashier',false);
     $assert(str_contains($status,'200') && !str_contains($body,'Refund sale #11'),'Unapproved HTTP access exposes no other seller sale');
     $post=['csrf_token'=>'fixture-csrf','sale_id'=>11,'quantity'=>[11=>1],'disposition'=>[11=>'damaged'],'reason'=>'customer_return','approved_by'=>2,'cashier_id'=>3,'shift_id'=>2];
@@ -54,7 +55,7 @@ try {
     [$status,$body]=$request(['refund_id'=>$row['refund_id']],1,'cashier',false);
     $assert(str_contains($body,'HTTP-CARD-SETTLEMENT') && str_contains($body,'Refund completed externally and recorded in RetailMind.'),'Saved customer receipt describes external settlement');
     [$status,$packFormBody]=$request(['sale_id'=>22],1,'cashier',false);
-    $assert(str_contains($status,'200') && str_contains($packFormBody,'Pack (6 pcs)') && str_contains($packFormBody,'Piece') && str_contains($packFormBody,'Restockable (Whole sealed pack)') && str_contains($packFormBody,'Restockable requires whole sealed, complete pack (6 pcs)'),'HTTP refund form distinguishes Pack and Piece lines and states sealed pack restock eligibility');
+    $assert(str_contains($status,'200') && str_contains($packFormBody,'Pack (6 pcs)') && str_contains($packFormBody,'Piece') && str_contains($packFormBody,'Restockable (whole, sealed, complete pack)'),'HTTP refund form distinguishes Pack and Piece lines and states sealed pack restock eligibility');
     $fractionalPackPost=['csrf_token'=>'fixture-csrf','sale_id'=>22,'quantity'=>[22=>'1.5'],'disposition'=>[22=>'restockable'],'reason'=>'customer_return','external_completed'=>'1','payment_reference'=>'HTTP-PACK-FRAC'];
     $before=$snapshot();$request($fractionalPackPost);
     $assert($snapshot()===$before,'HTTP fractional pack quantity is refused without partial writes');

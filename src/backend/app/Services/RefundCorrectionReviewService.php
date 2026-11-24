@@ -163,6 +163,8 @@ class RefundCorrectionReviewService
         if (function_exists('is_remote_request') && is_remote_request()) throw new DomainException('Refund corrections are unavailable during remote monitoring.');
         StoreWriteGate::begin($this->pdo);
         try {
+            $this->pdo->prepare('SELECT refund_id FROM cash_refunds WHERE refund_id=?' . ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : ''))->execute([$refundId]);
+            if ($stockStatus === 'pending') $this->assertNoConditionCorrection($refundId);
             $stmt = $this->pdo->prepare("
                 INSERT INTO refund_correction_reviews (
                     refund_id, correction_type, status, cash_status, stock_status,
@@ -359,6 +361,8 @@ class RefundCorrectionReviewService
                 throw new DomainException('Stock correction is not pending for this review.');
             }
 
+            $this->pdo->prepare('SELECT refund_id FROM cash_refunds WHERE refund_id=?' . ($this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : ''))->execute([$review['refund_id']]);
+            $this->assertNoConditionCorrection((int)$review['refund_id']);
             $proposal = json_decode((string)$review['proposed_correction'], true) ?: [];
             if (isset($proposal['product_id'], $proposal['quantity']) && ((int)$proposal['product_id'] !== $productId || (int)$proposal['quantity'] !== $qtyChange)) {
                 throw new DomainException('The stock correction must match the approved Product and quantity.');
@@ -426,4 +430,14 @@ class RefundCorrectionReviewService
             throw $e;
         }
     }
+    private function assertNoConditionCorrection(int $refundId): void
+    {
+        require_once __DIR__ . '/SalesWorkflowService.php';
+        $columns = \SalesWorkflowService::getTableColumns($this->pdo, 'refund_return_condition_corrections');
+        if (!$columns) return;
+        $stmt = $this->pdo->prepare('SELECT 1 FROM refund_return_condition_corrections c JOIN cash_refund_items i ON i.refund_item_id=c.refund_item_id WHERE i.refund_id=? LIMIT 1');
+        $stmt->execute([$refundId]);
+        if ($stmt->fetchColumn()) throw new DomainException('This refund has condition corrections. Ask the Inventory Manager to reconcile stock using its condition history.');
+    }
+
 }

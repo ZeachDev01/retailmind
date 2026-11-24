@@ -2076,3 +2076,20 @@ PREPARE rm_product_image_source FROM @rm_sql;
 EXECUTE rm_product_image_source;
 DEALLOCATE PREPARE rm_product_image_source;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180005_product_image_source','Keep attribution for saved Open Food Facts Product photos') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+CREATE TABLE IF NOT EXISTS `refund_return_condition_corrections` (
+  `correction_id` INT AUTO_INCREMENT PRIMARY KEY,
+  `refund_item_id` INT NOT NULL,
+  `previous_condition` VARCHAR(30) NOT NULL,
+  `new_condition` VARCHAR(30) NOT NULL,
+  `quantity` INT NOT NULL,
+  `selling_form` VARCHAR(20) NOT NULL,
+  `pack_size` INT NULL,
+  `reason` VARCHAR(255) NOT NULL,
+  `actor_id` INT NOT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `stock_movement_id` INT NOT NULL,
+  `request_token` VARCHAR(64) NOT NULL UNIQUE,
+  `version` INT NOT NULL,
+  UNIQUE (`refund_item_id`, `version`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
