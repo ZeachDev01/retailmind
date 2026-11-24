@@ -877,3 +877,17 @@
     .receipts-page .receipt-page-heading { flex-direction: column; gap: 16px; }
     .receipts-page .receipt-page-heading .btn { align-self: flex-start; }
 }
+
+/* Return conditions live in operational details, outside the printed receipt. */
+.receipts-page .refund-condition-details { padding: 1rem; }
+.receipts-page .refund-condition-details h3 { margin: 1rem 0 .75rem; font-size: 1.05rem; }
+.receipts-page .refund-condition-form label { font-size: .95rem; font-weight: 600; }
+.receipts-page .refund-condition-form :is(input:not([type="hidden"]):not([type="checkbox"]), select) {
+    width: 100%; min-height: 44px; padding: .65rem .9rem;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--card-bg); color: var(--text); font: inherit; font-size: 1rem;
+}
+.receipts-page .refund-condition-form .refund-condition-confirm { display: flex; align-items: flex-start; gap: .5rem; font-weight: 400; }
+.receipts-page .refund-condition-form .refund-condition-confirm[hidden] { display: none; }
+.receipts-page .refund-condition-form input[type="checkbox"] { margin-top: .25rem; flex-shrink: 0; }
+.receipts-page .refund-condition-details :is([role="alert"], [role="status"]) { padding: .75rem; border: 1px solid var(--border); border-radius: 10px; }
