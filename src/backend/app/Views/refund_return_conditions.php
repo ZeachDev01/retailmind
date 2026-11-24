@@ -26,7 +26,7 @@ $escape=static fn($value)=>htmlspecialchars((string)$value,ENT_QUOTES,'UTF-8');
 <button type="submit" class="btn btn-primary">Save correction</button>
 </form></details>
 <?php elseif(!$line['eligible']): ?><p>Ask the Inventory Manager to reconcile this return.</p><?php endif; ?>
-<?php if($line['corrections']): ?><h4>Condition history</h4><ul><?php foreach($line['corrections'] as $correction): ?><li><?= $escape(ucfirst($correction['previous_condition']).' → '.ucfirst($correction['new_condition'])) ?> — <?= $escape($correction['actor_name']) ?> · <?= $escape($correction['created_at']) ?><br><?= $escape($correction['reason']) ?><br><?= (int)$correction['quantity'] ?> <?= $escape($correction['selling_form'].((int)$correction['quantity']===1?'':'s')) ?><?= $correction['selling_form']==='pack'?' ('.(int)$correction['pack_size'].' pieces per pack)':'' ?> � Stock movement #<?= (int)$correction['stock_movement_id'] ?></li><?php endforeach; ?></ul><?php endif; ?>
+<?php if($line['corrections']): ?><h4>Condition history</h4><ul><?php foreach($line['corrections'] as $correction): ?><li><?= $escape(ucfirst($correction['previous_condition']).' → '.ucfirst($correction['new_condition'])) ?> — <?= $escape($correction['actor_name']) ?> · <?= $escape($correction['created_at']) ?><br><?= $escape($correction['reason']) ?><br><?= (int)$correction['quantity'] ?> <?= $escape($correction['selling_form'].((int)$correction['quantity']===1?'':'s')) ?><?= $correction['selling_form']==='pack'?' ('.(int)$correction['pack_size'].' pieces per pack)':'' ?> · Stock movement #<?= (int)$correction['stock_movement_id'] ?></li><?php endforeach; ?></ul><?php endif; ?>
 </article>
 <?php endforeach; ?>
 </section>

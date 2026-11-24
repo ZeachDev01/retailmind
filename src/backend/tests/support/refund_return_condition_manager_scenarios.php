@@ -16,7 +16,7 @@ $managerItem=(int)$managerLines[0]['refund_item_id'];
 $pdo->exec("UPDATE cashier_shifts SET status='closed' WHERE shift_id=1");
 $immutable=[];
 foreach(['sales','sale_items','cash_refunds','cash_refund_items','refund_receipt_details','cash_drawer_movements','cashier_shifts'] as $table)$immutable[$table]=$pdo->query('SELECT * FROM '.$table)->fetchAll(PDO::FETCH_ASSOC);
-$managerPost=['csrf_token'=>'fixture-csrf','action'=>'correct_condition','refund_item_id'=>$managerItem,'new_condition'=>'damaged','correction_reason'=>'Manager inspection found damage','expected_version'=>1,'request_token'=>str_repeat('b1',16)];
+$managerPost=['csrf_token'=>'fixture-csrf','action'=>'correct_condition','refund_item_id'=>$managerItem,'new_condition'=>'damaged','correction_reason'=>'Manager inspection found damage','expected_version'=>1,'request_token'=>str_repeat('c1',16)];
 $before=$snapshot();
 [$status]=$storeRequest($managerPost,2,'admin',true);
 $assert(str_contains($status,'422') && $snapshot()===$before,'Administrator is read-only for routine condition correction');
@@ -44,7 +44,7 @@ $otherSplit=(int)$pdo->query('SELECT refund_id FROM cash_refunds WHERE sale_id=1
 $assert($conditionService->details(6,'inventory_manager',$otherSplit)[0]['effective_condition']==='damaged' && !$conditionService->details(6,'inventory_manager',$otherSplit)[0]['corrections'],'Store correction leaves another refunded line untouched');
 $saved=$snapshot();$storeRequest($managerPost,6,'inventory_manager',true);
 $assert($snapshot()===$saved,'Store retry creates no duplicate correction or stock movement');
-$stale=$managerPost;$stale['request_token']=str_repeat('b2',16);$stale['new_condition']='restockable';$stale['fit_for_sale']='1';
+$stale=$managerPost;$stale['request_token']=str_repeat('c2',16);$stale['new_condition']='restockable';$stale['fit_for_sale']='1';
 [$status,$error]=$storeRequest($stale,6,'inventory_manager',true);
 $assert(str_contains($status,'422') && str_contains($error,'condition changed') && !str_contains($error,'Correction saved') && $snapshot()===$saved,'Store stale preview fails without completion claim');
 [$status,$adminHistory]=$storeRequest(['sale_id'=>102],2,'admin');
@@ -57,6 +57,16 @@ if (getenv('RUN_REFUND_MANAGER_BROWSER')==='1') {
     $assert(proc_close($process)===0,'Store return browser: '.$output.$error);echo $output;
 }
 foreach($immutable as $table=>$rows)$assert($rows===$pdo->query('SELECT * FROM '.$table)->fetchAll(PDO::FETCH_ASSOC),'Store condition correction leaves '.$table.' immutable');
+// The Store entry point consumes shared pack behavior without a second writer.
+[$status,$packStore]=$storeRequest(['sale_id'=>110]);
+$assert(str_contains($status,'200') && str_contains($packStore,'3 packs (6 pieces per pack)'),'Store details preserve historical pack form and size');
+$packStorePost=['csrf_token'=>'fixture-csrf','action'=>'correct_condition','refund_item_id'=>$packItem,'new_condition'=>'damaged','correction_reason'=>'Manager pack inspection','expected_version'=>3,'request_token'=>str_repeat('c3',16)];
+$before=$snapshot();[$status,$packFailure]=$storeRequest($packStorePost,6,'inventory_manager',true);
+$assert(str_contains($status,'422') && !str_contains($packFailure,'Correction saved') && $snapshot()===$before,'Store pack save shares insufficient sealed stock guard');
+$pdo->exec('UPDATE product_batches SET sealed_quantity=3,loose_quantity=2 WHERE batch_id=110');
+[$status,$packStoreAfter]=$storeRequest($packStorePost,6,'inventory_manager',true);
+$assert(str_contains($status,'200') && str_contains($packStoreAfter,'Correction saved. 3 packs of Barnats Sales Pack removed from available stock.') && (int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id=110')->fetchColumn()===24,'Manager Store pack save removes eighteen Base Units with explicit form confirmation');
+$assert($conditionService->details(6,'inventory_manager',$packRefund)[1]['effective_condition']==='damaged','Manager pack save leaves sibling returned piece unchanged');
 $pdo->exec("UPDATE cashier_shifts SET status='open' WHERE shift_id=1");
 if($fixturePath=getenv('RETURN_CONDITION_MANAGER_BROWSER_FIXTURE'))file_put_contents($fixturePath,json_encode(['before'=>$managerDetails,'after'=>$managerAfter,'admin'=>$adminHistory,'cashier'=>$own],JSON_THROW_ON_ERROR));
 echo "Return condition Store roles persisted/HTTP checks: passed\n";

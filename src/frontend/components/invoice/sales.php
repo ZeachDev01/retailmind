@@ -470,7 +470,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let conditionSaleId = null;
     async function loadRefundConditions(saleId) {
         conditionSaleId = saleId;
-        refundConditions.textContent = 'Loading Cash Refunds…';
+        refundConditions.textContent = 'Loading Cash Refundsâ€¦';
         try {
             const response = await fetch('?action=refund_conditions&sale_id=' + encodeURIComponent(saleId));
             const html = await response.text();
