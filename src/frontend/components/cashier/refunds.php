@@ -59,14 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         if (($_POST['action'] ?? '') === 'correct_condition') {
-            $allowed = ['csrf_token','action','refund_item_id','expected_version','request_token','new_condition','correction_reason','fit_for_sale'];
-            if (array_diff(array_keys($_POST), $allowed)) throw new DomainException('Only the returned condition can be changed here. Reopen the refund details.');
-            $correctionId = $conditionService->correct($actorId, $actorRole, (int)($_POST['refund_item_id'] ?? 0),
-                (string)($_POST['new_condition'] ?? ''), (string)($_POST['correction_reason'] ?? ''),
-                (int)($_POST['expected_version'] ?? -1), (string)($_POST['request_token'] ?? ''), ($_POST['fit_for_sale'] ?? '') === '1');
-            $savedLine = $pdo->prepare('SELECT i.refund_id,i.quantity,i.selling_form,p.product_name FROM cash_refund_items i JOIN products p ON p.product_id=i.product_id WHERE i.refund_item_id=?');
-            $savedLine->execute([(int)$_POST['refund_item_id']]); $savedLine = $savedLine->fetch(PDO::FETCH_ASSOC);
-            $_SESSION['condition_correction_saved'] = 'Correction saved. ' . $savedLine['quantity'] . ' ' . (($savedLine['selling_form']??'piece') === 'pack' ? ((int)$savedLine['quantity'] === 1 ? 'pack of ' : 'packs of ') : '') . $savedLine['product_name'] . ((string)$_POST['new_condition'] === 'restockable' ? ' returned to available stock.' : ' removed from available stock.');
+            $savedLine = $conditionService->correctSubmission($actorId, $actorRole, $_POST);
+            $_SESSION['condition_correction_saved'] = $savedLine['confirmation'];
             $_SESSION['condition_correction_refund'] = (int)$savedLine['refund_id'];
             header('Location: ' . app_url('components/cashier/refunds.php?condition_saved=1'), true, 303);
             exit;
