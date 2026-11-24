@@ -33,7 +33,7 @@ const { chromium } = require('playwright');
             await page.locator('#receiptOtherTab').click();
             const conditions = page.locator('.refund-condition-details');
             await conditions.getByText('Manager inspection found damage', {exact:false}).waitFor();
-            const item = conditions.locator('.refund-condition-line').filter({hasText:'Inspected both pieces'});
+            const item = conditions.locator('.refund-condition-line').filter({hasText:'Split allocation item'}).filter({has:page.locator('.refund-condition-quantity', {hasText:/^2 pieces/})});
             await item.locator('summary').click();
             const form = item.locator('form');
             const target = width === 1440 ? 'restockable' : 'damaged';

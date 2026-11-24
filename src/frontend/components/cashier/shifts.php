@@ -174,11 +174,29 @@ $firstAvailableRegisterId = (int)(array_values($availableRegisters)[0]['register
 ?>
 <!DOCTYPE html>
 <html lang="en">
+<?php
+$shiftTabs = ['record' => ['Record movement', 'bi-plus-circle'], 'current' => ['Current movements', 'bi-arrow-left-right'], 'close' => ['Close shift', 'bi-calculator'], 'recent' => ['Recent shifts', 'bi-clock-history']];
+if (!$isCashier) unset($shiftTabs['record']);
+if (!$isCashier && $actorRole !== 'admin') unset($shiftTabs['close']);
+$activeShiftTab = $openShift ? ($isCashier && !$ownRegisterLocked ? 'record' : 'current') : 'recent';
+$requestedTab = $_GET['tab'] ?? '';
+$returnTab = $_GET['return_tab'] ?? '';
+if (is_string($returnTab) && isset($shiftTabs[$returnTab])) $activeShiftTab = $returnTab;
+if (is_string($requestedTab) && isset($shiftTabs[$requestedTab])) $activeShiftTab = $requestedTab;
+if ($countPreview || in_array($_POST['action'] ?? '', ['count', 'close'], true)) $activeShiftTab = 'close';
+if (($_POST['action'] ?? '') === 'movement' && $isCashier) $activeShiftTab = 'record';
+if ($closedSummary) $activeShiftTab = 'recent';
+if (!isset($shiftTabs[$activeShiftTab])) $activeShiftTab = 'recent';
+$showShiftWorkspace = (is_string($requestedTab) && isset($shiftTabs[$requestedTab]))
+    || in_array($_POST['action'] ?? '', ['movement', 'count', 'close'], true);
+$shiftSummaryUrl = app_url('components/cashier/shifts.php?' . http_build_query(['return_tab' => $activeShiftTab] + (!$isCashier ? ['cashier_id' => $targetCashierId] : [])));
+$shiftTasksUrl = app_url('components/cashier/shifts.php?' . http_build_query(['tab' => $activeShiftTab] + (!$isCashier ? ['cashier_id' => $targetCashierId] : [])));
+?>
 
 <head><?php retailmind_theme_head(); ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Cashier Shifts</title>
+    <title><?= $showShiftWorkspace ? 'Shift workspace' : 'Cashier Shifts' ?></title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/cashier-pages.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/cashier-pages.css')) ?>">
     <script src="<?= htmlspecialchars(app_url('assets/js/cash-drawer-counter.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/cash-drawer-counter.js')) ?>" defer></script>
@@ -189,8 +207,16 @@ $firstAvailableRegisterId = (int)(array_values($availableRegisters)[0]['register
     <div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content" id="shift-main">
             <div class="topbar shift-topbar">
                 <div>
-                    <h1>Cashier Shifts</h1>
-                </div><a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Return to POS</a>
+                    <h1><?= $showShiftWorkspace ? 'Shift workspace' : 'Cashier Shifts' ?></h1>
+                </div>
+                <div class="shift-page-actions">
+                    <?php if ($showShiftWorkspace): ?>
+                        <a class="btn btn-secondary" href="<?= htmlspecialchars($shiftSummaryUrl) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Back to Cashier Shifts</a>
+                    <?php else: ?>
+                        <a class="btn" href="<?= htmlspecialchars($shiftTasksUrl) ?>"><i class="bi bi-arrow-left-right" aria-hidden="true"></i>Open shift workspace</a>
+                        <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>"><i class="bi bi-arrow-left" aria-hidden="true"></i>Return to POS</a>
+                    <?php endif; ?>
+                </div>
             </div>
             <?php if ($error !== ''): ?><div class="message error" role="alert"><?= htmlspecialchars($error) ?></div><?php endif; ?>
             <?php foreach ([[$message, 'success'], [$error, 'error']] as [$notice, $noticeType]): ?>
@@ -205,6 +231,7 @@ $firstAvailableRegisterId = (int)(array_values($availableRegisters)[0]['register
                     <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/pos.php')) ?>">Unlock at POS</a>
                 </div>
             <?php endif; ?>
+            <?php if (!$showShiftWorkspace): ?>
             <?php if (!$isCashier): ?><section class="dashboard-section shift-selector">
                     <form method="get"><label for="shift-cashier">View open shift</label><select id="shift-cashier" name="cashier_id" onchange="this.form.submit()" <?= !$cashiers ? 'disabled' : '' ?>><?php if (!$cashiers): ?><option>No open shifts</option><?php endif; ?><?php foreach ($cashiers as $c): ?><option value="<?= (int)$c['user_id'] ?>" <?= $targetCashierId === (int)$c['user_id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['display_name'] ?? $c['full_name'] ?? 'Cashier') ?></option><?php endforeach; ?></select><noscript><button class="btn" type="submit">View shift</button></noscript></form>
                 </section><?php endif; ?>
@@ -264,18 +291,7 @@ $firstAvailableRegisterId = (int)(array_values($availableRegisters)[0]['register
                         </div>
                     <?php endif; ?>
                 </section>
-            <?php
-            $shiftTabs = ['record' => ['Record movement', 'bi-plus-circle'], 'current' => ['Current movements', 'bi-arrow-left-right'], 'close' => ['Close shift', 'bi-calculator'], 'recent' => ['Recent shifts', 'bi-clock-history']];
-            if (!$isCashier) unset($shiftTabs['record']);
-            if (!$isCashier && $actorRole !== 'admin') unset($shiftTabs['close']);
-            $activeShiftTab = $openShift ? ($isCashier && !$ownRegisterLocked ? 'record' : 'current') : 'recent';
-            $requestedTab = $_GET['tab'] ?? '';
-            if (is_string($requestedTab) && isset($shiftTabs[$requestedTab])) $activeShiftTab = $requestedTab;
-            if ($countPreview || in_array($_POST['action'] ?? '', ['count', 'close'], true)) $activeShiftTab = 'close';
-            if (($_POST['action'] ?? '') === 'movement' && $isCashier) $activeShiftTab = 'record';
-            if ($closedSummary) $activeShiftTab = 'recent';
-            if (!isset($shiftTabs[$activeShiftTab])) $activeShiftTab = 'recent';
-            ?>
+            <?php else: ?>
             <div class="shift-workspace" id="shift-workspace">
                 <nav class="shift-tablist" role="tablist" aria-label="Cashier Shift sections">
                     <?php foreach ($shiftTabs as $key => [$label, $icon]): ?>
@@ -318,7 +334,7 @@ $firstAvailableRegisterId = (int)(array_values($availableRegisters)[0]['register
                 </div><?php endif; ?>
                 <?php if (isset($shiftTabs['current'])): ?><div class="shift-tabpanel" role="tabpanel" id="shift-panel-current" aria-labelledby="shift-tab-current" tabindex="0" <?= $activeShiftTab === 'current' ? '' : 'hidden' ?>>
             <?php if ($openShift): ?><section class="dashboard-section" id="current-shift-movements">
-                    <div class="shift-section-heading"><h2>Current shift movements</h2><?php if ($isCashier): ?><a href="<?= htmlspecialchars(app_url('components/cashier/history.php?type=movements')) ?>">All drawer movements</a><?php endif; ?></div>
+                    <div class="shift-section-heading"><h2>Current shift movements</h2></div>
                     <?php if ($movements): ?>
                     <div class="table-wrap">
                         <table class="shift-movement-table" data-page-size="10">
@@ -337,8 +353,20 @@ $firstAvailableRegisterId = (int)(array_values($availableRegisters)[0]['register
                                 </tr><?php endforeach; ?>
                         </tbody></table>
                     </div>
-                    <?php else: ?><p class="shift-empty">No drawer movements recorded for this shift.</p><?php endif; ?>
-                </section><?php else: ?><section class="dashboard-section"><h2>Current shift movements</h2><p class="shift-empty">Open a shift to see its drawer movements.</p></section><?php endif; ?>
+                    <?php else: ?>
+                    <div class="shift-movements-empty">
+                        <i class="bi bi-arrow-left-right" aria-hidden="true"></i>
+                        <h3>No drawer movements yet</h3>
+                        <p>Cash added to or taken from this drawer appears here.</p>
+                        <?php if ($isCashier && !$ownRegisterLocked && !$countPreview): ?>
+                            <a class="btn" href="<?= htmlspecialchars(app_url('components/cashier/shifts.php?tab=record')) ?>">Record movement</a>
+                            <p class="shift-help">Sales and refunds are tracked separately.</p>
+                        <?php else: ?>
+                            <p class="shift-help"><?= $ownRegisterLocked ? 'Unlock your register at POS to record a movement.' : ($countPreview ? 'Finish closing this shift before recording another movement.' : 'The Cashier records drawer movements. Sales and refunds are tracked separately.') ?></p>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
+                </section><?php else: ?><section class="dashboard-section"><h2>Current shift movements</h2><div class="shift-movements-empty"><i class="bi bi-arrow-left-right" aria-hidden="true"></i><h3>No open shift</h3><p>Open a Cashier Shift to start tracking drawer cash.</p></div></section><?php endif; ?>
                 </div><?php endif; ?>
                 <?php if (isset($shiftTabs['close'])): ?><div class="shift-tabpanel" role="tabpanel" id="shift-panel-close" aria-labelledby="shift-tab-close" tabindex="0" <?= $activeShiftTab === 'close' ? '' : 'hidden' ?>>
                 <?php if ($openShift && ($isCashier || $actorRole === 'admin')): ?><section class="dashboard-section shift-reconciliation" <?= $isCashier ? 'data-shift-cart-guard data-cashier-id="' . $actorId . '" data-shift-id="' . (int)$openShift['shift_id'] . '"' : '' ?>>
@@ -428,9 +456,8 @@ $firstAvailableRegisterId = (int)(array_values($availableRegisters)[0]['register
             </section><?php endif; ?>
             <section class="dashboard-section shift-history">
                 <div class="shift-section-heading"><h2 id="recent-shifts-heading">Recent shifts</h2><span class="shift-history-count"><?= count($recent) ?> shift<?= count($recent) === 1 ? '' : 's' ?></span></div>
-                <?php if ($isCashier): ?><p><a href="<?= htmlspecialchars(app_url('components/cashier/history.php?type=movements')) ?>">Drawer movement history across shifts</a></p><?php endif; ?>
                 <?php if ($recent): ?><div class="table-wrap" role="region" aria-labelledby="recent-shifts-heading" tabindex="0">
-                    <table class="shift-history-table" data-page-size="10">
+                    <table class="shift-history-table" data-page-size="15" data-always-paginate>
                         <thead><tr>
                             <th>Cashier / register</th>
                             <th>Opened</th>
@@ -452,12 +479,21 @@ $firstAvailableRegisterId = (int)(array_values($availableRegisters)[0]['register
                                 <td data-label="Difference"><?php if ($r['cash_variance'] === null): ?>—<?php else: ?><span class="variance-badge-cell <?= (float)$r['cash_variance'] < 0 ? 'is-shortage' : ((float)$r['cash_variance'] > 0 ? 'is-overage' : 'is-balanced') ?>"><?= (float)$r['cash_variance'] >= 0 ? '+' : '' ?>₱<?= number_format((float)$r['cash_variance'], 2) ?></span><?php endif; ?></td>
                             </tr><?php endforeach; ?></tbody>
                     </table>
-                </div><?php else: ?><p class="shift-empty">No shifts yet.</p><?php endif; ?>
+                </div><?php else: ?>
+                    <div class="shift-movements-empty">
+                        <i class="bi bi-clock-history" aria-hidden="true"></i>
+                        <h3>No shifts yet</h3>
+                        <p>Shifts will appear here with their register, opening and closing times, and cash reconciliation.</p>
+                        <p class="shift-help"><?= $isCashier ? 'Open a shift to start tracking drawer activity.' : 'Shift history appears after a Cashier opens their first shift.' ?></p>
+                    </div>
+                <?php endif; ?>
             </section>
                 </div><?php endif; ?>
             </div>
+            <?php endif; ?>
         </main>
     </div>
+    <?php if ($showShiftWorkspace): ?>
     <script>
         const shiftWorkspace = document.getElementById('shift-workspace');
         const shiftTabs = [...shiftWorkspace.querySelectorAll('.shift-tablist [role="tab"]')];
@@ -476,13 +512,23 @@ $firstAvailableRegisterId = (int)(array_values($availableRegisters)[0]['register
             });
             if (focus) tab.focus({preventScroll: true});
             alignShiftTab(tab);
+            const headerBottom = Math.max(0, ...[...document.querySelectorAll('.global-topbar, .admin-mobile-topbar')]
+                .map(header => header.getBoundingClientRect().bottom));
+            shiftWorkspace.style.setProperty('--shift-header-offset', `${headerBottom}px`);
+            const pageHeader = document.querySelector('.shift-topbar');
+            pageHeader.style.scrollMarginTop = `${headerBottom}px`;
+            pageHeader.scrollIntoView({block: 'start', behavior: 'instant'});
             history.replaceState(null, '', tab.href);
+            const summaryLink = document.querySelector('.shift-page-actions a');
+            const summaryUrl = new URL(summaryLink.href);
+            summaryUrl.searchParams.set('return_tab', new URL(tab.href).searchParams.get('tab'));
+            summaryLink.href = summaryUrl.href;
         };
         shiftTabs.forEach((tab, index) => {
             tab.addEventListener('click', event => {
                 if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
                 event.preventDefault();
-                selectShiftTab(tab);
+                selectShiftTab(tab, true);
             });
             tab.addEventListener('keydown', event => {
                 let next = index;
@@ -548,6 +594,7 @@ $firstAvailableRegisterId = (int)(array_values($availableRegisters)[0]['register
             syncReasons();
         }
     </script>
+    <?php endif; ?>
 </body>
 
 </html>

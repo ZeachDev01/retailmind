@@ -991,7 +991,7 @@
           !row.classList.contains("history-empty") &&
           !row.querySelector(".u-empty-cell, .transaction-empty, .shift-empty, .backup-empty, .table-empty-row"),
       );
-      if (rows.length < 8) return;
+      if (rows.length < 8 && !table.hasAttribute("data-always-paginate")) return;
 
       const toolbar = document.createElement("div");
       toolbar.className = "table-toolbar auto-table-toolbar";
@@ -1003,7 +1003,7 @@
       const footer = document.createElement("div");
       footer.className = "table-pagination auto-table-pagination";
       footer.innerHTML =
-        '<span class="auto-page-summary"></span><label>Rows <select aria-label="Rows per page"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label><div class="pagination-buttons"></div>';
+        '<span class="auto-page-summary"></span><label>Rows <select aria-label="Rows per page"><option>10</option><option>15</option><option selected>25</option><option>50</option><option>100</option></select></label><div class="pagination-buttons"></div>';
       wrap.insertAdjacentElement("afterend", footer);
       const search = qs("input", toolbar);
       if (table.dataset.searchLabel) {
@@ -1015,7 +1015,7 @@
       }
       const count = qs(".toolbar-count", toolbar);
       const pageSize = qs("select", footer);
-      if (["10", "25", "50", "100"].includes(table.dataset.pageSize)) {
+      if (["10", "15", "25", "50", "100"].includes(table.dataset.pageSize)) {
         pageSize.value = table.dataset.pageSize;
       }
       const summary = qs(".auto-page-summary", footer);

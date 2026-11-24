@@ -8,11 +8,15 @@
                     <button type="submit" class="btn btn-secondary">Apply</button>
                 </form>
                 <nav class="history-page-buttons" aria-label="<?= htmlspecialchars($paginationLabel ?? 'History pages') ?>">
-                    <?php if ($page > 1): ?><a class="history-page-button history-page-direction" href="<?= htmlspecialchars($url(['page' => $page - 1])) ?>" rel="prev">&lsaquo; Previous</a><?php else: ?><span class="history-page-button history-page-direction" aria-disabled="true">&lsaquo; Previous</span><?php endif; ?>
+                    <?php if ($page > 1): ?><a class="history-page-button history-page-direction" href="<?= htmlspecialchars($url(['page' => $page - 1])) ?>" rel="prev"><?php else: ?><span class="history-page-button history-page-direction" aria-disabled="true"><?php endif; ?>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg> Previous
+                    <?php if ($page > 1): ?></a><?php else: ?></span><?php endif; ?>
                     <?php $lastVisiblePage = min($totalPages, max(5, $page)); ?>
                     <?php for ($number = 1; $number <= $lastVisiblePage; $number++): ?>
                         <?php if ($number === $page): ?><span class="history-page-button" aria-current="page" aria-label="Page <?= $number ?>, current page"><?= $number ?></span><?php else: ?><a class="history-page-button" aria-label="Page <?= $number ?>" href="<?= htmlspecialchars($url(['page' => $number])) ?>"><?= $number ?></a><?php endif; ?>
                     <?php endfor; ?>
-                    <?php if ($hasNext): ?><a class="history-page-button history-page-direction" href="<?= htmlspecialchars($url(['page' => $page + 1])) ?>" rel="next">Next &rsaquo;</a><?php else: ?><span class="history-page-button history-page-direction" aria-disabled="true">Next &rsaquo;</span><?php endif; ?>
+                    <?php if ($hasNext): ?><a class="history-page-button history-page-direction" href="<?= htmlspecialchars($url(['page' => $page + 1])) ?>" rel="next"><?php else: ?><span class="history-page-button history-page-direction" aria-disabled="true"><?php endif; ?>
+                        Next <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"/></svg>
+                    <?php if ($hasNext): ?></a><?php else: ?></span><?php endif; ?>
                 </nav>
             </div>

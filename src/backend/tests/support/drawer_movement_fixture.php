@@ -5,6 +5,8 @@ require_once __DIR__ . '/../../bootstrap/app.php';
 function app_url(string $path): string { return '/' . $path; }
 function generate_csrf_token(): string { return 'fixture-csrf'; }
 function format_display_datetime(string $value): string { return $value; }
+$_GET['tab'] = $argv[2] ?? (in_array($argv[1] ?? '', ['record', 'current', 'close', 'recent'], true) ? $argv[1] : ($_GET['tab'] ?? ''));
+$_GET['return_tab'] = $argv[3] ?? ($_GET['return_tab'] ?? '');
 $isCashier = true;
 $actorRole = 'cashier';
 $actorId = $targetCashierId = 1;
@@ -26,6 +28,12 @@ if (($argv[1] ?? '') === '--refund') $movements = [$movements[0]];
 if (($argv[1] ?? '') === '--empty') {
     $summary = App\Services\ShiftReconciliationCalculator::defaultSummary();
     $movements = [];
+}
+if (($argv[1] ?? '') === '--history') {
+    $recent = array_fill(0, 23, $openShift + [
+        'full_name' => 'Fixture Cashier', 'closed_at' => null, 'status' => 'open',
+        'expected_cash' => null, 'actual_cash' => null, 'cash_variance' => null,
+    ]);
 }
 $path = __DIR__ . '/../../../frontend/components/cashier/shifts.php';
 $source = file_get_contents($path);

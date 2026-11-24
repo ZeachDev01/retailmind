@@ -475,7 +475,7 @@ if ($receiptId > 0 && $receipt === null) {
                         <div class="drawer-view drawer-view-details is-active" id="refund-drawer-view-details">
                             <div class="history-drawer-body">
                                 <dl class="history-drawer-kv" id="refund-drawer-fields"></dl>
-<div id="refund-drawer-conditions" aria-live="polite"></div>
+                                <div id="refund-drawer-conditions" aria-live="polite"></div>
                             </div>
                             <div class="history-drawer-footer">
                                 <button type="button" class="btn btn-primary" id="refund-drawer-receipt-btn" hidden><i class="bi bi-receipt" aria-hidden="true"></i> View receipt</button>
@@ -657,7 +657,7 @@ if ($receiptId > 0 && $receipt === null) {
                         'Recorded At': refund.created_at ?? '—',
                         'Payment Method': (refund.payment_method || '—').toUpperCase(),
                         'Refund Amount': '₱' + Number(refund.refund_amount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
-                        'Reason': refund.reason ?? '—',
+                        'Reason': <?= json_encode(CashRefundService::REFUND_REASONS) ?>[refund.reason] || refund.reason || '—',
                         'Note': refund.note || 'None'
                     };
                     for (const [label, val] of Object.entries(map)) {
@@ -687,7 +687,7 @@ if ($receiptId > 0 && $receipt === null) {
                 }
                 drawer.showModal();
                 const conditions = document.getElementById('refund-drawer-conditions');
-                conditions.textContent = 'Loading returned items�';
+                conditions.textContent = 'Loading returned items...';
                 try {
                     const response = await fetch('?condition_details=' + encodeURIComponent(refund.refund_id));
                     const html = await response.text();
