@@ -64,15 +64,15 @@ if ($basisFilter === 'forecast_backed') {
 }
 
 $totalFilteredProducts = count($displayProducts);
-$showAllProducts = (isset($_GET['show']) && $_GET['show'] === 'all') || (isset($_GET['per_page']) && $_GET['per_page'] === 'all');
-$productsPerPage = 15;
+$productsPerPage = filter_var($_GET['per_page'] ?? 15, FILTER_VALIDATE_INT);
+$productsPerPage = in_array($productsPerPage, [15, 25, 50, 100], true) ? $productsPerPage : 15;
 $currentProductPage = max(1, (int)($_GET['p'] ?? 1));
 $totalProductPages = max(1, (int)ceil($totalFilteredProducts / $productsPerPage));
 if ($currentProductPage > $totalProductPages) {
     $currentProductPage = $totalProductPages;
 }
 $productOffset = ($currentProductPage - 1) * $productsPerPage;
-$paginatedProducts = $showAllProducts ? $displayProducts : array_slice($displayProducts, $productOffset, $productsPerPage);
+$paginatedProducts = array_slice($displayProducts, $productOffset, $productsPerPage);
 
 $operationalIssues = $coverage['operational_issues'] ?? $service->getOperationalIssues($coverage, $userRole);
 $primaryIssue = $operationalIssues[0] ?? null;
@@ -223,9 +223,16 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                     <form method="get" action="" class="search-form" role="search">
                         <?php if ($basisFilter !== 'all'): ?><input type="hidden" name="basis" value="<?= htmlspecialchars($basisFilter) ?>"><?php endif; ?>
                         <input type="search" name="search" autocomplete="off" aria-label="Search products by name, SKU, or ID" placeholder="Product name or SKU" value="<?= htmlspecialchars($searchQuery) ?>" class="input-text">
+                        <label class="forecast-page-size">Rows per page
+                            <select name="per_page" class="input-select">
+                                <?php foreach ([15, 25, 50, 100] as $size): ?>
+                                    <option value="<?= $size ?>" <?= $productsPerPage === $size ? 'selected' : '' ?>><?= $size ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
                         <button type="submit" class="btn btn-secondary">Search</button>
                         <?php if ($searchQuery !== ''): ?>
-                            <a href="predictions.php<?= $basisFilter !== 'all' ? '?basis=' . urlencode($basisFilter) : '' ?>" class="btn btn-quiet">Clear</a>
+                            <a href="?<?= htmlspecialchars(http_build_query(['basis' => $basisFilter, 'per_page' => $productsPerPage])) ?>" class="btn btn-quiet">Clear</a>
                         <?php endif; ?>
                     </form>
                 </div>
@@ -299,19 +306,14 @@ if ($metaStmt && ($demoJson = $metaStmt->fetchColumn())) {
                 </div>
                 <?php if ($totalFilteredProducts > $productsPerPage): ?>
                     <nav class="forecast-pagination" aria-label="Products pagination">
-                        <span class="pagination-info">Showing <?= $showAllProducts ? '1–' . $totalFilteredProducts : ($productOffset + 1) . '–' . min($totalFilteredProducts, $productOffset + $productsPerPage) ?> of <?= $totalFilteredProducts ?> products</span>
+                        <span class="pagination-info">Showing <?= ($productOffset + 1) . '–' . min($totalFilteredProducts, $productOffset + $productsPerPage) ?> of <?= $totalFilteredProducts ?> products</span>
                         <div class="pagination-links">
-                            <?php if (!$showAllProducts && $totalProductPages > 1): ?>
-                                <?php if ($currentProductPage > 1): ?>
-                                    <a href="?<?= htmlspecialchars(http_build_query(array_merge($_GET, ['p' => $currentProductPage - 1]))) ?>#product-forecasts" class="btn btn-sm btn-quiet">&larr; Previous</a>
-                                <?php endif; ?>
-                                <span class="pagination-current">Page <?= $currentProductPage ?> of <?= $totalProductPages ?></span>
-                                <?php if ($currentProductPage < $totalProductPages): ?>
-                                    <a href="?<?= htmlspecialchars(http_build_query(array_merge($_GET, ['p' => $currentProductPage + 1]))) ?>#product-forecasts" class="btn btn-sm btn-quiet">Next &rarr;</a>
-                                <?php endif; ?>
-                                <a href="?<?= htmlspecialchars(http_build_query(array_merge($_GET, ['show' => 'all']))) ?>#product-forecasts" class="pagination-toggle">View all</a>
-                            <?php elseif ($showAllProducts): ?>
-                                <a href="?<?= htmlspecialchars(http_build_query(array_diff_key($_GET, ['show' => '']))) ?>#product-forecasts" class="pagination-toggle">Show pages</a>
+                            <?php if ($currentProductPage > 1): ?>
+                                <a href="?<?= htmlspecialchars(http_build_query(array_merge($_GET, ['p' => $currentProductPage - 1]))) ?>#product-forecasts" class="btn btn-sm btn-quiet">&larr; Previous</a>
+                            <?php endif; ?>
+                            <span class="pagination-current">Page <?= $currentProductPage ?> of <?= $totalProductPages ?></span>
+                            <?php if ($currentProductPage < $totalProductPages): ?>
+                                <a href="?<?= htmlspecialchars(http_build_query(array_merge($_GET, ['p' => $currentProductPage + 1]))) ?>#product-forecasts" class="btn btn-sm btn-quiet">Next &rarr;</a>
                             <?php endif; ?>
                         </div>
                     </nav>

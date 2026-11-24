@@ -10,12 +10,14 @@ const {chromium} = require('playwright');
     const render = source.slice(source.indexOf('    async function loadHistory()'), source.indexOf("    el('prev').addEventListener"));
     const drawerScript = source.slice(source.indexOf('    function openDetailsDrawer(tx)'), source.indexOf("    el('review-cancel')"));
     const markup = fs.readFileSync('src/frontend/components/cashier/gcash.php', 'utf8').match(/<section class="pos-panel gcash-history"[\s\S]*?<\/section>/)[0];
+    const fundsMarkup = [...fs.readFileSync('src/frontend/components/cashier/gcash.php', 'utf8').matchAll(/<section class="pos-panel gcash-history"[\s\S]*?<\/section>/g)][1][0];
+    const fundsScript = source.slice(source.indexOf('    let fundHistoryRequest'), source.indexOf('    tabs.forEach((t, idx)'));
     const drawerMarkup = fs.readFileSync('src/frontend/components/cashier/gcash.php', 'utf8').match(/<dialog id="gcash-details-drawer"[\s\S]*?<\/dialog>/)[0];
     const browser = await chromium.launch({headless: true});
     const output = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-gcash-history-'));
     try {
         const page = await browser.newPage();
-        await page.setContent(`<body class="cashier-page"><main id="gcash-workspace">${markup}\n${drawerMarkup}</main></body>`);
+        await page.setContent(`<body class="cashier-page"><main id="gcash-workspace">${markup}\n${fundsMarkup}\n${drawerMarkup}</main></body>`);
         for (const file of ['style.css', 'cashier.css', 'gcash.css']) {
             await page.addStyleTag({path: `src/frontend/assets/css/${file}`});
         }
@@ -25,9 +27,13 @@ const {chromium} = require('playwright');
             const cell = (row, value) => { const td = row.insertCell(); td.textContent = value; return td; };
             const formatPhp = (val, sign = false) => (sign && val > 0 ? '+' : '') + (val < 0 ? '-₱' : '₱') + Math.abs(val).toLocaleString('en-PH', {minimumFractionDigits: 2});
             const notify = message => { throw new Error(message); };
-            const request = async () => ({transactions: window.historyFixtures, has_next: false});
+            const request = async () => {
+                if (window.requestFailure) throw new Error('Records unavailable. Try again later.');
+                return {transactions: window.historyFixtures, movements: window.fundFixtures || [], has_next: false};
+            };
             const openCorrectionDialog = tx => {};
             ${render}
+            ${fundsScript}
             ${drawerScript}
         `});
         await page.evaluate(async () => {
@@ -66,15 +72,48 @@ const {chromium} = require('playwright');
         for (const width of [1440, 1024, 390]) {
             await page.setViewportSize({width, height: 900});
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Table scroll stays inside page');
-            assert.equal(await page.locator('.gcash-history table').evaluate(table => getComputedStyle(table).display), 'table', 'One scroll container preserves table layout on mobile');
+            assert.equal(await page.locator('.gcash-history table').first().evaluate(table => getComputedStyle(table).display), 'table', 'One scroll container preserves table layout on mobile');
             assert.equal(await row.locator('td').nth(3).evaluate(cell => getComputedStyle(cell).textAlign), 'right', 'Principal aligns with its column heading');
             const date = await row.locator('td').first().boundingBox();
-            const region = await page.locator('.gcash-table-wrap').boundingBox();
+            const region = await page.locator('.gcash-table-wrap').first().boundingBox();
             assert.ok(date.x >= region.x && date.x + date.width <= region.x + region.width, 'Full date column is visible at the start of history');
             await page.screenshot({path: path.join(output, `history-${width}.png`), fullPage: true});
         }
         await page.evaluate(async () => { window.historyFixtures = []; await loadHistory(); });
         assert.equal(await page.locator('#gcash-history-status').innerText(), 'No transactions on this page.');
+        await page.evaluate(() => loadFundMovements());
+        for (const theme of ['light', 'dark']) {
+            await page.locator('html').evaluate((root, theme) => root.dataset.theme = theme, theme);
+            for (const width of [1440, 768, 390]) {
+                await page.setViewportSize({width, height: 900});
+                for (const kind of ['history', 'funds']) {
+                    assert.equal(await page.locator(`#gcash-${kind}-empty`).isVisible(), true);
+                    assert.equal(await page.locator(`#gcash-${kind}-empty ~ .gcash-table-wrap`).isVisible(), false);
+                    const description = await page.locator(`#gcash-${kind}-empty p`).boundingBox();
+                    assert.ok(description.x >= 0 && description.x + description.width <= width, 'Description fits viewport');
+                }
+                assert.equal(await page.locator('.gcash-pagination').isVisible(), false, 'Empty first page hides pagination');
+                await page.screenshot({path: path.join(output, `empty-${theme}-${width}.png`), fullPage: true});
+            }
+        }
+        await page.evaluate(async () => { page = 2; await loadHistory(); });
+        assert.equal(await page.locator('#gcash-history-empty-title').textContent(), 'No transactions on this page');
+        assert.equal(await page.locator('.gcash-pagination').isVisible(), true, 'Empty later page preserves Previous');
+        await page.evaluate(async () => {
+            window.fundFixtures = [{created_at: '2026-11-24', movement_type: 'replenishment', fund_type: 'cash', direction: 'in', amount: 100, session_id: 1, recorder_name: 'Test Cashier'}];
+            await loadFundMovements();
+        });
+        assert.equal(await page.locator('#gcash-funds-empty').isVisible(), false);
+        assert.equal(await page.locator('#gcash-funds-body tr').count(), 1);
+        await page.evaluate(async () => {
+            window.requestFailure = true;
+            await loadFundMovements();
+            try { await loadHistory(); } catch (_) {}
+        });
+        for (const kind of ['history', 'funds']) {
+            assert.equal(await page.locator(`#gcash-${kind}-empty`).isVisible(), false, 'Failure never looks like an empty record set');
+            assert.match(await page.locator(`#gcash-${kind}-status`).textContent(), /Records unavailable/);
+        }
         console.log('GCash history: passed (columns, disclosure, escaping, actions, empty state, responsive layout)');
         console.log('Screenshots: ' + output);
     } finally {

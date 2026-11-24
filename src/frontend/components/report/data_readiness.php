@@ -41,7 +41,8 @@ if ($search !== '' || $statusFilter !== '') {
 }
 
 // Pagination handling
-$perPage = 25;
+$perPage = filter_var($_GET['per_page'] ?? 15, FILTER_VALIDATE_INT);
+$perPage = in_array($perPage, [15, 25, 50, 100], true) ? $perPage : 15;
 $totalFiltered = count($filteredRows);
 $totalPages = max(1, (int)ceil($totalFiltered / $perPage));
 $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 10000]]) ?: 1;
@@ -188,9 +189,16 @@ function build_query(array $params): string {
                         <option value="Model Requires Retraining" <?= $statusFilter === 'Model Requires Retraining' ? 'selected' : '' ?>>Model Requires Retraining</option>
                         <option value="Insufficient Data" <?= $statusFilter === 'Insufficient Data' ? 'selected' : '' ?>>Data checks blocked</option>
                     </select>
+                    <label class="forecast-page-size">Rows per page
+                        <select name="per_page" class="input-select">
+                            <?php foreach ([15, 25, 50, 100] as $size): ?>
+                                <option value="<?= $size ?>" <?= $perPage === $size ? 'selected' : '' ?>><?= $size ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
                     <button type="submit" class="btn btn-primary btn-sm">Filter</button>
                     <?php if ($search !== '' || $statusFilter !== ''): ?>
-                        <a href="data_readiness.php" class="btn btn-quiet btn-sm">Reset</a>
+                        <a href="?per_page=<?= $perPage ?>" class="btn btn-quiet btn-sm">Reset</a>
                     <?php endif; ?>
                 </div>
                 <div class="u-text-muted" style="font-size:0.85rem;">

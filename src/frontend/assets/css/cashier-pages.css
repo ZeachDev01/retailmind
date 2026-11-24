@@ -1783,40 +1783,69 @@ html[data-theme="dark"] .history-drawer-back-btn:hover { background: #334155; }
     border-bottom: 1px solid var(--border);
 }
 .cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-money-flow {
-    gap: 12px;
+    gap: 0 24px;
     margin: 16px 0;
     padding: 0;
     border: 0;
 }
 .cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-money-flow > div {
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--theme-surface-soft, #f1f5f9);
+    padding: 16px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
 }
 .cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-money-flow > :last-child {
-    border-color: var(--primary, #2563eb);
+    align-self: stretch;
+    padding: 16px;
+    border-radius: 12px;
     background: var(--theme-info-surface, #eff6ff);
 }
 .cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-money-flow > :last-child :is(dt, .shift-flow-total) {
-    color: var(--primary, #2563eb);
+    color: var(--theme-info-text, #1d4ed8);
 }
-.cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-flow-total { margin-top: 8px; }
+.cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-flow-total {
+    margin-top: 8px;
+    font-size: 1.5rem;
+    line-height: 1.2;
+    letter-spacing: -.02em;
+}
+.cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-money-flow > :last-child .shift-flow-total {
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+.cashier-shifts-page .shift-overview .shift-flow-breakdown {
+    gap: 6px;
+    margin-top: 16px;
+    line-height: 1.5;
+}
+.cashier-shifts-page .shift-overview .shift-flow-breakdown li > :last-child {
+    color: var(--text);
+    font-weight: 500;
+}
 .cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-activity-row {
     gap: 8px 24px;
     padding-top: 12px;
 }
+.cashier-shifts-page .shift-overview .shift-activity-row p { margin-left: auto; text-wrap: pretty; }
+@media (max-width: 768px) {
+    .cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-money-flow { gap: 8px 24px; }
+    .cashier-shifts-page .shift-overview .shift-activity-row p { flex-basis: 100%; margin-left: 0; }
+}
 @media (max-width: 480px) {
     .cashier-shifts-page .shift-overview:has(.shift-overview-content) { padding: 16px; }
-    .cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-money-flow > div { padding: 12px; }
+    .cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-money-flow > div { padding: 12px 0; }
+    .cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-money-flow > :last-child { padding: 16px; }
+    .cashier-shifts-page .shift-overview .shift-money-flow dd { display: contents; }
+    .cashier-shifts-page .shift-overview:has(.shift-overview-content) .shift-flow-total { margin-top: 0; }
+    .cashier-shifts-page .shift-overview .shift-flow-breakdown { grid-column: 1 / -1; margin-top: 0; }
 }
 
 .cashier-shifts-page .shift-tab { font-weight: 500; }
-.cashier-shifts-page .shift-overview h2,
 .cashier-shifts-page .shift-details dd,
 .cashier-shifts-page .shift-history-table td:first-child,
 .cashier-shifts-page .shift-status,
 .cashier-shifts-page .shift-variance-card .variance-badge { font-weight: 500; }
+.cashier-shifts-page .shift-overview h2 { font-size: 1.05rem; font-weight: 700; line-height: 1.3; text-wrap: balance; }
 .cashier-shifts-page .shift-preview-grid .stat-card .value,
 .cashier-shifts-page .shift-reconciled-grid .value,
 .cashier-shifts-page .variance-badge-cell { font-weight: 600; }

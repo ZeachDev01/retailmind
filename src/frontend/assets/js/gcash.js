@@ -761,6 +761,7 @@
         const status = el('funds-status');
         const body = el('funds-body');
         status.textContent = 'Loading service fund movements…';
+        el('funds-empty').hidden = true;
         body.replaceChildren();
         try {
             const data = await request({action: 'fund_movements'});
@@ -775,6 +776,7 @@
                 cell(row, [movement.evidence, movement.reason].filter(Boolean).join(' · ') || '—');
             }
             status.textContent = data.movements.length ? '' : 'No service fund movements recorded yet.';
+            el('funds-empty').hidden = data.movements.length > 0;
         } catch (error) {
             if (requestId === fundHistoryRequest) status.textContent = error.message;
         }
@@ -824,6 +826,7 @@
         const version = ++historyRequest;
         const requestedPage = page;
         el('history-status').textContent = 'Loading transactions…';
+        el('history-empty').hidden = true;
         el('prev').disabled = el('next').disabled = true;
         try {
             const data = await request({page: requestedPage});
@@ -933,6 +936,11 @@
                 }
             }
             el('history-status').textContent = rows.length ? '' : 'No transactions on this page.';
+            el('history-empty').hidden = rows.length > 0;
+            el('history-empty-title').textContent = requestedPage > 1 ? 'No transactions on this page' : 'No transactions yet';
+            el('history-empty-description').textContent = requestedPage > 1
+                ? 'Go to the previous page to view your earlier transactions.'
+                : 'Your recorded Cash-In and Cash-Out transactions will appear here, with their reference numbers, fees, and status. Start in the New Transaction tab.';
             el('page').textContent = 'Page ' + requestedPage;
             el('prev').disabled = requestedPage <= 1;
             el('next').disabled = !data.has_next;

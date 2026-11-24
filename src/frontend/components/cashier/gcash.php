@@ -255,6 +255,14 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     </div>
                 </div>
                 <p id="gcash-history-status" class="gcash-history-status" role="status" aria-live="polite">Loading transactions…</p>
+                <div id="gcash-history-empty" class="gcash-records-empty" hidden>
+                    <svg class="gcash-records-empty-icon" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 11a9 9 0 1 1 2.6 7.4M3 4v7h7"></path>
+                        <path d="M12 7v5l3 2"></path>
+                    </svg>
+                    <h3 id="gcash-history-empty-title">No transactions yet</h3>
+                    <p id="gcash-history-empty-description">Your recorded Cash-In and Cash-Out transactions will appear here, with their reference numbers, fees, and status. Start in the New Transaction tab.</p>
+                </div>
                 <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="GCash transaction history">
                     <table data-no-smart-table>
                         <thead>
@@ -283,6 +291,13 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
             <section class="pos-panel gcash-history" aria-labelledby="gcash-funds-title">
                 <div class="pos-panel-header gcash-panel-header"><div class="pos-panel-title"><h2 id="gcash-funds-title">Service Fund Movements</h2></div></div>
                 <p id="gcash-funds-status" class="gcash-history-status" role="status" aria-live="polite">Your recorded service fund movements appear here.</p>
+                <div id="gcash-funds-empty" class="gcash-records-empty" hidden>
+                    <svg class="gcash-records-empty-icon" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"></path>
+                    </svg>
+                    <h3>No service fund movements yet</h3>
+                    <p>Cash and wallet fund movements you record will appear here, with their amounts, approvals, and details. Use Move funds when you have an active GCash session.</p>
+                </div>
                 <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="Your service fund movements">
                     <table data-no-smart-table>
                         <thead><tr><th scope="col">Date / time</th><th scope="col">Movement</th><th scope="col">Fund / amount</th><th scope="col">Session</th><th scope="col">Recorded / approved by</th><th scope="col">Evidence / details</th></tr></thead>

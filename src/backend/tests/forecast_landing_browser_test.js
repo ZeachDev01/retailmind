@@ -708,6 +708,57 @@ const fixture = action => {
                 if (process.env.FORECAST_SCREENSHOTS) await page.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, role + '-workspace-' + width + '.png')});
             }
         }
+        fixture('reports');
+        await login('super_admin');
+        for (const [file, table, pageKey, nextLabel, submitLabel] of [
+            ['data_readiness.php', '.readiness-catalog', 'page', 'Next page', 'Filter'],
+            ['predictions.php', '.forecast-table', 'p', 'Next →', 'Search'],
+        ]) {
+            const url = origin + '/components/report/' + file;
+            await page.goto(url);
+            assert.equal(await page.locator('[name="per_page"]').inputValue(), '15');
+            assert.equal(await page.locator(table + ' tbody tr').count(), 15);
+            assert.deepEqual(await page.locator('[name="per_page"] option').allTextContents(), ['15', '25', '50', '100']);
+            for (const size of [25, 50, 100, 15]) {
+                await page.locator('[name="per_page"]').selectOption(String(size));
+                await Promise.all([
+                    page.waitForURL(u => u.searchParams.get('per_page') === String(size)),
+                    page.getByRole('button', {name: submitLabel, exact: true}).click(),
+                ]);
+                assert.equal(await page.locator(table + ' tbody tr').count(), Math.min(size, 66));
+                assert.equal(new URL(page.url()).searchParams.has(pageKey), false, 'Changing size resets the page');
+            }
+            const firstProduct = await page.locator(table + ' tbody tr').first().innerText();
+            await page.getByRole('link', {name: nextLabel, exact: true}).click();
+            await page.waitForURL(u => u.searchParams.get(pageKey) === '2');
+            assert.equal(new URL(page.url()).searchParams.get('per_page'), '15');
+            assert.notEqual(await page.locator(table + ' tbody tr').first().innerText(), firstProduct);
+            await page.locator('[name="search"]').fill('Report pagination item');
+            await page.locator('[name="per_page"]').selectOption('25');
+            await page.getByRole('button', {name: submitLabel, exact: true}).click();
+            await page.waitForURL(u => u.searchParams.get('search') === 'Report pagination item');
+            assert.equal(await page.locator(table + ' tbody tr').count(), 25);
+            assert.equal(new URL(page.url()).searchParams.has(pageKey), false);
+            await page.getByRole('link', {name: file === 'predictions.php' ? 'Clear' : 'Reset', exact: true}).click();
+            await page.waitForURL(u => !u.searchParams.has('search'));
+            assert.equal(await page.locator('[name="per_page"]').inputValue(), '25');
+            for (const invalid of ['0', '-1', '999999', 'all', 'bad', '15.5', '']) {
+                await page.goto(url + '?per_page=' + invalid);
+                assert.equal(await page.locator('[name="per_page"]').inputValue(), '15', 'Invalid size falls back to 15');
+                assert.equal(await page.locator(table + ' tbody tr').count(), 15);
+            }
+            for (const theme of ['light', 'dark']) {
+                await page.evaluate(mode => document.documentElement.dataset.theme = mode, theme);
+                for (const width of [1440, 390, 320]) {
+                    await page.setViewportSize({width, height: 900});
+                    const sizeControl = page.locator('.forecast-page-size');
+                    const bounds = await sizeControl.boundingBox();
+                    assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width, 'Page size control fits ' + width);
+                    assert.ok((await page.locator('[name="search"]').boundingBox()).width >= 200, 'Search remains usable at ' + width);
+                    if (process.env.FORECAST_SCREENSHOTS) await sizeControl.locator('..').screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, file + '-page-size-' + theme + '-' + width + '.png')});
+                }
+            }
+        }
         console.log('PASS: Forecast landing browser test passed cleanly!');
     } finally {
         if (browser) await browser.close();
