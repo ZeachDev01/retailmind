@@ -1069,30 +1069,52 @@ class BatchInventoryLedger
     {
         $this->requireTransaction();
         $product=(int)$line['product_id'];$quantity=(int)$line['quantity'];
+        $form=$line['selling_form']??'piece';$packSize=$form==='pack'?(int)($line['pack_size']??0):1;
+        $reconcile=' Ask the Inventory Manager to reconcile stock.';
+        if(!in_array($target,['damaged','restockable'],true)||!in_array($form,['piece','pack'],true)||$quantity<1||$packSize<1||($form==='pack'&&$packSize<2))throw new DomainException('Historical selling form is missing.'.$reconcile);
+        $quantity *= $packSize;
         $stock=$this->lockStock($product);
         $this->assertBalanced($product, $stock);
-        if (!$this->hasColumn('product_batches', 'loose_quantity')) throw new DomainException('Historical selling form is missing. Ask the Inventory Manager to reconcile stock.');
-        $skip=$this->pdo->prepare('SELECT COALESCE(SUM(quantity),0) FROM cash_refund_items WHERE sale_item_id=? AND refund_item_id<?');
-        $skip->execute([$line['sale_item_id'],$line['refund_item_id']]);$offset=(int)$skip->fetchColumn();
-        $q=$this->pdo->prepare('SELECT sb.quantity AS allocation_quantity,b.* FROM sale_item_batches sb JOIN product_batches b ON b.batch_id=sb.batch_id WHERE sb.sale_item_id=? ORDER BY sb.sale_item_batch_id'.$this->forUpdate());$q->execute([$line['sale_item_id']]);
-        $remaining=$quantity;$allocations=[];
-        foreach($q->fetchAll(PDO::FETCH_ASSOC) as $batch){
-            if($offset>=(int)$batch['allocation_quantity']){$offset-=(int)$batch['allocation_quantity'];continue;}
-            $amount=min($remaining,(int)$batch['allocation_quantity']-$offset);$offset=0;
-            if($amount<=0)break;
-            if((int)$batch['product_id']!==$product)throw new DomainException('Historical allocation is inconsistent. Ask the Inventory Manager to reconcile stock.');
-            if($target==='restockable'&&!empty($batch['expiration_date'])&&$batch['expiration_date']<date('Y-m-d'))throw new DomainException('Expired goods cannot return to available stock. Ask the Inventory Manager to reconcile stock.');
-            if($target==='damaged'&&((int)$batch['remaining_quantity']<$amount||(isset($batch['loose_quantity'])&&(int)$batch['loose_quantity']<$amount)))throw new DomainException('The original loose stock is no longer available. Ask the Inventory Manager to reconcile stock.');
-            $allocations[]=[$batch['batch_id'],$amount];$remaining-=$amount;if($remaining===0)break;
+        if (!$this->hasColumn('product_batches', 'loose_quantity') || !$this->hasColumn('product_batches', 'sealed_quantity')) throw new DomainException('Historical selling form is missing.'.$reconcile);
+        if($form==='pack'){
+            if(!$this->hasColumn('products','pack_size')||!$this->hasColumn('sale_items','pack_size'))throw new DomainException('Historical Sales Pack evidence is missing.'.$reconcile);
+            $q=$this->pdo->prepare('SELECT pack_size FROM products WHERE product_id=?'.$this->forUpdate());$q->execute([$product]);
+            if((int)$q->fetchColumn()!==$packSize)throw new DomainException('The current Sales Pack configuration differs from this historical return.'.$reconcile);
+            $q=$this->pdo->prepare('SELECT product_id,selling_form,pack_size,quantity FROM sale_items WHERE sale_item_id=?');$q->execute([$line['sale_item_id']]);$sale=$q->fetch(PDO::FETCH_ASSOC);
+            if(!$sale||(int)$sale['product_id']!==$product||$sale['selling_form']!==$form||(int)$sale['pack_size']!==$packSize)throw new DomainException('Historical Sales Pack evidence is inconsistent.'.$reconcile);
         }
-        if($remaining!==0)throw new DomainException('Historical batch allocation is missing. Ask the Inventory Manager to reconcile stock.');
+        $skip=$this->pdo->prepare('SELECT quantity,selling_form,pack_size FROM cash_refund_items WHERE sale_item_id=? AND refund_item_id<?');
+        $skip->execute([$line['sale_item_id'],$line['refund_item_id']]);$offset=0;
+        foreach($skip->fetchAll(PDO::FETCH_ASSOC) as $earlier){
+            if(($earlier['selling_form']??'piece')!==$form||($form==='pack'&&(int)$earlier['pack_size']!==$packSize))throw new DomainException('Earlier return selling form is inconsistent.'.$reconcile);
+            $offset+=(int)$earlier['quantity']*$packSize;
+        }
+        $q=$this->pdo->prepare('SELECT sb.quantity AS allocation_quantity,b.* FROM sale_item_batches sb LEFT JOIN product_batches b ON b.batch_id=sb.batch_id WHERE sb.sale_item_id=? ORDER BY sb.sale_item_batch_id'.$this->forUpdate());$q->execute([$line['sale_item_id']]);
+        $batches=$q->fetchAll(PDO::FETCH_ASSOC);
+        if($form==='pack'&&array_sum(array_column($batches,'allocation_quantity'))!==(int)$sale['quantity']*$packSize)throw new DomainException('Historical batch allocation is incomplete.'.$reconcile);
+        $remaining=$quantity;$allocations=[];$seen=[];
+        foreach($batches as $batch){
+            $allocated=(int)$batch['allocation_quantity'];
+            if($allocated<1||(int)$batch['product_id']!==$product||isset($seen[$batch['batch_id']])||($form==='pack'&&$allocated%$packSize!==0))throw new DomainException('Historical allocation is inconsistent.'.$reconcile);
+            $seen[$batch['batch_id']]=true;
+            if($offset>=$allocated){$offset-=$allocated;continue;}
+            $amount=min($remaining,$allocated-$offset);$offset=0;
+            if($amount<=0)break;
+            if($form==='pack'&&((int)$batch['sealed_quantity']<0||(int)$batch['loose_quantity']<0||(int)$batch['remaining_quantity']!==(int)$batch['sealed_quantity']*$packSize+(int)$batch['loose_quantity']||$amount%$packSize!==0))throw new DomainException('Historical sealed stock form is incompatible.'.$reconcile);
+            if($target==='restockable'&&!empty($batch['expiration_date'])&&$batch['expiration_date']<date('Y-m-d'))throw new DomainException('Expired goods cannot return to available stock.'.$reconcile);
+            $formAmount=$form==='pack'?intdiv($amount,$packSize):$amount;
+            $formColumn=$form==='pack'?'sealed_quantity':'loose_quantity';
+            if($target==='damaged'&&((int)$batch['remaining_quantity']<$amount||(int)$batch[$formColumn]<$formAmount))throw new DomainException('The original '.($form==='pack'?'sealed':'loose').' stock is no longer available.'.$reconcile);
+            $allocations[]=[$batch['batch_id'],$amount,$formAmount];$remaining-=$amount;if($remaining===0)break;
+        }
+        if($remaining!==0)throw new DomainException('Historical batch allocation is missing.'.$reconcile);
         $change=$target==='restockable'?$quantity:-$quantity;
-        if($stock+$change<0)throw new DomainException('Insufficient stock. Ask the Inventory Manager to reconcile stock.');
-        foreach($allocations as [$batch,$amount]){
+        if($stock+$change<0)throw new DomainException('Insufficient stock.'.$reconcile);
+        foreach($allocations as [$batch,$amount,$formAmount]){
             $delta=$target==='restockable'?$amount:-$amount;
-            $forms=$this->hasColumn('product_batches','loose_quantity')?', loose_quantity=loose_quantity+?':'';
-            $values=$forms!==''?[$delta,$delta,$batch]:[$delta,$batch];
-            $this->pdo->prepare('UPDATE product_batches SET remaining_quantity=remaining_quantity+?'.$forms.' WHERE batch_id=?')->execute($values);
+            $formDelta=$target==='restockable'?$formAmount:-$formAmount;
+            $formColumn=$form==='pack'?'sealed_quantity':'loose_quantity';
+            $this->pdo->prepare('UPDATE product_batches SET remaining_quantity=remaining_quantity+?, '.$formColumn.'='.$formColumn.'+? WHERE batch_id=?')->execute([$delta,$formDelta,$batch]);
         }
         $this->pdo->prepare('UPDATE inventory SET quantity_on_hand=quantity_on_hand+? WHERE product_id=?')->execute([$change,$product]);
         $this->pdo->prepare("INSERT INTO stock_movements(product_id,change_qty,reason,moved_by) VALUES (?,?,'adjustment',?)")->execute([$product,$change,$actor]);
