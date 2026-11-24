@@ -35,6 +35,7 @@ final class AdminOverviewReport
             'start_date' => isset($query['start_date']) ? trim((string)$query['start_date']) : PhilippineTime::today(),
             'end_date' => isset($query['end_date']) ? trim((string)$query['end_date']) : PhilippineTime::today(),
             'cashier_id' => $query['cashier_id'] ?? null,
+            'limit' => in_array((int)($query['length'] ?? 15), [10, 15, 25, 50, 100], true) ? (int)($query['length'] ?? 15) : 15,
             'page' => filter_var($query['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 100000]]) ?: 1,
         ];
     }
@@ -108,7 +109,7 @@ final class AdminOverviewReport
         return new AdminOverviewModel(
             overview: $overview,
             filters: $filters,
-            page: (int)$filters['page'],
+            page: (int)($overview['page'] ?? $filters['page']),
             activeTab: $activeTab,
             overviewFace: $isFilteredActivity ? 'activity' : 'balances',
             isFilteredActivity: $isFilteredActivity,

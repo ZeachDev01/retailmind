@@ -14,16 +14,16 @@ $error = null;
 $entries = [];
 $search = is_string($_GET['q'] ?? null) ? trim($_GET['q']) : '';
 $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 100000]]) ?: 1;
-$pageSize = filter_var($_GET['length'] ?? 10, FILTER_VALIDATE_INT);
-$pageSize = in_array($pageSize, [10, 25, 50, 100], true) ? $pageSize : 10;
+$pageSize = filter_var($_GET['length'] ?? 15, FILTER_VALIDATE_INT);
+$pageSize = in_array($pageSize, [10, 15, 25, 50, 100], true) ? $pageSize : 15;
 $entryKey = $_GET['entry'] ?? null;
 $entry = null;
 $neighbors = null;
 $sortColumns = ['product_name', 'sku', 'received_qty', 'accepted_qty', 'damaged_qty', 'expiration_date'];
 $sort = in_array($_GET['sort'] ?? null, $sortColumns, true) ? $_GET['sort'] : 'product_name';
 $direction = ($_GET['direction'] ?? null) === 'desc' ? 'desc' : 'asc';
-$itemPageSize = filter_var($_GET['item_length'] ?? 25, FILTER_VALIDATE_INT);
-$itemPageSize = in_array($itemPageSize, [25, 50, 100], true) ? $itemPageSize : 25;
+$itemPageSize = filter_var($_GET['item_length'] ?? 15, FILTER_VALIDATE_INT);
+$itemPageSize = in_array($itemPageSize, [10, 15, 25, 50, 100], true) ? $itemPageSize : 15;
 $itemPage = filter_var($_GET['item_page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 1;
 $totalRows = 0;
 $totalPages = 1;
@@ -192,23 +192,6 @@ if ($entry !== null) {
                     <div class="history-notes"><dt>Entry notes</dt><dd><?= htmlspecialchars($entry['notes']) ?></dd></div>
                 <?php endif; ?>
             </dl>
-            <div class="history-item-toolbar">
-                <p>Showing <?= $itemOffset + 1 ?> to <?= $itemOffset + count($itemRows) ?> of <?= $itemCount ?> items</p>
-                <form method="get" class="history-page-length">
-                    <?php foreach ($detailFilters + $historyFilters as $name => $value): ?>
-                        <?php if ($name !== 'item_length' && $value !== null): ?>
-                            <input type="hidden" name="<?= htmlspecialchars($name) ?>" value="<?= htmlspecialchars((string)$value) ?>">
-                        <?php endif; ?>
-                    <?php endforeach; ?>
-                    <label for="history_item_length">Items per page</label>
-                    <select id="history_item_length" name="item_length">
-                        <?php foreach ([25, 50, 100] as $size): ?>
-                            <option value="<?= $size ?>" <?= $size === $itemPageSize ? 'selected' : '' ?>><?= $size ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                    <button type="submit" class="btn btn-secondary">Apply</button>
-                </form>
-            </div>
             <div class="u-table-scroll history-table-panel" tabindex="0" role="region" aria-label="Items in entry #<?= $entry['group_id'] ?>">
                 <table class="history-table">
                     <thead>
@@ -301,17 +284,14 @@ if ($entry !== null) {
                     </tbody>
                 </table>
             </div>
-            <?php if ($itemLastPage > 1): ?>
-                <nav class="history-entry-navigation history-item-pagination" aria-label="Item pages">
-                    <?php if ($itemPage > 1): ?>
-                        <a class="btn btn-secondary" href="<?= htmlspecialchars($detailUrl(['item_page' => $itemPage - 1])) ?>" rel="prev">Previous Item Page</a>
-                    <?php endif; ?>
-                    <span class="history-page-number">Page <?= $itemPage ?> of <?= $itemLastPage ?></span>
-                    <?php if ($itemPage < $itemLastPage): ?>
-                        <a class="btn btn-secondary" href="<?= htmlspecialchars($detailUrl(['item_page' => $itemPage + 1])) ?>" rel="next">Next Item Page</a>
-                    <?php endif; ?>
-                </nav>
-            <?php endif; ?>
+            <?php
+            $rows = $itemRows; $page = $itemPage; $pageSize = $itemPageSize;
+            $totalRows = $itemCount; $totalPages = $itemLastPage; $hasNext = $page < $totalPages;
+            $paginationFilters = array_diff_key($detailFilters + $historyFilters, array_flip(['item_page', 'item_length']));
+            $paginationLengthKey = 'item_length'; $paginationLabel = 'Receiving item pages';
+            $url = static fn(array $params): string => $detailUrl(['item_page' => $params['page']]);
+            require __DIR__ . '/../../../backend/app/Views/table_pagination.php';
+            ?>
         <?php endif; ?>
         <?php if (!$error && $entryKey === null): ?>
             <?php

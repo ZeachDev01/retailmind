@@ -280,10 +280,10 @@ $totalSuggestedUnits = (int)array_sum(array_column($queue, 'stock_rule_quantity'
                             </table>
                         </div>
                         <p id="queue-no-results" class="empty-state" hidden>No products match these filters.</p>
-                        <footer class="queue-panel-footer">
+                        <footer class="queue-panel-footer rm-table-footer">
                             <span id="queue-results" role="status">Showing <?= count($queue) ?> of <?= count($queue) ?> products</span>
-                            <label>Rows <select id="queue-page-size" aria-label="Rows per page"><option>10</option><option>25</option><option>50</option><option>100</option></select></label>
-                            <span id="queue-page-status" aria-live="polite"></span>
+                            <label class="rm-page-size"><select id="queue-page-size" aria-label="Rows per page"><option>10</option><option selected>15</option><option>25</option><option>50</option><option>100</option></select> entries per page</label>
+                            <span hidden id="queue-page-status" aria-live="polite"></span>
                             <nav class="queue-pagination" id="queue-pagination" aria-label="Recommendation pages"></nav>
                         </footer>
                     <?php endif; ?>

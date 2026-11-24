@@ -118,7 +118,7 @@ $movementChartData = [
             </tbody>
         </table>
         </div>
-        <nav class="sr-pagination" aria-label="Stock Movement pagination"><span id="risk-page-summary" role="status"></span><div><span class="sr-units">Quantities in base units</span><button type="button" id="risk-previous" aria-label="Previous Stock Movement page"><i class="bi bi-chevron-left" aria-hidden="true"></i></button><span id="risk-page-status"></span><button type="button" id="risk-next" aria-label="Next Stock Movement page"><i class="bi bi-chevron-right" aria-hidden="true"></i></button></div></nav>
+        <nav class="sr-pagination" aria-label="Stock Movement pagination"><span id="risk-page-summary" role="status"></span><div class="rm-page-buttons"><span class="sr-units">Quantities in base units</span><button type="button" id="risk-previous" aria-label="Previous Stock Movement page"><i class="bi bi-chevron-left" aria-hidden="true"></i>Previous</button><span hidden id="risk-page-status"></span><span id="risk-page-numbers" class="rm-page-buttons"></span><button type="button" id="risk-next" aria-label="Next Stock Movement page">Next<i class="bi bi-chevron-right" aria-hidden="true"></i></button></div></nav>
     </div>
     <template id="movement-report-template">
         <main class="stock-risk sr-report">

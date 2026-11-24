@@ -13,6 +13,7 @@ function render(count, page = '1') {
     const result = spawnSync(process.env.PHP_BINARY || 'php', ['-r', `
         require_once 'src/backend/bootstrap/app.php';
         $source = file_get_contents('src/frontend/components/administrator/database_backup.php');
+        $source = str_replace("__DIR__ . '/../../../backend/app/Views/table_pagination.php'", "'src/backend/app/Views/table_pagination.php'", $source);
         $history = [];
         for ($i = 1; $i <= (int)$argv[1]; $i++) $history[] = [
             'snapshot_at' => '2026-11-01 10:00:00', 'filename' => 'backup-' . $i . '.rmpkg',
@@ -41,16 +42,16 @@ function render(count, page = '1') {
             await page.addStyleTag({path: 'src/frontend/assets/css/backup.css'});
             await page.addStyleTag({content: '.main-content {margin:0!important;padding:24px!important;width:100%;}'});
         }
-        for (const [number, expected, first, label] of [['1', 10, 1, 'Showing 1–10 of 23'], ['2', 10, 11, 'Showing 11–20 of 23'], ['999', 3, 21, 'Showing 21–23 of 23'], ['-2', 10, 1, 'Showing 1–10 of 23'], ['invalid', 10, 1, 'Showing 1–10 of 23']]) {
+        for (const [number, expected, first, label] of [['1', 15, 1, 'Showing 1 to 15 of 23 entries'], ['2', 8, 16, 'Showing 16 to 23 of 23 entries'], ['999', 8, 16, 'Showing 16 to 23 of 23 entries'], ['-2', 15, 1, 'Showing 1 to 15 of 23 entries'], ['invalid', 15, 1, 'Showing 1 to 15 of 23 entries']]) {
             await show(23, number);
             assert.equal(await page.locator('tbody tr').count(), expected);
             assert.equal(await page.locator('tbody tr').first().locator('.backup-filename').textContent(), 'backup-' + first + '.rmpkg');
-            assert.equal(await page.locator('.backup-pagination p').textContent(), label);
+            assert.equal(await page.locator('.history-pagination .history-page-number').textContent(), label);
             assert.equal(await page.locator('.backup-record-count').textContent(), '23 records');
         }
         await show(23, '2');
-        assert.equal(await page.getByRole('link', {name: 'Previous', exact: true}).getAttribute('href'), '?history_page=1#backup-history');
-        assert.equal(await page.getByRole('link', {name: 'Next', exact: true}).getAttribute('href'), '?history_page=3#backup-history');
+        assert.equal(await page.getByRole('link', {name: 'Previous', exact: true}).getAttribute('href'), '?history_page=1&length=15#backup-history');
+        assert.equal(await page.locator('.history-page-buttons [aria-disabled="true"]').count(), 1);
         const output = 'tmp/manual/backup-history-pagination';
         fs.mkdirSync(output, {recursive: true});
         for (const width of [1440, 375]) {
@@ -59,10 +60,10 @@ function render(count, page = '1') {
             await page.screenshot({path: path.join(output, 'history-' + width + '.png'), fullPage: true});
         }
         await show(1, '1');
-        assert.equal(await page.locator('.backup-pagination [aria-disabled="true"]').count(), 2);
+        assert.equal(await page.locator('.history-pagination [aria-disabled="true"]').count(), 2);
         await show(0, '999');
         assert.equal(await page.locator('.backup-empty').count(), 1);
-        assert.equal(await page.locator('.backup-pagination').count(), 0);
-        console.log('Backup history pagination: passed (order, 10 rows, boundaries, empty, desktop/mobile)');
+        assert.equal(await page.locator('.history-pagination').count(), 0);
+        console.log('Backup history pagination: passed (order, 15 rows, boundaries, empty, desktop/mobile)');
     } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

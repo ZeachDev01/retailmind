@@ -24,17 +24,17 @@
         const form = dialog.querySelector('[data-backup-key-export]');
         const password = form.elements.namedItem('key_password');
         const error = dialog.querySelector('[data-backup-key-error]');
-        const key = 'retailmind.backup-key-recommendation.' + dialog.dataset.fingerprint;
         const download = document.querySelector('[data-backup-download]');
         function show() {
-            try { sessionStorage.setItem(key, '1'); } catch (error) { /* storage unavailable */ }
             if (!dialog.open) dialog.showModal();
         }
         dialog.addEventListener('close', () => {
             password.value = '';
             if (download?.hidden) document.querySelector('[data-backup-create]')?.focus();
         });
-        dialog.querySelector('[data-backup-key-dialog-close]').addEventListener('click', () => dialog.close());
+        dialog.querySelectorAll('[data-backup-key-dialog-close]').forEach(button => {
+            button.addEventListener('click', () => dialog.close());
+        });
         dialog.querySelector('[data-backup-key-manage]').addEventListener('click', () => dialog.close());
         form.addEventListener('submit', async event => {
             event.preventDefault();
@@ -83,9 +83,6 @@
             });
             return;
         }
-        let seen = false;
-        try { seen = sessionStorage.getItem(key) !== null; } catch (error) { /* storage unavailable */ }
-        if (!seen) show();
     }
     if (window.RetailMindNavigation) window.RetailMindNavigation.initializePage(initialize);
     else initialize();

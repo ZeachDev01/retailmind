@@ -21,6 +21,7 @@ const {chromium} = require('playwright');
         for (const file of ['style.css', 'cashier.css', 'gcash.css']) {
             await page.addStyleTag({path: `src/frontend/assets/css/${file}`});
         }
+        await page.addScriptTag({path: 'src/frontend/assets/js/ui.js'});
         await page.addScriptTag({content: `
             let historyRequest = 0, page = 1, rows = [], leaving = false;
             const el = id => document.getElementById('gcash-' + id);
@@ -29,7 +30,7 @@ const {chromium} = require('playwright');
             const notify = message => { throw new Error(message); };
             const request = async () => {
                 if (window.requestFailure) throw new Error('Records unavailable. Try again later.');
-                return {transactions: window.historyFixtures, movements: window.fundFixtures || [], has_next: false};
+                return {page, total: window.historyFixtures.length, pages: 1, length: 15, transactions: window.historyFixtures, movements: window.fundFixtures || [], has_next: false};
             };
             const openCorrectionDialog = tx => {};
             ${render}

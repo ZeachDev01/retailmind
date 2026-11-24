@@ -15,7 +15,9 @@
     const detailBody = root.querySelector('#movement-detail-body');
     const collator = new Intl.Collator(undefined, {numeric:true, sensitivity:'base'});
     const numberFormat = new Intl.NumberFormat('en-PH');
-    let page = 1;
+    let page = 1, pageSize = 15;
+    const footer = root.querySelector('.sr-pagination');
+    RetailMindUI.tablePageSize(footer, pageSize, size => { pageSize = size; page = 1; render(); });
     let sort = 'days';
     let direction = 1;
     let trigger = null;
@@ -105,13 +107,15 @@
     function render() {
         const matching = matchingRows();
         reportButton.disabled = matching.length === 0;
-        const pages = Math.max(1, Math.ceil(matching.length / 10));
+        const pages = Math.max(1, Math.ceil(matching.length / pageSize));
         page = Math.min(page, pages);
         rows.forEach(row => { row.hidden = true; });
-        matching.slice((page - 1) * 10, page * 10).forEach(row => { row.hidden = false; });
+        matching.slice((page - 1) * pageSize, page * pageSize).forEach(row => { row.hidden = false; });
         root.querySelector('#risk-empty').hidden = matching.length > 0;
-        root.querySelector('#risk-page-summary').textContent = matching.length ? 'Showing ' + ((page - 1) * 10 + 1) + '–' + Math.min(page * 10, matching.length) + ' of ' + matching.length + ' products' : 'No products to show';
+        root.querySelector('#risk-page-summary').textContent = matching.length ? 'Showing ' + ((page - 1) * pageSize + 1) + '–' + Math.min(page * pageSize, matching.length) + ' of ' + matching.length + ' products' : 'No products to show';
         root.querySelector('#risk-page-status').textContent = 'Page ' + page + ' of ' + pages;
+        const numbers = root.querySelector('#risk-page-numbers');
+        RetailMindUI.renderPageButtons(numbers, page, pages, target => { page = target; render(); }, false);
         previous.disabled = page === 1;
         next.disabled = page === pages;
     }

@@ -637,8 +637,26 @@
 }
 
 /* Recovery-key prompt and Backup Keyring. */
-.backup-key-recommendation-dialog p { margin: 0 0 1rem; color: var(--muted); font-size: .9rem; }
-.backup-key-recommendation-dialog > a { display: inline-block; margin-top: 1rem; }
+.backup-key-recommendation-dialog { box-sizing: border-box; }
+.backup-key-prompt-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
+.backup-key-prompt-heading h2 { margin: 0; font-size: 1.2rem; line-height: 1.3; }
+.backup-key-prompt-close { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; border: 0; border-radius: 10px; background: transparent; color: var(--muted, #667085); cursor: pointer; }
+.backup-key-prompt-close:hover { background: var(--surface-soft, #f8fafc); color: var(--text, #1f2937); }
+.backup-key-recommendation-dialog p { margin: 0 0 1.25rem; color: var(--muted, #667085); font-size: .95rem; line-height: 1.6; }
+.backup-key-recommendation-dialog code { color: var(--text, #1f2937); font-size: .9em; }
+.backup-key-recommendation-dialog label { font-size: .9rem; font-weight: 600; }
+.backup-key-recommendation-dialog input { min-height: 44px; font-size: 1rem; }
+.backup-key-recommendation-dialog .btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 44px; white-space: normal; }
+.backup-key-recommendation-dialog [data-backup-key-error] { color: var(--theme-danger-text, #b91c1c); }
+.backup-key-recommendation-dialog .backup-key-manage { display: flex; align-items: center; gap: .75rem; min-height: 44px; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border, #e5e7eb); color: var(--primary, #2563eb); font-size: .9rem; font-weight: 600; text-decoration: none; }
+.backup-key-manage span { flex: 1; }
+.backup-key-manage:hover span { text-decoration: underline; text-underline-offset: 3px; }
+.backup-key-prompt-close:focus-visible, .backup-key-manage:focus-visible { outline: 2px solid var(--primary, #2563eb); outline-offset: 3px; }
+@media (max-width: 540px) {
+    .backup-key-recommendation-dialog { padding: 1.25rem; }
+    .backup-key-recommendation-dialog .backup-authorization-actions { flex-direction: column-reverse; }
+    .backup-key-recommendation-dialog .btn { width: 100%; }
+}
 .backup-keyring { margin-top: 2rem; }
 .backup-keyring .table-wrap { max-width: 100%; overflow-x: auto; }
 .backup-keyring h3 { margin: 0 0 .5rem; color: var(--text); font-size: .95rem; }

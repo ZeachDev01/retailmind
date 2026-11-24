@@ -53,6 +53,7 @@ php -d memory_limit=512M src/backend/tests/store_package_format_test.php
 php -d memory_limit=512M src/backend/tests/backup_keyring_test.php
 php src/backend/tests/backup_key_recommendation_test.php
 php src/backend/tests/backup_keyring_ui_contract.php
+node src/backend/tests/backup_key_prompt_browser_test.js
 php src/backend/tests/portable_store_package_test.php
 php src/backend/tests/session_policy_test.php
 node src/backend/tests/session_policy_browser_test.js

@@ -115,16 +115,6 @@
         } catch (_) {}
     }
 
-    function button(label, page, ariaLabel, disabled, current = false) {
-        const element = document.createElement('button');
-        element.type = 'button';
-        element.textContent = label;
-        element.setAttribute('aria-label', ariaLabel);
-        if (current) element.setAttribute('aria-current', 'page');
-        element.disabled = disabled;
-        element.addEventListener('click', () => { currentPage = page; update(); });
-        return element;
-    }
     function update() {
         syncFromSnapshot();
         const query = search.value.trim().toLocaleLowerCase();
@@ -165,17 +155,10 @@
         document.getElementById('queue-no-results').hidden = filtered.length !== 0;
         if (pageStatus) pageStatus.textContent = `Page ${currentPage} of ${pages}`;
         if (pagination) {
-            pagination.replaceChildren(
-                button('«', 1, 'First page', currentPage === 1),
-                button('‹', Math.max(1, currentPage - 1), 'Previous page', currentPage === 1)
-            );
-            for (let page = Math.max(1, currentPage - 2); page <= Math.min(pages, currentPage + 2); page++) {
-                pagination.append(button(String(page), page, `Page ${page}`, false, page === currentPage));
-            }
-            pagination.append(
-                button('›', Math.min(pages, currentPage + 1), 'Next page', currentPage === pages),
-                button('»', pages, 'Last page', currentPage === pages)
-            );
+            RetailMindUI.renderPageButtons(pagination, currentPage, pages, page => {
+                currentPage = page;
+                update();
+            });
         }
     }
     search.addEventListener('input', () => { currentPage = 1; update(); });

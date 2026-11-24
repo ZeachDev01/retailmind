@@ -829,7 +829,7 @@
         el('history-empty').hidden = true;
         el('prev').disabled = el('next').disabled = true;
         try {
-            const data = await request({page: requestedPage});
+            const data = await request({page: requestedPage, length: el('page-size').value});
             if (version !== historyRequest || leaving) return;
             rows = data.transactions;
             el('history-body').replaceChildren();
@@ -941,8 +941,11 @@
             el('history-empty-description').textContent = requestedPage > 1
                 ? 'Go to the previous page to view your earlier transactions.'
                 : 'Your recorded Cash-In and Cash-Out transactions will appear here, with their reference numbers, fees, and status. Start in the New Transaction tab.';
-            el('page').textContent = 'Page ' + requestedPage;
-            el('prev').disabled = requestedPage <= 1;
+            page = data.page;
+            el('page').textContent = 'Page ' + page;
+            el('page-summary').textContent = `Showing ${data.total ? (page - 1) * data.length + 1 : 0} to ${Math.min(page * data.length, data.total)} of ${data.total} entries`;
+            RetailMindUI.renderPageButtons(el('page-numbers'), page, data.pages, target => { page = target; loadHistory(); }, false);
+            el('prev').disabled = page <= 1;
             el('next').disabled = !data.has_next;
         } catch (error) {
             if (version !== historyRequest || leaving) return;
@@ -950,6 +953,7 @@
             notify(error.message, 'error');
         }
     }
+    el('page-size').addEventListener('change', () => { page = 1; loadHistory(); });
     el('prev').addEventListener('click', () => { page--; loadHistory(); });
     el('next').addEventListener('click', () => { page++; loadHistory(); });
 

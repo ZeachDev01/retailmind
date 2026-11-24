@@ -31,16 +31,14 @@ const {chromium} = require('playwright');
             return route.fulfill({contentType: 'text/html', body: '<style>' + styles + '</style><body class="receipts-page">' + main + dialog + '</body>'});
         });
         await page.goto('http://receipt.test/');
+        await page.addScriptTag({path: path.join(root, 'src/frontend/assets/js/ui.js')});
         await page.addScriptTag({path: path.join(root, 'src/frontend/assets/vendor/datatables/datatables.min.js')});
         await page.addScriptTag({path: path.join(root, 'src/frontend/assets/js/sale-receipt-dialog.js')});
         await page.addScriptTag({content: stripPhp(source.match(/<script>([\s\S]*?)<\/script>/)[1])});
         await page.evaluate(() => document.dispatchEvent(new Event('DOMContentLoaded')));
         await page.getByText('1 permitted receipt found.', {exact: true}).waitFor();
-        assert.equal(await page.locator('.dt-length select').inputValue(), '10');
+        assert.equal(await page.locator('#receipt-table-footer select').inputValue(), '15');
         assert.equal(await page.locator('#receiptsTable thead th').count(), 7);
-        const searchBounds = await page.locator('.dt-search input').boundingBox();
-        const newSaleBounds = await page.locator('#receiptNewSale').boundingBox();
-        assert(newSaleBounds.x >= searchBounds.x + searchBounds.width, 'New Sale sits to the right of search');
         for (const width of [1440, 1024, 768, 390, 320]) {
             await page.setViewportSize({width, height: 900});
             assert(await page.locator('.receipt-table-wrap').evaluate(el => el.scrollWidth <= el.clientWidth), 'Table fits at ' + width);

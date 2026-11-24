@@ -337,7 +337,7 @@ $shiftTasksUrl = app_url('components/cashier/shifts.php?' . http_build_query(['t
                     <div class="shift-section-heading"><h2>Current shift movements</h2></div>
                     <?php if ($movements): ?>
                     <div class="table-wrap">
-                        <table class="shift-movement-table" data-page-size="10">
+                        <table class="shift-movement-table" data-page-size="15">
                             <thead><tr>
                                 <th>Time</th>
                                 <th>Type</th>

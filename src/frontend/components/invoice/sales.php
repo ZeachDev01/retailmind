@@ -262,7 +262,10 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
                     <tbody></tbody>
                 </table>
             </div>
-            <nav id="receiptPagination" class="receipt-pagination" aria-label="Receipt history pages"></nav>
+            <footer class="rm-table-footer" id="receipt-table-footer">
+                <span id="receipt-page-summary" role="status"></span>
+                <nav id="receiptPagination" class="receipt-pagination" aria-label="Receipt history pages"></nav>
+            </footer>
             </section>
     </main>
 </div>
@@ -340,13 +343,13 @@ document.addEventListener('DOMContentLoaded', function() {
         autoWidth: false,
         columnDefs: [{targets: [6, 7, 8, 9], visible: false}],
         processing: true,
-        pageLength: 10,
-        lengthMenu: [10, 25, 50, 100],
+        pageLength: 15,
+        lengthMenu: [10, 15, 25, 50, 100],
         order: [[1, 'desc'], [0, 'desc']],
         stateSave: true,
         stateDuration: -1,
         stateLoadParams: function(settings, data) {
-            data.length = 10;
+            data.length = 15;
             data.start = 0;
             if (data.columns) data.columns.forEach(function(column, index) {
                 column.visible = ![6, 7, 8, 9].includes(index);
@@ -434,7 +437,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     placeholder: 'Receipt number or payment method'
                 }
             }],
-            bottomStart: ['info', {pageLength: {menu: [10, 25, 50, 100]}}],
+            bottomStart: null,
             bottomEnd: null
         },
         language: {
@@ -602,33 +605,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    RetailMindUI.tablePageSize(document.getElementById('receipt-table-footer'), 15, size => table.page.len(size).draw());
     let restorePageFocus = false;
     function renderPagination() {
         const info = table.page.info();
         const totalPages = Math.max(info.pages, 1);
-        const pageCount = Math.min(totalPages, Math.max(5, info.page + 1));
-        const fragment = document.createDocumentFragment();
-        function addButton(label, target, options) {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'receipt-page-button' + (options.current ? ' current' : '') + (options.direction ? ' direction' : '');
-            button.textContent = label;
-            if (options.current) button.setAttribute('aria-current', 'page');
-            if (options.disabled) button.disabled = true;
-            else button.addEventListener('click', function() {
-                restorePageFocus = true;
-                table.page(target).draw('page');
-            });
-            if (options.current) button.setAttribute('aria-label', 'Page ' + (target + 1) + ', current page');
-            else if (!options.direction) button.setAttribute('aria-label', 'Page ' + (target + 1));
-            fragment.append(button);
-        }
-        addButton('‹ Previous', info.page - 1, {direction: true, disabled: info.page === 0});
-        for (let page = 0; page < pageCount; page++) {
-            addButton(String(page + 1), page, {current: page === info.page});
-        }
-        addButton('Next ›', info.page + 1, {direction: true, disabled: info.page >= totalPages - 1});
-        pagination.replaceChildren(fragment);
+        document.getElementById('receipt-page-summary').textContent = `Showing ${info.recordsDisplay ? info.start + 1 : 0} to ${info.end} of ${info.recordsDisplay} entries`;
+        RetailMindUI.renderPageButtons(pagination, info.page + 1, totalPages, page => {
+            restorePageFocus = true;
+            table.page(page - 1).draw('page');
+        });
         if (restorePageFocus) {
             pagination.querySelector('[aria-current="page"]')?.focus();
             restorePageFocus = false;

@@ -123,11 +123,10 @@ const state = () => JSON.parse(fixture('state', true));
             await follow('#analytics-tab-actual');
             await page.locator('#analytics-product').selectOption('3');
             await Promise.all([page.waitForNavigation(),page.getByRole('button',{name:'Apply view',exact:true}).click()]);
-            assert.equal(await page.locator('tbody tr').count(),10);
-            await follow('.analytics-pagination a[rel="next"]');
-            assert.equal(await page.locator('tbody tr').count(),10);
-            await follow('.analytics-pagination a[rel="next"]');
-            assert.equal(await page.locator('tbody tr').count(),6);
+            assert.equal(await page.locator('tbody tr').count(),15);
+            assert.equal(await page.locator('.rm-table-footer select').inputValue(),'15');
+            await follow('.history-pagination a[rel="next"]');
+            assert.equal(await page.locator('tbody tr').count(),11);
             await page.locator('#analytics-search').fill('2016-04-01');
             await Promise.all([page.waitForNavigation(),page.getByRole('button',{name:'Search',exact:true}).click()]);
             assert.equal(await page.locator('tbody tr').count(),2,'Search across pages preserves both origins');
@@ -136,7 +135,7 @@ const state = () => JSON.parse(fixture('state', true));
             await expect(page.locator('.analytics-no-results')).toContainText('No matching records');
             assert.equal(await page.locator('#analytics-search').inputValue(),'<script>missing</script>');
             await follow('.analytics-search a');
-            assert.equal(await page.locator('tbody tr').count(),10);
+            assert.equal(await page.locator('tbody tr').count(),15);
             await page.locator('#analytics-group').selectOption('day');
             await page.locator('#analytics-order').selectOption('asc');
             await Promise.all([page.waitForNavigation(),page.getByRole('button',{name:'Apply view',exact:true}).click()]);
@@ -176,23 +175,24 @@ const state = () => JSON.parse(fixture('state', true));
                   for (const width of [1440,640,390,320]) {
                     await page.setViewportSize({width,height:900});
                     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),tab + ' fits ' + width);
-                    assert.ok(await page.locator('.analytics-tab[aria-current="page"]').evaluate(el => {
-                        const tab=el.getBoundingClientRect(), list=el.parentElement.getBoundingClientRect();
-                        return tab.left >= list.left-1 && tab.right <= list.right+1;
-                    }),'Selected main view stays fully visible after navigation and resize');
+                    await page.waitForFunction(() => {
+                        const el = document.querySelector('.analytics-tab[aria-current="page"]');
+                        const tab = el.getBoundingClientRect(), list = el.parentElement.getBoundingClientRect();
+                        return tab.left >= list.left - 1 && tab.right <= list.right + 1;
+                    });
                     if (role === 'admin' && [1440,390].includes(width)) await capture('.impeccable/review/forecast-analytics/' + tab + '-' + theme + '-' + width + '.png');
                   }
                 }
             }
             await page.goto(url + '?training_run_id=' + ids.store + '&evidence=store');
             assert.equal(await page.locator('#actualChart').count(),1,'Matched Store sales create a Store chart');
-            assert.equal(await page.locator('tbody tr').count(),10);
+            assert.equal(await page.locator('tbody tr').count(),15);
             assert.ok((await page.locator('tbody tr').first().innerText()).includes('Theme Test Item'));
             assert.equal(await page.locator('tbody tr').first().locator('td').nth(3).innerText(),'1');
-            await follow('.analytics-pagination a[rel="next"]');
+            await follow('.history-pagination a[rel="next"]');
             assert.equal(await page.locator('tbody tr').first().locator('td').nth(3).innerText(),'Unknown','Missing Store sales never become zero');
             await follow('#analytics-tab-logs');
-            await expect(page.locator('.analytics-pagination')).toContainText('25 records');
+            await expect(page.locator('.history-pagination')).toContainText('25 entries');
             if (role === 'admin') {
                 await capture('.impeccable/review/forecast-analytics/store-logs-mobile.png');
                 await follow('#analytics-tab-model');
@@ -224,9 +224,9 @@ const state = () => JSON.parse(fixture('state', true));
             const plain = await noJS.newPage();
             await plain.goto(url + '?training_run_id=' + ids.failed);
             await plain.locator('#analytics-tab-logs').click();
-            await expect(plain.locator('tbody tr')).toHaveCount(10);
-            await plain.locator('.analytics-pagination a[rel="next"]').click();
-            await expect(plain.locator('tbody tr')).toHaveCount(10);
+            await expect(plain.locator('tbody tr')).toHaveCount(15);
+            await plain.locator('.history-pagination a[rel="next"]').click();
+            await expect(plain.locator('tbody tr')).toHaveCount(15);
             await plain.locator('#analytics-search').fill('2016-04-01');
             await Promise.all([plain.waitForNavigation(),plain.getByRole('button',{name:'Search',exact:true}).click()]);
             await expect(plain.locator('tbody tr')).toHaveCount(2);

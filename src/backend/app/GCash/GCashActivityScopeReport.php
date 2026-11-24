@@ -19,20 +19,26 @@ final class GCashActivityScopeReport
     {
     }
 
-    public function cashierHistory(int $cashierId, int $page): array
+    public function cashierHistory(int $cashierId, int $page, int $size = 15): array
     {
-        $offset = (max(1, min(100000, $page)) - 1) * 25;
+        $size = in_array($size, [10, 15, 25, 50, 100], true) ? $size : 15;
+        $count = $this->pdo->prepare('SELECT COUNT(*) FROM gcash_transactions WHERE cashier_id = ?');
+        $count->execute([$cashierId]);
+        $total = (int)$count->fetchColumn();
+        $pages = max(1, (int)ceil($total / $size));
+        $page = min($pages, max(1, $page));
+        $offset = ($page - 1) * $size;
         $stmt = $this->pdo->prepare(
             'SELECT t.*, u.display_name AS cashier_name, u.username AS cashier_username
              FROM gcash_transactions t
              JOIN users u ON t.cashier_id = u.user_id
              WHERE t.cashier_id = ?
              ORDER BY t.transaction_id DESC
-             LIMIT 26 OFFSET ' . $offset
+             LIMIT ' . ($size + 1) . ' OFFSET ' . $offset
         );
         $stmt->execute([$cashierId]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        $txs = array_slice($rows, 0, 25);
+        $txs = array_slice($rows, 0, $size);
         if ($txs !== []) {
             $ids = array_map(static fn($r) => (int)$r['transaction_id'], $txs);
             $inClause = implode(',', $ids);
@@ -61,7 +67,7 @@ final class GCashActivityScopeReport
             }
             unset($tx);
         }
-        return ['transactions' => $txs, 'has_next' => count($rows) > 25, 'page' => $page];
+        return ['transactions' => $txs, 'has_next' => count($rows) > $size, 'page' => $page, 'total' => $total, 'pages' => $pages, 'length' => $size];
     }
 
     /** Yields matching history in descending transaction order, using bounded batches. */
@@ -140,7 +146,9 @@ final class GCashActivityScopeReport
         $feesAfterReturns = round($feesCharged - $feesReturned, 2);
 
         $page = max(1, min(100000, (int)($filters['page'] ?? 1)));
-        $limit = max(10, min(100, (int)($filters['limit'] ?? 50)));
+        $limit = (int)($filters['limit'] ?? 15);
+        $limit = in_array($limit, [10, 15, 25, 50, 100], true) ? $limit : 15;
+        $page = min($page, max(1, (int)ceil($totalTransactions / $limit)));
         $offset = ($page - 1) * $limit;
         $rows = $this->reportingTransactions($whereSql, $whereParams, $limit + 1, $offset);
         $hasNext = count($rows) > $limit;

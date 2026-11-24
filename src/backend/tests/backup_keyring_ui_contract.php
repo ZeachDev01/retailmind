@@ -158,9 +158,8 @@ $assert(str_contains($banner, 'substr($recommendedFingerprint, 0, 8)') && str_co
     'The banner must identify the key by fingerprint without exposing key material');
 $assert(str_contains($banner, 'csrf_field()'), 'The banner download form must carry CSRF');
 
-$assert(str_contains($script, 'sessionStorage'), 'The recommendation modal must be limited per session');
-$assert(str_contains($script, "'retailmind.backup-key-recommendation.'"),
-    'The session flag must be scoped to the fingerprint');
+$assert(!str_contains($script, 'sessionStorage') && !str_contains($banner, "$" . "backupRecommendation['fingerprint']"),
+    'Scheduled or account recommendations must not trigger a modal without a manual download');
 $assert(str_contains($script, 'showModal()'), 'The modal must use the native dialog API');
 $assert(str_contains($script, "'close'"), 'The modal must clear credentials on close, including Escape');
 $assert(str_contains($script, 'await response.blob()') && str_contains($script, 'download.hidden = true'),

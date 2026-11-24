@@ -6,6 +6,8 @@ const {chromium} = require('playwright');
 
 const frontend = path.resolve(__dirname, '../../frontend');
 const php = process.env.PHP_BINARY || 'php';
+const ui = fs.readFileSync(path.join(frontend, 'assets/js/ui.js'), 'utf8');
+const paginationHelpers = '(function(){const RM=window.RetailMindUI;' + ui.slice(ui.indexOf('  RM.tablePageSize ='), ui.indexOf('  function initSmartTables()')) + '})();';
 const source = fs.readFileSync(path.join(frontend, 'components/inventory_management/inventory_overview.php'), 'utf8');
 const statusHelp = fs.readFileSync(path.join(frontend, 'components/inventory_management/stock_movement_status_help.php'), 'utf8');
 const riskView = fs.readFileSync(path.join(frontend, 'components/inventory_management/stock_risk.php'), 'utf8')
@@ -132,6 +134,7 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
             await page.addInitScript(() => {
                 window.RetailMindUI = {hasUnsavedChanges: () => false, dismissOverlays() {}, initPageContent() {}};
             });
+            await page.addInitScript({content: paginationHelpers});
             await page.goto(overviewUrl);
             assert.equal(await page.locator('#overview-forecast').count(), 0, 'Stock Movement replaces the forecast comparison');
             for (const file of ['theme.css', 'style.css', 'inventory.css', 'stock-risk.css']) {
@@ -150,9 +153,9 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
             assert.match(await page.locator('#overview-panel-movements tbody tr:visible').first().innerText(), /Biscuits/);
             await page.locator('[data-movement-sort="1"]').click();
             assert.equal(await page.locator('#overview-panel-movements tbody tr:visible').first().locator('td').nth(1).innerText(), '-2', 'Quantity sorting is numeric');
-            await page.locator('#movement-page-next').click();
+            assert(await page.locator('#movement-page-next').isDisabled(), 'Six movements fit the default fifteen rows');
             await page.locator('[data-movement-sort="1"]').click();
-            assert.equal(await page.locator('#movement-page-status').innerText(), 'Page 1 of 2', 'Sorting resets pagination');
+            assert.equal(await page.locator('#movement-page-status').innerText(), 'Page 1 of 1', 'Sorting resets pagination');
             assert.equal(await page.locator('[data-movement-sort="1"]').evaluate(button => button.closest('th').getAttribute('aria-sort')), 'descending');
             await page.locator('.overview-metric[data-overview-view="all"]').click();
             assert.equal(await page.locator('[data-overview-product-row]:visible').count(), 4);
@@ -187,7 +190,7 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
             for (const id of ['overview-metrics', 'overview-charts', 'overview-default-view', 'overview-product-view']) {
                 assert.equal(await page.locator('#' + id).isVisible(), false, id + ' hides while comparing Stock Movement');
             }
-            assert.equal(await page.locator('[data-risk-row]:visible').count(), 10);
+            assert.equal(await page.locator('[data-risk-row]:visible').count(), 12);
             for (const [selector, maxHeight] of [['#movement-chart-weekly', 144], ['#movement-chart-top', 144], ['#movement-chart-coverage', 96]]) {
                 assert.equal(await page.locator(selector).isVisible(), true, 'The three page charts render when the tab opens: ' + selector);
                 assert.ok(await drawnCanvasPixels(page, selector) > 0, 'The chart draws pixels: ' + selector);
@@ -227,6 +230,7 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
                 await page.screenshot({path:path.join(output,'stock-movement-default-'+theme+'-'+width+'.png'),fullPage:true,animations:'disabled'});
             }
             await page.locator('html').evaluate(el=>{el.dataset.theme='light';});
+            await page.locator('.sr-pagination select').selectOption('10');
             await page.getByRole('button', {name:'Next Stock Movement page', exact:true}).click();
             assert.equal(await page.locator('[data-risk-row]:visible').count(), 2);
             const nextPageRow = page.locator('[data-risk-row]:visible').filter({
@@ -439,6 +443,7 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
         const directErrors = [];
         direct.on('pageerror', error => directErrors.push(error.message));
         await direct.addInitScript(() => { window.RetailMindUI = {}; });
+        await direct.addInitScript({content: paginationHelpers});
         const styles = ['style.css', 'inventory.css', 'stock-risk.css']
             .map(file => '<link rel="stylesheet" href="/assets/css/' + file + '">').join('');
         const directHtml = '<!doctype html><html><head>' + styles

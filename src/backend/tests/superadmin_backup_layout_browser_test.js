@@ -51,7 +51,6 @@ function render(count = 23, historyPage = '1', action = '') {
     fs.mkdirSync(output, {recursive: true});
     try {
         const page = await browser.newPage();
-        let recommendationPromptShown = false;
         async function show(count = 23, number = '1', action = '') {
             await page.setContent(render(count, number, action));
             await page.addStyleTag({path: 'src/frontend/assets/css/style.css'});
@@ -68,14 +67,8 @@ function render(count = 23, historyPage = '1', action = '') {
             await show();
             const recommendation = page.locator('[data-backup-key-recommendation]');
             const recommendationDialog = page.locator('[data-backup-key-dialog]');
-            assert.equal(await recommendation.isVisible(), true, 'The recommendation banner persists for the account');
-            assert.equal(await recommendationDialog.count(), 1, 'The recommendation prompt markup is present');
-            if (await recommendationDialog.evaluate(dialog => dialog.open)) {
-                recommendationPromptShown = true;
-                await page.keyboard.press('Escape');
-                assert.equal(await recommendationDialog.evaluate(dialog => dialog.open), false, 'Escape closes the recommendation prompt');
-                assert.equal(await recommendation.isVisible(), true, 'Dismissing the prompt keeps the persistent banner');
-            }
+            assert.equal(await recommendation.count(), 0, 'Scheduled backups do not interrupt the backup screen');
+            assert.equal(await recommendationDialog.count(), 0, 'No prompt before a manual backup download');
             assert.equal(await page.locator('.backup-summary > div').count(), 5);
             assert.equal(await page.locator('#backup-history tbody tr').count(), 10);
             assert.equal(await page.getByRole('link', {name: 'Identity Reconciliation', exact: true}).count(), 1);
@@ -110,7 +103,6 @@ function render(count = 23, historyPage = '1', action = '') {
         assert(await page.locator('#safety-panel').isVisible(), 'Safety action returns to its tab');
         await show(1, '1', 'preflight');
         assert(await page.locator('#restore-panel details.backup-tips').evaluate(node => node.open), 'Validation feedback remains expanded');
-        assert.equal(recommendationPromptShown, true, 'The recommendation prompt opens once per session');
         console.log('Superadmin backup layout: passed (production PHP, tabs, validation, pagination, empty, desktop/mobile)');
     } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

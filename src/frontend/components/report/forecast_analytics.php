@@ -245,11 +245,13 @@ $modelView = in_array($_GET['model_view'] ?? '', ['trend', 'features', 'checks']
 if (!$isHistoricalView && $modelView === 'features') $modelView = 'trend';
 $tableSearch = is_string($_GET['q'] ?? null) ? trim($_GET['q']) : '';
 $tablePage = is_string($_GET['page'] ?? null) && ctype_digit($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$tableLength = filter_var($_GET['length'] ?? 15, FILTER_VALIDATE_INT);
+$tableLength = in_array($tableLength, [10, 15, 25, 50, 100], true) ? $tableLength : 15;
 $analyticsParams = [
     'training_run_id' => $selectedRun['training_run_id'] ?? null, 'evidence' => $evidenceSource,
     'tab' => $activeTab, 'product_id' => $historicalProduct, 'group_by' => $chartGroup,
     'date_order' => $chartOrder, 'errors' => $errorOrder, 'model_view' => $modelView,
-    'q' => $tableSearch, 'page' => $tablePage,
+    'q' => $tableSearch, 'page' => $tablePage, 'length' => $tableLength,
 ];
 
 function analytics_url(array $changes = []): string {
@@ -266,7 +268,7 @@ function analytics_inputs(array $exclude): void {
 }
 
 function analytics_records(array $rows, string $name, bool $errors = false): void {
-    global $tableSearch, $tablePage;
+    global $tableSearch, $tablePage, $tableLength, $analyticsParams;
     $total = count($rows);
     if ($tableSearch !== '') {
         $rows = array_values(array_filter($rows, static function (array $row) use ($tableSearch): bool {
@@ -274,9 +276,9 @@ function analytics_records(array $rows, string $name, bool $errors = false): voi
         }));
     }
     $count = count($rows);
-    $pages = max(1, (int)ceil($count / 10));
+    $pages = max(1, (int)ceil($count / $tableLength));
     $page = min($tablePage, $pages);
-    $offset = ($page - 1) * 10;
+    $offset = ($page - 1) * $tableLength;
     ?>
     <div class="analytics-records">
         <div class="analytics-table-toolbar">
@@ -292,7 +294,7 @@ function analytics_records(array $rows, string $name, bool $errors = false): voi
             <table class="data-table analytics-record-table" data-no-smart-table data-no-ghost-rows aria-label="<?= htmlspecialchars($name) ?>">
                 <thead><tr><th scope="col">Product</th><th scope="col"><?= $errors ? 'Average error' : 'Date' ?></th><th scope="col">Forecast</th><th scope="col">Actual sales</th></tr></thead>
                 <tbody>
-                <?php foreach (array_slice($rows, $offset, 10) as $row): ?>
+                <?php foreach (array_slice($rows, $offset, $tableLength) as $row): ?>
                     <tr>
                         <td data-label="Product"><strong><?= htmlspecialchars($row['product_name']) ?></strong>
                             <details class="analytics-row-details"><summary>Details<span class="sr-only"> for <?= htmlspecialchars($row['product_name']) ?><?= isset($row['target_date']) ? ' on ' . htmlspecialchars($row['target_date']) : '' ?></span></summary><dl>
@@ -312,14 +314,14 @@ function analytics_records(array $rows, string $name, bool $errors = false): voi
                 </tbody>
             </table>
         </div>
-        <nav class="analytics-pagination" aria-label="Table pages">
-            <span><?= $count ? ($offset + 1) . '–' . min($offset + 10, $count) : '0' ?> of <?= $count ?><?= $count !== $total ? ' matching records' : ' records' ?></span>
-            <div>
-                <?php if ($page > 1): ?><a class="btn btn-secondary" href="<?= htmlspecialchars(analytics_url(['page' => $page - 1])) ?>" rel="prev">Previous</a><?php endif; ?>
-                <span>Page <?= $page ?> of <?= $pages ?></span>
-                <?php if ($page < $pages): ?><a class="btn btn-secondary" href="<?= htmlspecialchars(analytics_url(['page' => $page + 1])) ?>" rel="next">Next</a><?php endif; ?>
-            </div>
-        </nav>
+        <?php
+        $rows = array_slice($rows, $offset, $tableLength); $pageSize = $tableLength;
+        $totalRows = $count; $totalPages = $pages; $hasNext = $page < $totalPages;
+        $paginationFilters = array_diff_key($analyticsParams, array_flip(['page', 'length']));
+        $paginationLabel = 'Analytics table pages';
+        $url = static fn(array $params): string => analytics_url($params);
+        require __DIR__ . '/../../../backend/app/Views/table_pagination.php';
+        ?>
     </div>
     <?php
 }

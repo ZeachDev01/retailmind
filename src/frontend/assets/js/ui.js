@@ -959,6 +959,46 @@
     });
   }
 
+  RM.tablePageSize = function (footer, size, onChange) {
+    footer.classList.add('rm-table-footer');
+    const label = document.createElement('label');
+    label.className = 'rm-page-size';
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', 'Entries per page');
+    [10, 15, 25, 50, 100].forEach(value => select.add(new Option(value, value, false, value === size)));
+    label.append(select, ' entries per page');
+    footer.insertBefore(label, footer.lastElementChild);
+    select.addEventListener('change', () => onChange(Number(select.value)));
+  };
+
+  RM.renderPageButtons = function (nav, page, pages, onPage, directions = true) {
+    nav.replaceChildren();
+    nav.classList.add('rm-page-buttons');
+    const add = (label, target, disabled, direction) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.disabled = disabled;
+      button.textContent = label;
+      button.setAttribute('aria-label', direction ? label + ' page' : 'Page ' + target);
+      if (!direction && target === page) button.setAttribute('aria-current', 'page');
+      if (direction) {
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-chevron-' + (direction === 'prev' ? 'left' : 'right');
+        icon.setAttribute('aria-hidden', 'true');
+        direction === 'prev' ? button.prepend(icon) : button.append(icon);
+      }
+      button.addEventListener('click', () => {
+        onPage(target);
+        nav.querySelector('[aria-current="page"]')?.focus({preventScroll: true});
+      });
+      nav.append(button);
+    };
+    if (directions) add('Previous', page - 1, page === 1, 'prev');
+    const first = Math.max(1, Math.min(page - 2, pages - 4));
+    for (let number = first; number <= Math.min(pages, first + 4); number++) add(String(number), number, false);
+    if (directions) add('Next', page + 1, page === pages, 'next');
+  };
+
   function initSmartTables() {
     qsa(".main-content .table-wrap table").forEach((table, tableIndex) => {
       const wrap = table.closest(".table-wrap");
@@ -1001,9 +1041,9 @@
         '<span class="toolbar-count" aria-live="polite"></span>';
       wrap.parentNode.insertBefore(toolbar, wrap);
       const footer = document.createElement("div");
-      footer.className = "table-pagination auto-table-pagination";
+      footer.className = "table-pagination auto-table-pagination rm-table-footer";
       footer.innerHTML =
-        '<span class="auto-page-summary"></span><label>Rows <select aria-label="Rows per page"><option>10</option><option>15</option><option selected>25</option><option>50</option><option>100</option></select></label><div class="pagination-buttons"></div>';
+        '<span class="auto-page-summary" role="status"></span><label class="rm-page-size"><select aria-label="Rows per page"><option>10</option><option selected>15</option><option>25</option><option>50</option><option>100</option></select> entries per page</label><nav class="pagination-buttons" aria-label="Table pages"></nav>';
       wrap.insertAdjacentElement("afterend", footer);
       const search = qs("input", toolbar);
       if (table.dataset.searchLabel) {
@@ -1033,7 +1073,7 @@
         filtered = rows.filter(
           (row) => !term || (rowSearchText.get(row) || "").includes(term),
         );
-        const size = Number(pageSize.value || 25);
+        const size = Number(pageSize.value || 15);
         const pages = Math.max(1, Math.ceil(filtered.length / size));
         page = Math.min(page, pages);
         const start = (page - 1) * size;
@@ -1044,29 +1084,10 @@
         summary.textContent = filtered.length
           ? `Showing ${start + 1}–${Math.min(start + size, filtered.length)} of ${filtered.length}`
           : "Showing 0 results";
-        buttons.innerHTML = "";
-        const add = (label, target, disabled, active, ariaLabel) => {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.textContent = label;
-          button.disabled = disabled;
-          if (ariaLabel) button.setAttribute("aria-label", ariaLabel);
-          if (active) button.setAttribute("aria-current", "page");
-          button.classList.toggle("active", !!active);
-          button.addEventListener("click", () => {
-            page = target;
-            render();
-          });
-          buttons.appendChild(button);
-        };
-        add("‹", Math.max(1, page - 1), page === 1, false, "Previous page");
-        for (
-          let p = Math.max(1, page - 2);
-          p <= Math.min(pages, Math.max(1, page - 2) + 4);
-          p++
-        )
-          add(String(p), p, false, p === page, `Page ${p}`);
-        add("›", Math.min(pages, page + 1), page === pages, false, "Next page");
+        RM.renderPageButtons(buttons, page, pages, target => {
+          page = target;
+          render();
+        });
       }
       search.addEventListener("input", () => {
         clearTimeout(searchTimer);

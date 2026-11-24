@@ -37,7 +37,7 @@ try {
         } else {
             $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 100000]]);
             if ($page === false) { throw new DomainException('Invalid history page.'); }
-            $result = $service->history((int)$_SESSION['user_id'], $page);
+            $result = $service->history((int)$_SESSION['user_id'], $page, (int)($_GET['length'] ?? 15));
         }
     } elseif ($method === 'POST') {
         if (!csrf_token_is_valid($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '')) {

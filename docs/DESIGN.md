@@ -108,6 +108,8 @@ components:
 
 # Design System: RetailMind
 
+The shared recovery-key modal now follows successful manual backup downloads only; scheduled backups do not interrupt dashboard visits. Its compact header includes a close control, actions stack on mobile, and Backup Keyring has a separated navigation row. See the [Backup & Restore surface brief](../.impeccable/surfaces/s-system-administrator-backup-restore-php-24753d25.md) for verification and existing check limitations. No global tokens changed.
+
 Remote Access now uses separate ngrok Free and Cloudflare setup views beneath a persistent installed-provider, status and public-link area. Guides and maintenance use native disclosures; setup view selection does not switch the running provider. See the [Remote Access surface brief](../.impeccable/surfaces/remote-access.md) for verification and remaining deployment checks. Existing visual identity and global tokens are unchanged.
 
 The 2026-11-10 clarification pass removed the page subtitle and the section's explanatory subtext, moved decision-critical facts into the existing disclosures, and replaced the flat status rows with one bordered connection console. Provider identity appears as inline vendor marks in the setup panel titles, and state motion (Online radar ring, Connecting breathe, setup-panel rise) stays scoped to the section and stops under reduced motion. No tokens or dependencies were added.

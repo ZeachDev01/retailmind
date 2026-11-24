@@ -279,10 +279,14 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                         <tbody id="gcash-history-body"></tbody>
                     </table>
                 </div>
-                <div class="gcash-actions gcash-pagination">
-                    <button type="button" class="btn btn-secondary" id="gcash-prev" disabled>Previous</button>
-                    <span id="gcash-page">Page 1</span>
-                    <button type="button" class="btn btn-secondary" id="gcash-next" disabled>Next</button>
+                <div class="gcash-actions gcash-pagination rm-table-footer">
+                    <span id="gcash-page-summary" role="status"></span>
+                    <label class="rm-page-size"><select id="gcash-page-size" aria-label="Entries per page"><option>10</option><option selected>15</option><option>25</option><option>50</option><option>100</option></select> entries per page</label>
+                    <div class="rm-page-buttons">
+                    <button type="button" class="btn btn-secondary" id="gcash-prev" disabled><i class="bi bi-chevron-left" aria-hidden="true"></i>Previous</button>
+                    <span hidden id="gcash-page">Page 1</span><span id="gcash-page-numbers" class="rm-page-buttons"></span>
+                    <button type="button" class="btn btn-secondary" id="gcash-next" disabled>Next<i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+                    </div>
                 </div>
             </section>
         </div>

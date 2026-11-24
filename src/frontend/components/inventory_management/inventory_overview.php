@@ -341,9 +341,10 @@ try {
             </div>
             <nav class="overview-product-pagination" id="overview-product-pagination" aria-label="Product pagination">
                 <span id="overview-page-summary" role="status">Showing 0 products</span>
-                <div>
+                <div class="rm-page-buttons">
                     <button type="button" class="btn btn-quiet" id="overview-page-previous"><i class="bi bi-chevron-left" aria-hidden="true"></i>Previous</button>
-                    <span id="overview-page-status" aria-live="polite">Page 1 of 1</span>
+                    <span hidden id="overview-page-status" aria-live="polite">Page 1 of 1</span>
+                    <span id="overview-page-numbers" class="rm-page-buttons"></span>
                     <button type="button" class="btn btn-quiet" id="overview-page-next">Next<i class="bi bi-chevron-right" aria-hidden="true"></i></button>
                 </div>
             </nav>
@@ -384,9 +385,10 @@ try {
             </div>
             <nav class="overview-tab-pagination" id="movement-pagination" aria-label="Stock movement pagination" hidden>
                 <span id="movement-page-summary">Showing 0 movements</span>
-                <div>
+                <div class="rm-page-buttons">
                     <button type="button" class="btn btn-quiet" id="movement-page-previous"><i class="bi bi-chevron-left" aria-hidden="true"></i>Previous</button>
-                    <span id="movement-page-status" aria-live="polite">Page 1 of 1</span>
+                    <span hidden id="movement-page-status" aria-live="polite">Page 1 of 1</span>
+                    <span id="movement-page-numbers" class="rm-page-buttons"></span>
                     <button type="button" class="btn btn-quiet" id="movement-page-next">Next<i class="bi bi-chevron-right" aria-hidden="true"></i></button>
                 </div>
             </nav>
@@ -430,9 +432,10 @@ try {
             </div>
             <nav class="overview-tab-pagination" id="fefo-pagination" aria-label="FEFO recommendation pagination" hidden>
                 <span id="fefo-page-summary">Showing 0 recommendations</span>
-                <div>
+                <div class="rm-page-buttons">
                     <button type="button" class="btn btn-quiet" id="fefo-page-previous"><i class="bi bi-chevron-left" aria-hidden="true"></i>Previous</button>
-                    <span id="fefo-page-status" aria-live="polite">Page 1 of 1</span>
+                    <span hidden id="fefo-page-status" aria-live="polite">Page 1 of 1</span>
+                    <span id="fefo-page-numbers" class="rm-page-buttons"></span>
                     <button type="button" class="btn btn-quiet" id="fefo-page-next">Next<i class="bi bi-chevron-right" aria-hidden="true"></i></button>
                 </div>
             </nav>
@@ -692,7 +695,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const movementPageStatus = document.getElementById('movement-page-status');
     const movementPreviousButton = document.getElementById('movement-page-previous');
     const movementNextButton = document.getElementById('movement-page-next');
-    const movementPageSize = 5;
+    let movementPageSize = 15;
     let movementPage = 1;
     let movementSortColumn = 4;
     let movementSortDirection = -1;
@@ -719,15 +722,19 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    RetailMindUI.tablePageSize(movementPagination, movementPageSize, size => { movementPageSize = size; movementPage = 1; renderMovementPage(); });
+
     function renderMovementPage() {
         const pageCount = Math.max(1, Math.ceil(movementRows.length / movementPageSize));
         const firstRow = (movementPage - 1) * movementPageSize;
         movementRows.forEach(function (row, index) {
             row.hidden = index < firstRow || index >= firstRow + movementPageSize;
         });
-        movementPagination.hidden = movementRows.length <= movementPageSize;
+        movementPagination.hidden = movementRows.length === 0;
         movementPageSummary.textContent = 'Showing ' + (firstRow + 1) + '-' + Math.min(firstRow + movementPageSize, movementRows.length) + ' of ' + movementRows.length;
         movementPageStatus.textContent = 'Page ' + movementPage + ' of ' + pageCount;
+        const movementNumbers = document.getElementById('movement-page-numbers');
+        RetailMindUI.renderPageButtons(movementNumbers, movementPage, pageCount, target => { movementPage = target; renderMovementPage(); }, false);
         movementPreviousButton.disabled = movementPage === 1;
         movementNextButton.disabled = movementPage === pageCount;
     }
@@ -755,8 +762,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const fefoPageStatus = document.getElementById('fefo-page-status');
     const fefoPreviousButton = document.getElementById('fefo-page-previous');
     const fefoNextButton = document.getElementById('fefo-page-next');
-    const fefoPageSize = 5;
+    let fefoPageSize = 15;
     let fefoPage = 1;
+
+    RetailMindUI.tablePageSize(fefoPagination, fefoPageSize, size => { fefoPageSize = size; fefoPage = 1; renderFefoPage(); });
 
     function renderFefoPage() {
         const pageCount = Math.max(1, Math.ceil(fefoRows.length / fefoPageSize));
@@ -764,9 +773,11 @@ document.addEventListener('DOMContentLoaded', function () {
         fefoRows.forEach(function (row, index) {
             row.hidden = index < firstRow || index >= firstRow + fefoPageSize;
         });
-        fefoPagination.hidden = fefoRows.length <= fefoPageSize;
+        fefoPagination.hidden = fefoRows.length === 0;
         fefoPageSummary.textContent = 'Showing ' + (firstRow + 1) + '-' + Math.min(firstRow + fefoPageSize, fefoRows.length) + ' of ' + fefoRows.length;
         fefoPageStatus.textContent = 'Page ' + fefoPage + ' of ' + pageCount;
+        const fefoNumbers = document.getElementById('fefo-page-numbers');
+        RetailMindUI.renderPageButtons(fefoNumbers, fefoPage, pageCount, target => { fefoPage = target; renderFefoPage(); }, false);
         fefoPreviousButton.disabled = fefoPage === 1;
         fefoNextButton.disabled = fefoPage === pageCount;
     }
@@ -788,7 +799,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (!window.RetailMindUI) return;
 
-    const pageSize = 10;
     const defaultView = document.getElementById('overview-default-view');
     const productView = document.getElementById('overview-product-view');
     const productEmpty = document.getElementById('overview-product-empty');
@@ -802,7 +812,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const pageStatus = document.getElementById('overview-page-status');
     const previousPageButton = document.getElementById('overview-page-previous');
     const nextPageButton = document.getElementById('overview-page-next');
-    const productPageSize = 10;
+    let productPageSize = 15;
     const stockMovementHashes = ['#stock-risk', '#stock-movement'];
     let activeProductView = 'all';
     let productPage = 1;
@@ -907,6 +917,8 @@ document.addEventListener('DOMContentLoaded', function () {
         defaultView.querySelector('.overview-tab.is-active').focus({preventScroll: true});
     });
 
+    RetailMindUI.tablePageSize(productPagination, productPageSize, size => { productPageSize = size; productPage = 1; renderProductPage(); });
+
     function renderProductPage() {
         const showUndated = activeProductView === 'missing-exp';
         document.querySelectorAll('.overview-col-undated').forEach(function (el) {
@@ -926,6 +938,8 @@ document.addEventListener('DOMContentLoaded', function () {
         selectAll.checked = false;
         pageSummary.textContent = matchingRows.length ? 'Showing ' + (firstRow + 1) + '-' + Math.min(firstRow + productPageSize, matchingRows.length) + ' of ' + matchingRows.length : 'Showing 0 products';
         pageStatus.textContent = 'Page ' + productPage + ' of ' + pageCount;
+        const productNumbers = document.getElementById('overview-page-numbers');
+        RetailMindUI.renderPageButtons(productNumbers, productPage, pageCount, target => { productPage = target; renderProductPage(); }, false);
         previousPageButton.disabled = productPage === 1;
         nextPageButton.disabled = productPage === pageCount;
         productPagination.hidden = matchingRows.length === 0;
@@ -1000,57 +1014,24 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     document.querySelectorAll('.product-overview-modal .table-wrap').forEach(function (tableWrap) {
-        const rows = Array.from(tableWrap.querySelectorAll('tbody tr')).filter(function (row) {
-            return !row.querySelector('.u-empty-cell');
-        });
-        if (rows.length <= pageSize) return;
-
-        const pageCount = Math.ceil(rows.length / pageSize);
-        let currentPage = 1;
-        const pagination = document.createElement('nav');
-        pagination.className = 'overview-pagination';
-        pagination.setAttribute('aria-label', 'Product list pagination');
-
-        const previousButton = document.createElement('button');
-        previousButton.type = 'button';
-        previousButton.className = 'btn btn-quiet';
-        previousButton.textContent = 'Previous';
-        previousButton.addEventListener('click', function () {
-            if (currentPage > 1) {
-                currentPage -= 1;
-                renderPage();
-            }
-        });
-
-        const pageStatus = document.createElement('span');
-        pageStatus.className = 'overview-pagination-status';
-        pageStatus.setAttribute('aria-live', 'polite');
-
-        const nextButton = document.createElement('button');
-        nextButton.type = 'button';
-        nextButton.className = 'btn btn-quiet';
-        nextButton.textContent = 'Next';
-        nextButton.addEventListener('click', function () {
-            if (currentPage < pageCount) {
-                currentPage += 1;
-                renderPage();
-            }
-        });
-
-        pagination.append(previousButton, pageStatus, nextButton);
-        tableWrap.appendChild(pagination);
-
-        function renderPage() {
-            const firstRow = (currentPage - 1) * pageSize;
-            rows.forEach(function (row, index) {
-                row.hidden = index < firstRow || index >= firstRow + pageSize;
-            });
-            pageStatus.textContent = 'Page ' + currentPage + ' of ' + pageCount;
-            previousButton.disabled = currentPage === 1;
-            nextButton.disabled = currentPage === pageCount;
+        const rows = Array.from(tableWrap.querySelectorAll('tbody tr')).filter(row => !row.querySelector('.u-empty-cell'));
+        if (!rows.length) return;
+        let size = 15, page = 1;
+        const footer = document.createElement('div');
+        const summary = document.createElement('span');
+        const nav = document.createElement('nav');
+        nav.setAttribute('aria-label', 'Product list pages');
+        footer.append(summary, nav);
+        tableWrap.after(footer);
+        RetailMindUI.tablePageSize(footer, size, value => { size = value; page = 1; render(); });
+        function render() {
+            const pages = Math.max(1, Math.ceil(rows.length / size));
+            const start = (page - 1) * size;
+            rows.forEach((row, index) => { row.hidden = index < start || index >= start + size; });
+            summary.textContent = `Showing ${start + 1} to ${Math.min(start + size, rows.length)} of ${rows.length} entries`;
+            RetailMindUI.renderPageButtons(nav, page, pages, target => { page = target; render(); });
         }
-
-        renderPage();
+        render();
     });
 
     document.querySelectorAll('[data-modal-target]').forEach(function (trigger) {

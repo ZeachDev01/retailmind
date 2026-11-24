@@ -1643,15 +1643,16 @@ foreach ($products as $product) {
                             </tbody>
                         </table>
                     </div>
-                    <footer class="table-pagination" aria-label="Product table pagination">
-                        <div><span id="page-summary">Showing <?= $totalProducts > 0 ? 1 : 0 ?>–<?= min(10, $totalProducts) ?> of <?= $totalProducts ?></span></div>
-                        <label>Rows <select id="page-size" aria-label="Rows per page">
+                    <footer class="table-pagination rm-table-footer" aria-label="Product table pagination">
+                        <div><span id="page-summary" role="status">Showing <?= $totalProducts > 0 ? 1 : 0 ?>–<?= min(10, $totalProducts) ?> of <?= $totalProducts ?></span></div>
+                        <label class="rm-page-size"><select id="page-size" aria-label="Rows per page">
                                 <option>10</option>
+                                <option selected>15</option>
                                 <option>25</option>
                                 <option>50</option>
                                 <option>100</option>
-                            </select></label>
-                        <span class="product-pagination-status" id="page-status" aria-live="polite"></span>
+                            </select> entries per page</label>
+                        <span hidden class="product-pagination-status" id="page-status" aria-live="polite"></span>
                         <nav class="pagination-buttons" id="pagination-buttons" aria-label="Product pages"></nav>
                     </footer>
                 </div>
@@ -2174,7 +2175,7 @@ foreach ($products as $product) {
             document.getElementById('catalog-empty').hidden = hasResults;
             document.getElementById('catalog-first-use').hidden = hasResults || productRows.length > 0;
             document.getElementById('catalog-no-results').hidden = hasResults || productRows.length === 0;
-            const size = Number(pageSizeInput.value || 10);
+            const size = Number(pageSizeInput.value || 15);
             const pages = Math.max(1, Math.ceil(filteredRows.length / size));
             currentPage = Math.min(currentPage, pages);
             const start = (currentPage - 1) * size;
@@ -2183,34 +2184,10 @@ foreach ($products as $product) {
             resultCount.textContent = `${filteredRows.length} result${filteredRows.length === 1 ? '' : 's'}`;
             pageSummary.textContent = filteredRows.length ? `Showing ${start + 1}–${Math.min(start + size, filteredRows.length)} of ${filteredRows.length}` : 'Showing 0 results';
             pageStatus.textContent = `Page ${currentPage} of ${pages}`;
-            paginationButtons.innerHTML = '';
-            const makeButton = (label, page, ariaLabel, disabled = false, active = false) => {
-                const button = document.createElement('button');
-                button.type = 'button';
-                button.textContent = label;
-                button.setAttribute('aria-label', ariaLabel);
-                button.disabled = disabled;
-                button.classList.toggle('active', active);
-                if (active) button.setAttribute('aria-current', 'page');
-                button.addEventListener('click', () => {
-                    currentPage = page;
-                    renderPage();
-                    document.getElementById('product-table').scrollIntoView({
-                        behavior: 'smooth'
-                    });
-                });
-                return button;
-            };
-            paginationButtons.appendChild(makeButton('«', 1, 'First page', currentPage === 1));
-            paginationButtons.appendChild(makeButton('‹', Math.max(1, currentPage - 1), 'Previous page', currentPage === 1));
-            let first = Math.max(1, currentPage - 2);
-            const last = Math.min(pages, first + 4);
-            first = Math.max(1, last - 4);
-            for (let page = first; page <= last; page++) {
-                paginationButtons.appendChild(makeButton(String(page), page, `Page ${page}`, false, page === currentPage));
-            }
-            paginationButtons.appendChild(makeButton('›', Math.min(pages, currentPage + 1), 'Next page', currentPage === pages));
-            paginationButtons.appendChild(makeButton('»', pages, 'Last page', currentPage === pages));
+            RetailMindUI.renderPageButtons(paginationButtons, currentPage, pages, page => {
+                currentPage = page;
+                renderPage();
+            });
             syncSelectAll();
         }
         [searchInput, categoryFilter, stockFilter, statusFilter, priceFilter].forEach(input => input.addEventListener(input.tagName === 'INPUT' ? 'input' : 'change', () => applyFilters()));

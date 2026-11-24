@@ -65,7 +65,8 @@ try {
     $history = [];
     $storageMessage = 'Backup history needs database updates before it can be shown. Ask your Super Administrator to Apply Database Updates.';
 }
-$historyPerPage = 10;
+$historyPerPage = filter_var($_GET['length'] ?? 15, FILTER_VALIDATE_INT);
+$historyPerPage = in_array($historyPerPage, [10, 15, 25, 50, 100], true) ? $historyPerPage : 15;
 $historyTotal = count($history);
 $historyPages = max(1, (int)ceil($historyTotal / $historyPerPage));
 $historyPage = min($historyPages, max(1, (int)($_GET['history_page'] ?? 1)));
@@ -231,14 +232,13 @@ if ($hasStoreConfigurationNav) {
                     </table>
                 </div>
                 <?php if ($historyTotal > 0): ?>
-                <nav class="backup-pagination" aria-label="Backup history pagination">
-                    <p>Showing <?= $historyOffset + 1 ?>–<?= min($historyOffset + $historyPerPage, $historyTotal) ?> of <?= $historyTotal ?></p>
-                    <div class="backup-pagination-actions">
-                        <?php if ($historyPage > 1): ?><a class="btn btn-secondary" href="?history_page=<?= $historyPage - 1 ?>#backup-history" rel="prev">Previous</a><?php else: ?><span class="btn btn-secondary" aria-disabled="true">Previous</span><?php endif; ?>
-                        <span class="backup-page-number" aria-current="page">Page <?= $historyPage ?> of <?= $historyPages ?></span>
-                        <?php if ($historyPage < $historyPages): ?><a class="btn btn-secondary" href="?history_page=<?= $historyPage + 1 ?>#backup-history" rel="next">Next</a><?php else: ?><span class="btn btn-secondary" aria-disabled="true">Next</span><?php endif; ?>
-                    </div>
-                </nav>
+                <?php
+                $rows = $historyRows; $page = $historyPage; $pageSize = $historyPerPage;
+                $totalRows = $historyTotal; $totalPages = $historyPages; $hasNext = $page < $totalPages;
+                $paginationFilters = []; $paginationLabel = 'Backup history pages';
+                $url = static fn(array $params): string => '?' . http_build_query(['history_page' => $params['page'], 'length' => $historyPerPage]) . '#backup-history';
+                require __DIR__ . '/../../../backend/app/Views/table_pagination.php';
+                ?>
                 <?php endif; ?>
             </section>
 

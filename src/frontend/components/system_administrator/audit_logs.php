@@ -603,8 +603,8 @@ if ($hasStoreConfigurationNav) {
                     },
                     error: showAuditLoadError
                 },
-                pageLength: 25,
-                lengthMenu: [10, 25, 50, 100],
+                pageLength: 15,
+                lengthMenu: [10, 15, 25, 50, 100],
                 order: [[0, 'desc']],
                 deferRender: true,
                 ordering: {
@@ -641,19 +641,6 @@ if ($hasStoreConfigurationNav) {
                             placeholder: 'Search audit records...'
                         }
                     },
-                    bottom: [
-                        'info',
-                        {
-                            pageLength: {
-                                menu: [10, 25, 50, 100]
-                            }
-                        },
-                        {
-                            paging: {
-                                numbers: 5
-                            }
-                        }
-                    ],
                     bottomStart: null,
                     bottomEnd: null
                 },
@@ -667,6 +654,22 @@ if ($hasStoreConfigurationNav) {
                     infoFiltered: '(filtered from _MAX_)'
                 }
             });
+
+            const footer = document.createElement('footer');
+            const summary = document.createElement('span');
+            summary.setAttribute('role', 'status');
+            const pages = document.createElement('nav');
+            pages.setAttribute('aria-label', 'Audit record pages');
+            footer.append(summary, pages);
+            document.getElementById('auditLogsTable_wrapper').after(footer);
+            RetailMindUI.tablePageSize(footer, 15, size => table.page.len(size).draw());
+            function renderAuditPages() {
+                const info = table.page.info();
+                summary.textContent = `Showing ${info.recordsDisplay ? info.start + 1 : 0} to ${info.end} of ${info.recordsDisplay} entries`;
+                RetailMindUI.renderPageButtons(pages, info.page + 1, Math.max(1, info.pages), page => table.page(page - 1).draw('page'));
+            }
+            table.on('draw', renderAuditPages);
+            renderAuditPages();
 
             var tableViewport = document.querySelector('#auditLogsTable_wrapper .dt-layout-table');
             tableViewport.tabIndex = 0;

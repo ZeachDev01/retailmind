@@ -75,7 +75,7 @@ async function main() {
             assert((await response.text()).includes('Receiving entry saved.'), 'receipt persisted');
         }
         const large = fixture('--seed-large-history');
-        const filteredHistory = history + '?q=' + token;
+        const filteredHistory = history + '?length=10&q=' + token;
         fs.mkdirSync(artifacts, {recursive:true});
         await page.goto(filteredHistory);
         await page.setViewportSize({width:1280, height:900});
@@ -93,24 +93,22 @@ async function main() {
         await page.locator('#entry_' + large.entry + ' a').first().focus();
         await page.keyboard.press('Enter');
         await page.waitForURL(url => url.searchParams.get('entry') === large.entry);
-        assert.equal(await page.locator(itemRows).count(), 25, 'the detail starts at 25 items');
+        assert.equal(await page.locator(itemRows).count(), 15, 'the detail starts at 15 items');
         assert.equal(await page.locator('.history-table th[aria-sort="ascending"]').innerText(), 'Product');
         await follow(page.getByRole('link', {name:'Delivered', exact:true}));
         assert.equal((await page.locator(itemRows).first().locator('td').nth(2).innerText()).trim(), '1');
         await follow(page.getByRole('link', {name:'Delivered', exact:true}));
         assert.equal((await page.locator(itemRows).first().locator('td').nth(2).innerText()).trim(), '100', 'sort includes rows from later pages');
-        await follow(page.getByRole('link', {name:'Next Item Page'}));
-        assert.equal((await page.locator(itemRows).first().locator('td').nth(2).innerText()).trim(), '75');
-        await page.getByLabel('Items per page', {exact:true}).selectOption('50');
+        await follow(page.getByRole('link', {name:'Next', exact:true}));
+        assert.equal((await page.locator(itemRows).first().locator('td').nth(2).innerText()).trim(), '85');
         await Promise.all([
             page.waitForURL(url => url.searchParams.get('item_length') === '50'),
-            page.getByRole('button', {name:'Apply', exact:true}).click()
+            page.getByLabel('Entries per page', {exact:true}).selectOption('50')
         ]);
         assert.equal(await page.locator(itemRows).count(), 50);
-        await page.getByLabel('Items per page', {exact:true}).selectOption('100');
         await Promise.all([
             page.waitForURL(url => url.searchParams.get('item_length') === '100'),
-            page.getByRole('button', {name:'Apply', exact:true}).click()
+            page.getByLabel('Entries per page', {exact:true}).selectOption('100')
         ]);
         assert.equal(await page.locator(itemRows).count(), 100);
         await follow(page.getByRole('link', {name:'Expiry', exact:true}));
@@ -217,7 +215,7 @@ async function main() {
         await page.getByRole('heading', {name:'No matching receipts'}).waitFor();
         await follow(page.getByRole('link', {name:'Clear search'}));
         await page.waitForURL('**/receiving_history.php');
-        assert.equal(await page.locator(entryRows).count(), 10);
+        assert.equal(await page.locator(entryRows).count(), 15);
         await page.goto(history + '?q=' + 'x'.repeat(201));
         await page.waitForFunction(() => [...document.querySelectorAll('.message.error, .swal2-html-container')]
             .some(el => el.getClientRects().length && el.textContent.includes('200 characters')));

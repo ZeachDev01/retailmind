@@ -7,3 +7,5 @@ Recovery Key custody becomes a Backup Keyring. Importing another installation's 
 Restore accepts packages from known older database structures through registered upgrade adapters while preserving the destination migration ledger. Unknown or newer structures are rejected with the missing migrations named. This keeps the existing portable-schema rule of never replaying a source package's DDL and avoids silently guessing at future structures.
 
 Consequences: the destination accumulates retained automatic packages until the next successful run replaces them; the keyring can hold multiple keys indefinitely; and compatibility depends on maintaining an adapter for each older structure that must remain restorable.
+
+2026-11-24 clarification: Recovery Key prompts open only after an operator successfully downloads a manually created backup, using that package's fingerprint. Scheduled backups do not interrupt dashboard visits or other Administrator accounts. Export acknowledgements and password-protected Keyring actions remain available.

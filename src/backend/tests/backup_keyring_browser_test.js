@@ -1,6 +1,6 @@
 'use strict';
 // Recovery-key recommendation + Backup Keyring over real HTTP sessions (#460).
-// Proves each manual download offers its key, unattended prompts respect acknowledgement,
+// Proves each manual download offers its key, unattended backups never interrupt other accounts,
 // exports stream only key bytes under a fingerprint filename,
 // and key custody changes stay visible without exposing key material.
 const assert = require('node:assert/strict');
@@ -133,13 +133,17 @@ const fingerprint = key => createHash('sha256').update(key).digest('hex');
         await first.page.goto(adminUrl);
         assert.equal(await prompt.count(), 0, 'Successful export suppresses unattended reminders for this account');
         fixture('scheduled_backup_history');
+        for (const role of ['admin', 'super_admin']) {
+            const fresh = await login(role);
+            assert.equal(await fresh.page.locator('[data-backup-key-dialog]').count(), 0, 'Scheduled backup does not interrupt a fresh ' + role + ' dashboard');
+            await fresh.context.close();
+        }
         await first.page.reload();
         assert.equal(await prompt.count(), 0, 'Successful export also suppresses scheduled-backup reminders using that key');
         assert.equal((await superAdministrator.page.goto(origin + '/components/system_administrator/backup_restore.php')).status(), 200);
-        assert.equal(await superAdministrator.page.locator('[data-backup-key-dialog]').isVisible(), true, 'Another account still gets its reminder');
-        await superAdministrator.page.keyboard.press('Escape');
+        assert.equal(await superAdministrator.page.locator('[data-backup-key-dialog]').count(), 0, 'Another account gets no popup for an unattended backup');
         await superAdministrator.page.reload();
-        assert.equal(await superAdministrator.page.locator('[data-backup-key-dialog]').isVisible(), false, 'Unattended reminder appears once per session');
+        assert.equal(await superAdministrator.page.locator('[data-backup-key-dialog]').count(), 0, 'Reload does not introduce an unattended reminder');
 
         // The same sequence works for the Super Administrator.
         await Promise.all([superAdministrator.page.waitForNavigation(), superAdministrator.page.locator('[data-backup-create]').click()]);

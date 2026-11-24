@@ -225,8 +225,8 @@ $users = $pdo->query(
 $totalRows = count($users);
 $activeCount = count(array_filter($users, static fn(array $user): bool => $user['status'] === 'active'));
 $disabledCount = $totalRows - $activeCount;
-$pageSize = filter_var($_GET['length'] ?? 10, FILTER_VALIDATE_INT);
-$pageSize = in_array($pageSize, [10, 25, 50, 100], true) ? $pageSize : 10;
+$pageSize = filter_var($_GET['length'] ?? 15, FILTER_VALIDATE_INT);
+$pageSize = in_array($pageSize, [10, 15, 25, 50, 100], true) ? $pageSize : 15;
 $totalPages = max(1, (int)ceil($totalRows / $pageSize));
 $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT);
 $page = is_int($page) ? min(max(1, $page), $totalPages) : 1;

@@ -109,24 +109,26 @@ $assert(str_contains(file_get_contents($root . '/src/frontend/components/sidebar
     'Cashier can navigate to history');
 $insert = $pdo->prepare("INSERT INTO sales (sale_id, cashier_id, sale_date, total_amount, payment_method) VALUES (?, 1, '2026-10-01 12:00', 10, 'cash')");
 for ($saleId = 100; $saleId < 111; $saleId++) $insert->execute([$saleId]);
-$first = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'sales']);
-$second = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'sales', 'page' => 2]);
-$assert(count($first['rows']) === 10 && $first['hasNext'], 'default page contains ten rows and has a next page');
+$first = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'sales', 'length' => 10]);
+$second = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'sales', 'page' => 2, 'length' => 10]);
+$assert(count($first['rows']) === 10 && $first['hasNext'], 'explicit ten-row page contains ten rows and has a next page');
 $assert(count($second['rows']) === 3 && !$second['hasNext'], 'last page contains the remaining rows');
 $assert(array_intersect(array_column($first['rows'], 'sale_id'), array_column($second['rows'], 'sale_id')) === [], 'pages do not repeat records');
 $assert($first['totalRows'] === 13 && $first['totalPages'] === 2, 'pagination counts only the authenticated Cashier records');
+$default = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'sales']);
+$assert($default['pageSize'] === 15 && count($default['rows']) === 13, 'default page uses fifteen rows');
 $larger = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'sales', 'length' => 25]);
 $assert(count($larger['rows']) === 13 && $larger['totalPages'] === 1 && !$larger['hasNext'], 'page length selector changes pagination');
 $invalidSize = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'sales', 'length' => '-1']);
-$assert($invalidSize['pageSize'] === 10, 'unsupported page size uses ten rows');
+$assert($invalidSize['pageSize'] === 15, 'unsupported page size uses fifteen rows');
 $filtered = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'sales', 'date_from' => '2026-10-01', 'date_to' => '2026-10-01']);
-$assert($filtered['totalRows'] === 11 && count($filtered['rows']) === 10 && $filtered['hasNext'], 'count and rows use identical date filters');
+$assert($filtered['totalRows'] === 11 && count($filtered['rows']) === 11 && !$filtered['hasNext'], 'count and rows use identical date filters');
 $insertRefund = $pdo->prepare("INSERT INTO cash_refunds (refund_id, cashier_id, sale_id, shift_id, created_at, refund_amount, payment_method, reason, note) VALUES (?, 1, 20, 10, '2026-10-01 12:00', 1, 'cash', 'other', 'pagination fixture')");
 for ($refundId = 100; $refundId < 155; $refundId++) $insertRefund->execute([$refundId]);
 $refundFirst = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'refunds']);
-$refundLast = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'refunds', 'page' => 6]);
-$assert(count($refundFirst['rows']) === 10 && $refundFirst['totalRows'] === 56, 'refund pagination counts only owned refunds');
-$assert(count($refundLast['rows']) === 6 && !$refundLast['hasNext'], 'refund pagination reaches records beyond the former fifty-row limit');
+$refundLast = (new CashierOperationalHistoryService($pdo))->resolve(1, ['type' => 'refunds', 'page' => 4]);
+$assert(count($refundFirst['rows']) === 15 && $refundFirst['totalRows'] === 56, 'refund pagination counts only owned refunds');
+$assert(count($refundLast['rows']) === 11 && !$refundLast['hasNext'], 'refund pagination reaches records beyond the former fifty-row limit');
 // Live balances include issuing-drawer refunds and approved legacy reversals.
 $pdo->exec("INSERT INTO sales VALUES (200,1,12,'2026-10-02 10:00',100.50,'cash',110,9.50,0);
     INSERT INTO cash_drawer_movements VALUES
@@ -163,7 +165,7 @@ foreach ([['date_from' => '2026-02-30'], ['date_from' => ['invalid']],
         'invalid date filters return an error without querying records');
 }
 $invalid = $service->resolve(1, ['type' => ['shifts'], 'page' => [], 'length' => [], 'id' => []]);
-$assert($invalid['type'] === 'sales' && $invalid['page'] === 1 && $invalid['pageSize'] === 10
+$assert($invalid['type'] === 'sales' && $invalid['page'] === 1 && $invalid['pageSize'] === 15
     && $invalid['recordId'] === null, 'malformed filters safely use private list defaults');
 $bounds = $service->resolve(1, ['page' => 999999]);
 $assert($bounds['page'] === 100000 && $bounds['rows'] === [], 'page upper bound is preserved');

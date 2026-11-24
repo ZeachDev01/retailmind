@@ -1,13 +1,15 @@
-<div class="gcash-pagination" data-fragment="transactions-pagination">
-    <div>
-        Page <strong id="admin-current-page"><?= $page ?></strong>
-    </div>
-    <div class="gcash-pagination-actions">
-        <?php if ($page > 1): ?>
-            <a href="?<?= http_build_query(array_merge($_GET, ['page' => $page - 1])) ?>" class="btn btn-secondary btn-sm" id="admin-prev-page">Previous</a>
-        <?php endif; ?>
-        <?php if (!empty($overview['has_next'])): ?>
-            <a href="?<?= http_build_query(array_merge($_GET, ['page' => $page + 1])) ?>" class="btn btn-secondary btn-sm" id="admin-next-page">Next</a>
-        <?php endif; ?>
-    </div>
+<div data-fragment="transactions-pagination">
+<?php
+$rows = $overview['transactions'] ?? [];
+$pageSize = $report->filters['limit'] ?? 15;
+$totalRows = (int)($overview['matching_record_count'] ?? 0);
+$totalPages = max(1, (int)ceil($totalRows / $pageSize));
+$page = min($totalPages, $page);
+$hasNext = $page < $totalPages;
+$paginationFilters = array_filter($_GET, static fn($value, $key): bool => is_scalar($value) && !in_array($key, ['page', 'length'], true), ARRAY_FILTER_USE_BOTH);
+$paginationFilters['tab'] = 'transactions';
+$paginationLabel = 'GCash transaction pages';
+$url = static fn(array $params): string => '?' . http_build_query($params + $paginationFilters + ['length' => $pageSize]);
+require __DIR__ . '/../table_pagination.php';
+?>
 </div>

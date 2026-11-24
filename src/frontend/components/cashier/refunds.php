@@ -121,7 +121,7 @@ try {
     $exceptionToken = '';
 }
 $refundHistory = (new \App\Services\CashierOperationalHistoryService($pdo))->resolve($actorId, [
-    'type' => 'refunds', 'page' => $_GET['page'] ?? 1, 'length' => $_GET['length'] ?? 10,
+    'type' => 'refunds', 'page' => $_GET['page'] ?? 1, 'length' => $_GET['length'] ?? 15,
 ]);
 $refunds = $refundHistory['rows'];
 ['page' => $page, 'pageSize' => $pageSize, 'totalRows' => $totalRows,

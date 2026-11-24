@@ -227,16 +227,12 @@ const {chromium} = require('playwright');
                     await page.getByRole('tab', {name: tab === 'current' ? 'Current movements' : 'Recent shifts', exact: true}).click();
                     const panel = page.locator(`#shift-panel-${tab}`);
                     const rows = panel.locator('tbody tr:visible');
-                    const pageSize = tab === 'recent' ? 15 : 10;
+                    const pageSize = 15;
                     assert.equal(await panel.getByRole('combobox', {name: 'Rows per page'}).inputValue(), String(pageSize));
                     assert.equal(await rows.count(), pageSize, `${tab}: uses its default page size`);
                     await panel.getByRole('button', {name: 'Page 2', exact: true}).click();
                     assert.equal(await panel.getByRole('button', {name: 'Page 2', exact: true}).getAttribute('aria-current'), 'page');
-                    assert.equal(await rows.count(), tab === 'recent' ? 8 : 10, `${tab}: second page retains remaining rows`);
-                    if (tab === 'current') {
-                        await panel.getByRole('button', {name: 'Next page', exact: true}).click();
-                        assert.equal(await rows.count(), 3, `${tab}: final page retains remaining rows`);
-                    }
+                    assert.equal(await rows.count(), 8, `${tab}: second page retains remaining rows`);
                     assert(await panel.getByRole('button', {name: 'Next page', exact: true}).isDisabled());
                     await panel.getByRole('combobox', {name: 'Rows per page'}).selectOption('25');
                     assert.equal(await rows.count(), 23, `${tab}: changing page size resets pagination`);

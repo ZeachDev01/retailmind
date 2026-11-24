@@ -80,9 +80,9 @@ Restore accepts packages from known older database structures by upgrading their
 ### Recovery-key recommendation
 
 - Every completed backup history row records the encryption key fingerprint that the package header already carries.
-- A per-account acknowledgement record ties a user to a key fingerprint and acknowledgement time. The recommendation appears when the newest completed backup's fingerprint has no acknowledgement for that account.
+- A per-account acknowledgement record ties a user to a key fingerprint and acknowledgement time. It records successful exports; it does not trigger a modal on login or dashboard visits.
 - The recommendation is a modal, without a persistent banner. Each manual backup download waits for the complete attachment response, hides its consumed download link, then offers the fingerprint captured with that backup. Failed downloads keep the link available and do not open the modal. The browser save action remains the operator’s responsibility.
-- Manual downloads always show the modal, including previously exported keys. “I already have a copy” only dismisses it; it does not record an export acknowledgement. Unattended-backup reminders remain limited to once per session per fingerprint and stop after the account exports that key.
+- Manual downloads always show the modal, including previously exported keys. “I already have a copy” only dismisses it; it does not record an export acknowledgement. Scheduled backups never automatically open this modal, including for another Administrator account.
 - The modal exports through the existing password- and CSRF-protected key endpoint. Incorrect passwords remain actionable inside the modal; closing it clears the password.
 - Acknowledgement is recorded only after the download stream completes successfully. Cancelled or failed downloads do not acknowledge.
 - The existing current-password authorization and local-request checks remain in force. The recommendation links to the existing Recovery Key area rather than creating a second download path.

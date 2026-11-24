@@ -17,6 +17,15 @@
         ],
         "createdAt": "2026-11-12T07:15:57.965Z",
         "reason": "Existing Bootstrap icon library is embedded in the isolated browser fixture; this is icon glyph rendering, not a new UI font."
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/frontend/assets/css/backup.css"
+        ],
+        "createdAt": "2026-11-24T11:31:06.266Z",
+        "reason": "Agent review: existing .preflight-result border signals restore validation warning or success, with data-preflight-state changing its semantic color. It is a status indicator, not decorative card styling; outside the recovery-key modal changes."
       }
     ]
   }

@@ -28,10 +28,11 @@
     const sortHeading = table.querySelector('[data-review-sort-heading]');
     const sort = sortHeading.querySelector('button');
     const noMatches = products.querySelector('.model-review-empty');
-    const pageSize = 10;
+    let pageSize = 15;
     let page = 1;
     let order = 0;
     let openProduct = null;
+    RetailMindUI.tablePageSize(pagination, pageSize, size => { pageSize = size; page = 1; render(); });
 
     function closeProduct() {
         if (!openProduct) return;
@@ -40,7 +41,7 @@
         openProduct = null;
     }
 
-    function render(keepPageFocus = false) {
+    function render() {
         closeProduct();
         const query = search.value.trim().toLowerCase();
         const matches = rows.filter(row => row.dataset.reviewProduct.toLowerCase().includes(query));
@@ -64,32 +65,8 @@
         count.textContent = matches.length
             ? (start + 1) + '–' + Math.min(start + pageSize, matches.length) + ' of ' + matches.length + ' products'
             : '0 products';
-        nav.hidden = pages === 1;
-        nav.replaceChildren();
-        if (pages === 1) return;
-
-        function addPage(label, target, disabled = false) {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.textContent = label;
-            button.dataset.page = target;
-            button.disabled = disabled;
-            nav.append(button);
-            return button;
-        }
-
-        addPage('Previous', page - 1, page === 1);
-        const first = Math.max(1, Math.min(page - 2, pages - 4));
-        for (let number = first; number <= Math.min(first + 4, pages); number += 1) {
-            const button = addPage(number, number);
-            button.setAttribute('aria-label', 'Page ' + number);
-            if (number === page) {
-                button.classList.add('active');
-                button.setAttribute('aria-current', 'page');
-            }
-        }
-        addPage('Next', page + 1, page === pages);
-        if (keepPageFocus) nav.querySelector('[aria-current="page"]').focus();
+        nav.hidden = false;
+        RetailMindUI.renderPageButtons(nav, page, pages, target => { page = target; render(); });
     }
 
     rows.forEach(row => {
@@ -112,12 +89,6 @@
         sort.querySelector('i').className = order === -1 ? 'bi bi-sort-down' : 'bi bi-sort-up';
         page = 1;
         render();
-    });
-    nav.addEventListener('click', event => {
-        const button = event.target.closest('[data-page]');
-        if (!button) return;
-        page = Number(button.dataset.page);
-        render(true);
     });
     table.addEventListener('click', event => {
         const toggle = event.target.closest('.model-review-product-toggle');

@@ -11,7 +11,7 @@ require_once __DIR__ . '/ShiftReconciliationCalculator.php';
 /** Read-only, identity-scoped operational records for the active Cashier. */
 final class CashierOperationalHistoryService
 {
-    public const PAGE_SIZE = 10;
+    public const PAGE_SIZE = 15;
 
     private const REFUND_STATUS_SQL = "CASE WHEN
         (SELECT ROUND(SUM(refund_amount), 2) FROM cash_refunds WHERE sale_id = r.sale_id)
@@ -78,7 +78,7 @@ final class CashierOperationalHistoryService
         $page = filter_var($query['page'] ?? 1, FILTER_VALIDATE_INT);
         $page = is_int($page) ? max(1, min(100000, $page)) : 1;
         $pageSize = filter_var($query['length'] ?? self::PAGE_SIZE, FILTER_VALIDATE_INT);
-        $pageSize = in_array($pageSize, [10, 25, 50, 100], true) ? $pageSize : self::PAGE_SIZE;
+        $pageSize = in_array($pageSize, [10, 15, 25, 50, 100], true) ? $pageSize : self::PAGE_SIZE;
         $recordId = filter_var($query['id'] ?? null, FILTER_VALIDATE_INT);
         $recordId = is_int($recordId) && $recordId > 0 ? $recordId : null;
         $fromDay = null;

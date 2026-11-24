@@ -236,7 +236,7 @@ $checks = [
     ],
     'Dedicated audit logs DataTable present' => [
         'file' => 'src/frontend/components/system_administrator/audit_logs.php',
-        'needles' => ['id="auditLogsTable"', 'data-no-smart-table', "new DataTable('#auditLogsTable'", 'dataTables.columnControl.min.js', 'dataTables.dateTime.min.js', "columnControl: ['order'", 'topStart: null', "bottom: [", "'info'", 'pageLength:', 'paging:', 'Export CSV'],
+        'needles' => ['id="auditLogsTable"', 'data-no-smart-table', "new DataTable('#auditLogsTable'", 'dataTables.columnControl.min.js', 'dataTables.dateTime.min.js', "columnControl: ['order'", 'topStart: null', 'renderAuditPages', 'tablePageSize', 'pageLength: 15', 'renderPageButtons', 'Export CSV'],
         'forbidden' => ['embed=1', 'data-embedded-close', 'Filter activity', 'Apply filters', 'audit-datatable-filters'],
     ],
     'Audit table categories link to category filters' => [
@@ -249,7 +249,7 @@ $checks = [
     ],
     'Receipt History uses a server-side DataTable' => [
         'file' => 'src/frontend/components/invoice/sales.php',
-        'needles' => ['id="receiptsTable"', 'data-no-smart-table', "new DataTable('#receiptsTable'", 'serverSide: true', 'processing: true', 'pageLength: 10', "stateDuration: -1", "sessionStorage", 'receipt-table-status'],
+        'needles' => ['id="receiptsTable"', 'data-no-smart-table', "new DataTable('#receiptsTable'", 'serverSide: true', 'processing: true', 'pageLength: 15', "stateDuration: -1", "sessionStorage", 'receipt-table-status'],
         'forbidden' => ['function performSearch()', 'fetchAll();\n}'],
     ],
     'Receipt History workspace exposes receipt filters and view actions' => [

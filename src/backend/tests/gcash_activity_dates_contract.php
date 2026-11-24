@@ -218,4 +218,21 @@ $traversed26 = iterator_to_array($service->adminTransactions([
 ]), false);
 $assert(count($traversed26) === 1 && (int)$traversed26[0]['transaction_id'] === 1, 'Traversal matches overview filtering on completion date');
 
+// Pagination uses the requested length without crossing Cashier ownership.
+$seed = $pdo->prepare("INSERT INTO gcash_transactions (transaction_id, cashier_id, transaction_type, created_at, verification_status) VALUES (?, ?, 'Cash-In', '2026-11-01 09:00:00', 'Completed')");
+foreach (range(100, 131) as $id) $seed->execute([$id, 2]);
+$seed->execute([200, 1]);
+$ownedTotal = (int)$pdo->query('SELECT COUNT(*) FROM gcash_transactions WHERE cashier_id = 2')->fetchColumn();
+$firstPage = $service->history(2, 1);
+$secondPage = $service->history(2, 2);
+$assert(count($firstPage['transactions']) === 15 && $firstPage['total'] === $ownedTotal, 'Cashier history defaults to fifteen owned records');
+$assert(array_intersect(array_column($firstPage['transactions'], 'transaction_id'), array_column($secondPage['transactions'], 'transaction_id')) === [], 'Cashier pages do not repeat records');
+$assert(count($service->history(2, 1, 25)['transactions']) === 25, 'Cashier history accepts a changed page size');
+$assert($service->history(2, 1, -1)['length'] === 15, 'Invalid page size falls back to fifteen');
+$lastPage = $service->history(2, 999);
+$assert($lastPage['page'] === $lastPage['pages'] && !$lastPage['has_next'], 'Cashier history clamps to its last page');
+$adminFilters = ['actor_role' => 'admin', 'period' => 'custom', 'start_date' => '2026-11-01', 'end_date' => '2026-11-01'];
+$assert(count($service->adminOverview($adminFilters)['transactions']) === 15, 'Administrator history defaults to fifteen records');
+$assert(count($service->adminOverview($adminFilters + ['limit' => 25])['transactions']) === 25, 'Administrator history accepts a changed page size');
+
 echo "Truthful GCash activity dates contract: passed\n";

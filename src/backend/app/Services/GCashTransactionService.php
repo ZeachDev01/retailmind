@@ -98,7 +98,7 @@ final class GCashTransactionService
         return $this->cashierOverviewReport()->cashierOverview($cashierId);
     }
 
-    public function history(int $cashierId, int $page): array { return $this->activity()->cashierHistory($cashierId, $page); }
+    public function history(int $cashierId, int $page, int $size = 15): array { return $this->activity()->cashierHistory($cashierId, $page, $size); }
     public function adminTransactions(array $filters = []): \Generator { return $this->activity()->adminTransactions($filters); }
     public function overview(array $filters = []): array { return $this->adminOverview($filters); }
 

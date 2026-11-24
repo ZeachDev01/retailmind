@@ -90,7 +90,7 @@ const {chromium} = require('playwright');
                     })).violations.map(issue => ({id: issue.id, nodes: issue.nodes.map(node => ({target: node.target, summary: node.failureSummary}))})));
                     assert.deepEqual(violations, [], `${theme}/${width}: WCAG AA automated audit`);
                 }
-                for (const selector of ['#receiptDateFrom', '#receiptDateTo', '#receiptRefundStatus', '#clearReceiptFilters', '.dt-search input', '.dt-length select', '.btn-view']) {
+                for (const selector of ['#receiptDateFrom', '#receiptDateTo', '#receiptRefundStatus', '#clearReceiptFilters', '.dt-search input', '#receipt-table-footer select', '.btn-view']) {
                     const box = await page.locator(selector).boundingBox();
                     assert(box && box.height >= 44 && box.width >= 44, `${theme}/${width}: ${selector} touch target`);
                 }

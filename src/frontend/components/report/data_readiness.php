@@ -42,7 +42,7 @@ if ($search !== '' || $statusFilter !== '') {
 
 // Pagination handling
 $perPage = filter_var($_GET['per_page'] ?? 15, FILTER_VALIDATE_INT);
-$perPage = in_array($perPage, [15, 25, 50, 100], true) ? $perPage : 15;
+$perPage = in_array($perPage, [10, 15, 25, 50, 100], true) ? $perPage : 15;
 $totalFiltered = count($filteredRows);
 $totalPages = max(1, (int)ceil($totalFiltered / $perPage));
 $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 10000]]) ?: 1;
@@ -189,13 +189,7 @@ function build_query(array $params): string {
                         <option value="Model Requires Retraining" <?= $statusFilter === 'Model Requires Retraining' ? 'selected' : '' ?>>Model Requires Retraining</option>
                         <option value="Insufficient Data" <?= $statusFilter === 'Insufficient Data' ? 'selected' : '' ?>>Data checks blocked</option>
                     </select>
-                    <label class="forecast-page-size">Rows per page
-                        <select name="per_page" class="input-select">
-                            <?php foreach ([15, 25, 50, 100] as $size): ?>
-                                <option value="<?= $size ?>" <?= $perPage === $size ? 'selected' : '' ?>><?= $size ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </label>
+                    <input type="hidden" name="per_page" value="<?= (int)$perPage ?>">
                     <button type="submit" class="btn btn-primary btn-sm">Filter</button>
                     <?php if ($search !== '' || $statusFilter !== ''): ?>
                         <a href="?per_page=<?= $perPage ?>" class="btn btn-quiet btn-sm">Reset</a>
@@ -289,24 +283,13 @@ function build_query(array $params): string {
                 </table>
             </div>
 
-            <?php if ($totalPages > 1): ?>
-                <nav class="table-pagination-nav" aria-label="Product readiness pages">
-                    <div>
-                        Showing <?= $totalFiltered > 0 ? $offset + 1 : 0 ?>&ndash;<?= min($offset + $perPage, $totalFiltered) ?> of <?= number_format($totalFiltered) ?>
-                    </div>
-                    <div class="pagination-controls">
-                        <a href="<?= htmlspecialchars(build_query(['page' => $page - 1])) ?>" class="page-btn" aria-label="Previous page" <?= $page <= 1 ? 'aria-disabled="true"' : '' ?>>&laquo;</a>
-                        <?php
-                        $startPage = max(1, $page - 2);
-                        $endPage = min($totalPages, $page + 2);
-                        for ($p = $startPage; $p <= $endPage; $p++):
-                        ?>
-                            <a href="<?= htmlspecialchars(build_query(['page' => $p])) ?>" class="page-btn <?= $p === $page ? 'active' : '' ?>" <?= $p === $page ? 'aria-current="page"' : '' ?>><?= $p ?></a>
-                        <?php endfor; ?>
-                        <a href="<?= htmlspecialchars(build_query(['page' => $page + 1])) ?>" class="page-btn" aria-label="Next page" <?= $page >= $totalPages ? 'aria-disabled="true"' : '' ?>>&raquo;</a>
-                    </div>
-                </nav>
-            <?php endif; ?>
+            <?php
+            $rows = $pagedRows; $pageSize = $perPage; $totalRows = $totalFiltered; $hasNext = $page < $totalPages;
+            $paginationFilters = ['search' => $search, 'status' => $statusFilter];
+            $paginationLengthKey = 'per_page'; $paginationLabel = 'Product readiness pages';
+            $url = static fn(array $params): string => build_query($params);
+            require __DIR__ . '/../../../backend/app/Views/table_pagination.php';
+            ?>
         </section>
     </main>
 </div>
