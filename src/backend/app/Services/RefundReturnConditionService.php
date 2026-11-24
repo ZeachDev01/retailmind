@@ -30,12 +30,20 @@ class RefundReturnConditionService
             UNIQUE(refund_item_id,version))");
     }
     private function lock(): string { return $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql'?' FOR UPDATE':''; }
-    private function authorize(int $actor,string $role,int $refund): void
+    private function authorize(int $actor,string $role,int $refund,bool $writing=false): void
     {
-        if($role!=='cashier') throw new DomainException('Use the Cashier Workspace to correct your own refund.');
-        $q=$this->pdo->prepare("SELECT 1 FROM users u JOIN roles r ON r.role_id=u.role_id LEFT JOIN user_roles ur ON ur.user_id=u.user_id LEFT JOIN roles ar ON ar.role_id=ur.role_id JOIN cash_refunds cr ON cr.refund_id=? AND cr.cashier_id=u.user_id WHERE u.user_id=? AND u.status='active' AND (r.role_name='cashier' OR ar.role_name='cashier')");
-        $q->execute([$refund,$actor]);
-        if(!$q->fetchColumn()) throw new DomainException('Only the issuing Cashier can correct this refund.');
+        if (!in_array($role, ['cashier','inventory_manager','admin'], true) || ($writing && $role==='admin')) {
+            throw new DomainException('Only the issuing Cashier or an authorized Inventory Manager can correct this refund.');
+        }
+        // The active Workspace controls authority even when an account holds both roles.
+        $q=$this->pdo->prepare("SELECT cr.refund_id FROM users u JOIN roles r ON r.role_id=u.role_id LEFT JOIN user_roles ur ON ur.user_id=u.user_id LEFT JOIN roles ar ON ar.role_id=ur.role_id JOIN cash_refunds cr ON cr.refund_id=? WHERE u.user_id=? AND u.status='active' AND (ar.role_name=? OR (r.role_name=? AND NOT EXISTS (SELECT 1 FROM user_roles assigned WHERE assigned.user_id=u.user_id)))" . ($role==='cashier'?' AND cr.cashier_id=u.user_id':''));
+        $q->execute([$refund,$actor,$role,$role]);
+        $authorized=$q->fetchColumn();
+        if($authorized===false) throw new DomainException('This Workspace is not authorized to access this refund.');
+        if($role!=='cashier') {
+            $q=$this->pdo->prepare('SELECT sale_id FROM cash_refunds WHERE refund_id=?');$q->execute([$refund]);$saleId=(int)$q->fetchColumn();
+            if((new \App\Receipts\ReceiptEngine($this->pdo))->fetchSale((int)$saleId, function_exists('store_scope_id')?store_scope_id($this->pdo):1)===null) throw new DomainException('This refund is outside the authorized Store.');
+        }
     }
     public function details(int $actor,string $role,int $refund): array
     {
@@ -43,6 +51,7 @@ class RefundReturnConditionService
         $q=$this->pdo->prepare('SELECT cri.*,p.product_name FROM cash_refund_items cri JOIN products p ON p.product_id=cri.product_id WHERE cri.refund_id=? ORDER BY cri.refund_item_id');$q->execute([$refund]);
         $lines=$q->fetchAll(PDO::FETCH_ASSOC);
         foreach($lines as &$line){
+            $line['can_correct']=$role!=='admin';
             $actorColumn=isset(\SalesWorkflowService::getTableColumns($this->pdo,'users')['display_name'])?'display_name':'full_name';
             $h=$this->pdo->prepare('SELECT c.*,u.'.$actorColumn.' AS actor_name FROM refund_return_condition_corrections c JOIN users u ON u.user_id=c.actor_id WHERE refund_item_id=? ORDER BY version DESC');$h->execute([$line['refund_item_id']]);$line['corrections']=$h->fetchAll(PDO::FETCH_ASSOC);
             $line['version']=(int)($line['corrections'][0]['version']??0);$line['effective_condition']=$line['corrections'][0]['new_condition']??$line['disposition'];
@@ -61,7 +70,7 @@ class RefundReturnConditionService
             $q=$this->pdo->prepare('SELECT * FROM cash_refund_items WHERE refund_item_id=?'.$this->lock());$q->execute([$item]);$line=$q->fetch(PDO::FETCH_ASSOC);
             if(!$line)throw new DomainException('Returned item not found.');
             $this->pdo->prepare('SELECT refund_id FROM cash_refunds WHERE refund_id=?'.$this->lock())->execute([$line['refund_id']]);
-            $this->authorize($actor,$role,(int)$line['refund_id']);
+            $this->authorize($actor,$role,(int)$line['refund_id'],true);
             $retry=$this->pdo->prepare('SELECT * FROM refund_return_condition_corrections WHERE request_token=?');$retry->execute([$token]);$saved=$retry->fetch(PDO::FETCH_ASSOC);
             if($saved){if((int)$saved['actor_id']!==$actor||(int)$saved['refund_item_id']!==$item||$saved['new_condition']!==$target||$saved['reason']!==$reason||(int)$saved['version']!==$expectedVersion+1)throw new DomainException('This save token belongs to another correction.');$this->pdo->commit();return (int)$saved['correction_id'];}
             $lines=$this->details($actor,$role,(int)$line['refund_id']);foreach($lines as $candidate)if((int)$candidate['refund_item_id']===$item)$line=$candidate;

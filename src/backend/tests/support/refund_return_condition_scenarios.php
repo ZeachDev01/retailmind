@@ -83,3 +83,4 @@ $conditionService->correct(1,'cashier',(int)$splitLine['refund_item_id'],'restoc
 $assert((int)$pdo->query('SELECT loose_quantity FROM product_batches WHERE batch_id=102')->fetchColumn()===9 && (int)$pdo->query('SELECT loose_quantity FROM product_batches WHERE batch_id=103')->fetchColumn()===10,'Partial refund offset preserves exact historical batch provenance');
 $assert((float)$pdo->query('SELECT cost_price FROM product_batches WHERE batch_id=103')->fetchColumn()===4.0,'Condition correction preserves source batch cost');
 echo "Return condition persisted/HTTP checks: passed\n";
+require __DIR__.'/refund_return_condition_manager_scenarios.php';

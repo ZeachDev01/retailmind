@@ -8,7 +8,7 @@ $escape=static fn($value)=>htmlspecialchars((string)$value,ENT_QUOTES,'UTF-8');
 <article class="refund-condition-line">
 <strong><?= $escape($line['product_name']) ?></strong>
 <p><?= (int)$line['quantity'] ?> <?= ($line['selling_form']??'piece')==='pack'?((int)$line['quantity']===1?'pack':'packs'):((int)$line['quantity']===1?'piece':'pieces') ?> · Effective condition: <strong><?= $escape(ucfirst($condition)) ?></strong></p>
-<?php if($line['eligible']): ?>
+<?php if($line['eligible'] && ($line['can_correct']??true)): ?>
 <details><summary>Correct condition</summary>
 <form method="post" class="refund-condition-form refund-form" data-product="<?= $escape($line['product_name']) ?>" data-quantity="<?= (int)$line['quantity'] ?>" data-current="<?= $escape($condition) ?>">
 <input type="hidden" name="csrf_token" value="<?= $escape(generate_csrf_token()) ?>">
@@ -24,8 +24,8 @@ $escape=static fn($value)=>htmlspecialchars((string)$value,ENT_QUOTES,'UTF-8');
 <p class="refund-condition-preview" aria-live="polite">Choose the correct condition to preview the stock change.</p>
 <button type="submit" class="btn btn-primary">Save correction</button>
 </form></details>
-<?php else: ?><p>Ask the Inventory Manager to reconcile this return.</p><?php endif; ?>
-<?php if($line['corrections']): ?><h4>Condition history</h4><ul><?php foreach($line['corrections'] as $correction): ?><li><?= $escape(ucfirst($correction['previous_condition']).' → '.ucfirst($correction['new_condition'])) ?> — <?= $escape($correction['actor_name']) ?> · <?= $escape($correction['created_at']) ?><br><?= $escape($correction['reason']) ?></li><?php endforeach; ?></ul><?php endif; ?>
+<?php elseif(!$line['eligible']): ?><p>Ask the Inventory Manager to reconcile this return.</p><?php endif; ?>
+<?php if($line['corrections']): ?><h4>Condition history</h4><ul><?php foreach($line['corrections'] as $correction): ?><li><?= $escape(ucfirst($correction['previous_condition']).' → '.ucfirst($correction['new_condition'])) ?> — <?= $escape($correction['actor_name']) ?> · <?= $escape($correction['created_at']) ?><br><?= $escape($correction['reason']) ?><br><?= (int)$correction['quantity'] ?> <?= $escape($correction['selling_form'].((int)$correction['quantity']===1?'':'s')) ?><?= $correction['selling_form']==='pack'?' ('.(int)$correction['pack_size'].' pieces per pack)':'' ?> � Stock movement #<?= (int)$correction['stock_movement_id'] ?></li><?php endforeach; ?></ul><?php endif; ?>
 </article>
 <?php endforeach; ?>
 </section>

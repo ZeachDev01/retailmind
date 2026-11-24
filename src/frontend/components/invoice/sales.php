@@ -10,10 +10,53 @@ use App\Receipts\ReceiptTableService;
 require_capability(RoleCapabilityPolicy::VIEW_SALES_HISTORY);
 
 $action = $_GET['action'] ?? (isset($_GET['reprint']) ? 'reprint' : (isset($_GET['thermal']) ? 'thermal' : 'list'));
-if (!in_array($action, ['list', 'view', 'data', 'reprint', 'thermal'], true)) {
+if (!in_array($action, ['list', 'view', 'data', 'reprint', 'thermal', 'refund_conditions'], true)) {
     $action = 'list';
 }
 require __DIR__ . '/../../../backend/app/Views/sale_receipt_support.php';
+
+// Operational return history is loaded separately from the immutable printed receipt.
+if ($action === 'refund_conditions') {
+    header('Cache-Control: no-store');
+    $conditionService = new \App\Services\RefundReturnConditionService($pdo);
+    $actorId = (int)$_SESSION['user_id'];
+    $actorRole = (string)current_role();
+    try {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            verify_csrf_token($_POST['csrf_token'] ?? '');
+            $allowed = ['csrf_token','action','refund_item_id','expected_version','request_token','new_condition','correction_reason','fit_for_sale'];
+            if (($_POST['action'] ?? '') !== 'correct_condition' || array_diff(array_keys($_POST), $allowed)) throw new DomainException('Only the returned condition can be changed here. Reopen the refund details.');
+            $itemId = (int)($_POST['refund_item_id'] ?? 0);
+            $conditionService->correct($actorId, $actorRole, $itemId,
+                (string)($_POST['new_condition'] ?? ''), (string)($_POST['correction_reason'] ?? ''),
+                (int)($_POST['expected_version'] ?? -1), (string)($_POST['request_token'] ?? ''), ($_POST['fit_for_sale'] ?? '') === '1');
+            $saved = $pdo->prepare('SELECT cr.sale_id,i.quantity,i.selling_form,p.product_name FROM cash_refund_items i JOIN cash_refunds cr ON cr.refund_id=i.refund_id JOIN products p ON p.product_id=i.product_id WHERE i.refund_item_id=?');
+            $saved->execute([$itemId]); $saved = $saved->fetch(PDO::FETCH_ASSOC);
+            $sale_id = (int)$saved['sale_id'];
+            $conditionConfirmation = 'Correction saved. ' . $saved['quantity'] . (($saved['selling_form']??'piece')==='pack'?((int)$saved['quantity']===1?' pack of ':' packs of '):' ') . $saved['product_name'] . ($_POST['new_condition']==='restockable'?' returned to available stock.':' removed from available stock.');
+        }
+        if (!(new \App\Receipts\ReceiptEngine($pdo))->fetchSale($sale_id, $storeId)) throw new DomainException('Receipt not found in the authorized Store.');
+        $refundQuery = $pdo->prepare('SELECT refund_id FROM cash_refunds WHERE sale_id=?' . ($actorRole==='cashier'?' AND cashier_id=?':'') . ' ORDER BY refund_id');
+        $refundQuery->execute($actorRole==='cashier'?[$sale_id,$actorId]:[$sale_id]);
+        $refundIds = $refundQuery->fetchAll(PDO::FETCH_COLUMN);
+        if (!$refundIds) echo '<p>No Cash Refund details are available in this Workspace.</p>';
+        $returnedRefunds = [];
+        foreach ($refundIds as $refundId) $returnedRefunds[(int)$refundId] = $conditionService->details($actorId, $actorRole, (int)$refundId);
+        if (isset($conditionConfirmation)) echo '<p role="status">' . htmlspecialchars($conditionConfirmation) . '</p>';
+        foreach ($returnedRefunds as $refundId => $conditionLines) {
+            echo '<h3>Cash Refund #' . (int)$refundId . '</h3>';
+            require __DIR__ . '/../../../backend/app/Views/refund_return_conditions.php';
+        }
+        if ($refundIds) echo '<p><a href="' . htmlspecialchars(app_url('components/cashier/refund_corrections.php')) . '">View linked Refund Correction Reviews</a></p>';
+    } catch (DomainException | InvalidArgumentException $e) {
+        http_response_code($_SERVER['REQUEST_METHOD']==='POST'?422:403);
+        echo '<p role="alert">' . htmlspecialchars($e->getMessage()) . '</p>';
+    } catch (Throwable $e) {
+        http_response_code(500);
+        echo '<p role="alert">' . htmlspecialchars(\App\Support\OperatorAlert::message($e, 'The condition could not be saved. Reopen the refund details and try again.')) . '</p>';
+    }
+    exit;
+}
 
 if ($action === 'data') {
     header('Content-Type: application/json; charset=utf-8');
@@ -141,6 +184,8 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
 <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/sale-receipt.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/sale-receipt.css')) ?>">
 <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt.js')) ?>" defer></script>
 <script src="<?= htmlspecialchars(app_url('assets/js/sale-receipt-dialog.js')) ?>" defer></script>
+<script src="<?= htmlspecialchars(app_url('assets/js/refund-return-conditions.js')) ?>" defer></script>
+<link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/refunds.css')) ?>">
 </head>
 <body class="receipts-page">
 <a class="skip-link" href="#receipts-main">Skip to main content</a>
@@ -419,7 +464,56 @@ document.addEventListener('DOMContentLoaded', function() {
         '<button type="button" id="receiptOtherTab" role="tab" aria-controls="receiptOtherDetails" aria-selected="false" tabindex="-1" disabled>Other Details</button>';
     const drawerSummary = document.createElement('dl');
     drawerSummary.className = 'receipt-drawer-summary';
-    otherPanel.append(drawerSummary);
+    const refundConditions = document.createElement('section');
+    refundConditions.className = 'refund-condition-details';
+    otherPanel.append(drawerSummary, refundConditions);
+    let conditionSaleId = null;
+    async function loadRefundConditions(saleId) {
+        conditionSaleId = saleId;
+        refundConditions.textContent = 'Loading Cash Refunds…';
+        try {
+            const response = await fetch('?action=refund_conditions&sale_id=' + encodeURIComponent(saleId));
+            const html = await response.text();
+            if (conditionSaleId !== saleId) return;
+            if (!response.ok) throw new Error('Unable to load returned items. Reopen the receipt details.');
+            refundConditions.innerHTML = html;
+            window.initRefundConditions(refundConditions);
+        } catch (error) { if (conditionSaleId === saleId) refundConditions.textContent = error.message; }
+    }
+    refundConditions.addEventListener('submit', async function(event) {
+        const form = event.target.closest('.refund-condition-form');
+        if (!form) return;
+        event.preventDefault();
+        const saleId = conditionSaleId;
+        const submit = form.querySelector('button[type="submit"]');
+        submit.disabled = true;
+        const previousAlert = refundConditions.querySelector('[role="alert"]');
+        previousAlert?.remove();
+        try {
+            const response = await fetch('?action=refund_conditions', {method: 'POST', body: new URLSearchParams(new FormData(form))});
+            const html = await response.text();
+            if (conditionSaleId !== saleId) return;
+            if (response.ok) {
+                refundConditions.innerHTML = html;
+                window.initRefundConditions(refundConditions);
+                const status = refundConditions.querySelector('[role="status"]');
+                if (status) { status.tabIndex = -1; status.focus(); }
+            } else {
+                const alert = document.createElement('div');
+                alert.innerHTML = html;
+                refundConditions.prepend(alert);
+                window.initRefundConditions(refundConditions);
+            }
+        } catch (error) {
+            if (conditionSaleId === saleId) {
+                const alert = document.createElement('p');
+                alert.setAttribute('role', 'alert');
+                alert.textContent = 'Save could not be confirmed. Reopen the receipt details before trying again.';
+                refundConditions.prepend(alert);
+                window.initRefundConditions(refundConditions);
+            }
+        }
+    });
     receiptPanel.before(drawerTabs);
     receiptPanel.after(otherPanel);
     const tabs = Array.from(drawerTabs.querySelectorAll('[role="tab"]'));
@@ -463,6 +557,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const receipt = table.row(button.closest('tr')).data();
         if (!receipt) return;
         drawerSummary.replaceChildren();
+        loadRefundConditions(receipt.sale_id);
         const money = function(value) {
             return 'â‚±' + Number(value).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         };
