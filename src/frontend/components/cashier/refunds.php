@@ -33,6 +33,14 @@ $refundService = new CashRefundService($pdo, $shiftService);
 $actorId = (int)$_SESSION['user_id'];
 // The active workspace, never the account's stored role (#86).
 $actorRole = (string)current_role();
+$conditionService = new \App\Services\RefundReturnConditionService($pdo);
+if (isset($_GET['condition_details'])) {
+    try {
+        $conditionLines = $conditionService->details($actorId, $actorRole, (int)$_GET['condition_details']);
+        require __DIR__ . '/../../../backend/app/Views/refund_return_conditions.php';
+    } catch (DomainException $e) { http_response_code(403); echo htmlspecialchars($e->getMessage()); }
+    exit;
+}
 $openShift = $shiftService->getOpenShift($actorId);
 $registerLocked = $shiftService->isRegisterLocked($actorId);
 
@@ -50,7 +58,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $saleId = (int)($_POST['sale_id'] ?? 0);
 
     try {
-        if (($_POST['action'] ?? '') === 'exception_lookup') {
+        if (($_POST['action'] ?? '') === 'correct_condition') {
+            $savedLine = $conditionService->correctSubmission($actorId, $actorRole, $_POST);
+            $_SESSION['condition_correction_saved'] = $savedLine['confirmation'];
+            $_SESSION['condition_correction_refund'] = (int)$savedLine['refund_id'];
+            header('Location: ' . app_url('components/cashier/refunds.php?condition_saved=1'), true, 303);
+            exit;
+        } elseif (($_POST['action'] ?? '') === 'exception_lookup') {
             $exceptionToken = (new \App\Services\RefundExceptionService($pdo))->openSale($actorId, $actorRole, $saleId,
                 (string)($_POST['approver_username'] ?? ''), (string)($_POST['approver_password'] ?? ''), (string)($_POST['exception_reason'] ?? ''));
         } else {
@@ -117,6 +131,13 @@ $paginationFilters = array_filter($paginationFilters, static fn($value): bool =>
 $url = static fn(array $params): string => app_url('components/cashier/refunds.php?' . http_build_query($params + $paginationFilters + ['length' => $pageSize])) . '#refund-history';
 $receiptId = (int)($_GET['refund_id'] ?? 0);
 $receipt = $receiptId > 0 ? (new \App\Receipts\ReceiptEngine($pdo))->fetchRefundForCashier($receiptId, $actorId, $storeId) : null;
+$savedConditionRefund = null;
+if (isset($_GET['condition_saved'], $_SESSION['condition_correction_refund'])) {
+    $savedQuery = $pdo->prepare('SELECT * FROM cash_refunds WHERE refund_id=? AND cashier_id=?');
+    $savedQuery->execute([(int)$_SESSION['condition_correction_refund'], $actorId]);
+    $savedConditionRefund = $savedQuery->fetch(PDO::FETCH_ASSOC) ?: null;
+    unset($_SESSION['condition_correction_refund']);
+}
 $paperWidthMm = (new \App\Receipts\ReceiptEngine($pdo))->resolvePaperWidth($actorId, $actorRole);
 if ($receiptId > 0 && $receipt === null) {
     // Missing and unauthorized receipts share one response, without exposing ownership.
@@ -139,6 +160,7 @@ if ($receiptId > 0 && $receipt === null) {
 </head>
 
 <body class="cashier-refunds-page">
+<?php if (isset($_GET['condition_saved'], $_SESSION['condition_correction_saved'])): ?><p role="status" class="alert alert-success"><?= htmlspecialchars($_SESSION['condition_correction_saved']) ?></p><?php unset($_SESSION['condition_correction_saved']); endif; ?>
     <a class="skip-link" href="#main-content">Skip to main content</a>
     <div class="app-shell"><?php include __DIR__ . '/../sidebar.php'; ?><main class="main-content" id="main-content">
             <div class="topbar refund-topbar">
@@ -453,6 +475,7 @@ if ($receiptId > 0 && $receipt === null) {
                         <div class="drawer-view drawer-view-details is-active" id="refund-drawer-view-details">
                             <div class="history-drawer-body">
                                 <dl class="history-drawer-kv" id="refund-drawer-fields"></dl>
+<div id="refund-drawer-conditions" aria-live="polite"></div>
                             </div>
                             <div class="history-drawer-footer">
                                 <button type="button" class="btn btn-primary" id="refund-drawer-receipt-btn" hidden><i class="bi bi-receipt" aria-hidden="true"></i> View receipt</button>
@@ -483,6 +506,7 @@ if ($receiptId > 0 && $receipt === null) {
             </section>
         </main>
     </div>
+    <script src="<?= htmlspecialchars(app_url('assets/js/refund-return-conditions.js')) ?>"></script>
     <script>
         const refundReason = document.getElementById('reason');
         const refundNote = document.getElementById('note');
@@ -617,7 +641,7 @@ if ($receiptId > 0 && $receipt === null) {
                 }
             };
 
-            const openDrawer = refund => {
+            const openDrawer = async refund => {
                 if (!refund) return;
                 currentRefund = refund;
                 switchView('details', false);
@@ -662,7 +686,20 @@ if ($receiptId > 0 && $receipt === null) {
                     }
                 }
                 drawer.showModal();
+                const conditions = document.getElementById('refund-drawer-conditions');
+                conditions.textContent = 'Loading returned items…';
+                try {
+                    const response = await fetch('?condition_details=' + encodeURIComponent(refund.refund_id));
+                    const html = await response.text();
+                    if (currentRefund !== refund) return;
+                    if (!response.ok) throw new Error(html);
+                    conditions.innerHTML = html;
+                    window.initRefundConditions(conditions);
+                } catch (error) { conditions.textContent = 'Returned items could not be loaded. Reopen the refund details.'; }
             };
+
+            const savedConditionRefund = <?= json_encode($savedConditionRefund) ?>;
+            if (savedConditionRefund) openDrawer(savedConditionRefund);
 
             const returnToDetails = () => {
                 if (!currentRefund) { drawer.close(); return; }

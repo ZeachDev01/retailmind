@@ -44,6 +44,7 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Backend Services: `App\Services\CashierOperationalHistoryService`, `ProductCodeLookupService`
   - Transaction History remains scoped to the authenticated Cashier. Cash Refunds and Drawer Movements combine date filters with Category; pagination preserves both. Refund category reflects the original sale's current cumulative refunds across issuers and dates.
   - Receipt History (`components/invoice/sales.php`) is a separate store-wide lookup/reprint workspace for authorized staff, including Cashiers. Viewing another Cashier's receipt does not bypass Supervisor override for refunds. See `docs/specs/cashier-history-consolidation.md`.
+  - Receipt History Other Details loads Cash Refund return conditions through `sales.php?action=refund_conditions`. Inventory Managers correct Store returns using `RefundReturnConditionService`; Administrators see read-only history. Cashier requests retain issuing ownership, including dual-role accounts. Verified by `refund_return_condition_manager_browser_test.js` and the disposable Cash Refund persisted/HTTP fixture.
 - **Stock Issue Reporting**: `components/cashier/stock_issues.php`
   - Backend Services: `App\Services\StockIssueService`
 

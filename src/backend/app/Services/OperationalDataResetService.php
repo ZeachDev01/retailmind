@@ -15,7 +15,7 @@ final class OperationalDataResetService
 {
     // Child records precede parents so foreign-key checks stay enabled.
     public const TABLES = [
-        'forecast_decisions', 'cash_refund_exception_access', 'refund_receipt_details',
+        'refund_return_condition_corrections', 'forecast_decisions', 'cash_refund_exception_access', 'refund_receipt_details',
         'cash_refund_items', 'cash_refunds', 'sale_reversal_items', 'sale_reversals',
         'sale_receipt_details', 'sale_item_batches', 'held_sale_items', 'held_sales', 'checkout_attempts',
         'sale_items', 'sales', 'inventory_adjustment_revisions', 'inventory_counts',

@@ -1,6 +1,10 @@
 # Correct a refunded item's return condition
 
+<<<<<<< HEAD
 Agreed design, 2026-11-24. Not implemented.
+=======
+Implemented, 2026-11-24, through tickets #507, #508, and #509 on `integration/refund-return-condition-correction`.
+>>>>>>> integration/refund-return-condition-correction
 
 ## Purpose
 

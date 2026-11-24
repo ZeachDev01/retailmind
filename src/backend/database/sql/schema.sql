@@ -20,7 +20,7 @@
 /*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 -- These later migration tables have no DROP in the original dump section.
-DROP TABLE IF EXISTS `cash_refund_exception_access`, `checkout_attempts`, `demand_forecasts`, `forecast_sales_imports`,
+DROP TABLE IF EXISTS `refund_return_condition_corrections`, `cash_refund_exception_access`, `checkout_attempts`, `demand_forecasts`, `forecast_sales_imports`,
   `gcash_adjustments`, `gcash_funding_movements`, `gcash_service_sessions`, `gcash_transactions`, `held_sale_items`,
   `inventory_draft_keys`, `inventory_submissions`, `ml_jobs`, `ml_model_evaluations`,
   `scheduled_demand_drivers`, `store_calendar`, `store_print_jobs`, `store_record_origins`;
@@ -2170,3 +2170,20 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180001_
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180002_receiving_cost_basis','Preserve the entered purchase amount and its receiving cost conversion') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180003_product_sku_provenance','Record whether a Product SKU follows its Individual Item barcode') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180005_product_image_source','Keep attribution for saved Open Food Facts Product photos') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
+CREATE TABLE `refund_return_condition_corrections` (
+  `correction_id` INT AUTO_INCREMENT PRIMARY KEY,
+  `refund_item_id` INT NOT NULL,
+  `previous_condition` VARCHAR(30) NOT NULL,
+  `new_condition` VARCHAR(30) NOT NULL,
+  `quantity` INT NOT NULL,
+  `selling_form` VARCHAR(20) NOT NULL,
+  `pack_size` INT NULL,
+  `reason` VARCHAR(255) NOT NULL,
+  `actor_id` INT NOT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `stock_movement_id` INT NOT NULL,
+  `request_token` VARCHAR(64) NOT NULL UNIQUE,
+  `version` INT NOT NULL,
+  UNIQUE (`refund_item_id`, `version`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

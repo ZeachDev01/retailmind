@@ -6,8 +6,9 @@ $httpServer=null;
 try {
     $bootstrap=var_export(realpath(__DIR__.'/../../bootstrap/app.php'),true);
     $endpoint=var_export(realpath(__DIR__.'/../../../frontend/components/cashier/refunds.php'),true);
+    $storeEndpoint=var_export(realpath(__DIR__.'/../../../frontend/components/invoice/sales.php'),true);
     $fixtureDatabase=var_export($database,true);
-    file_put_contents($router,'<?php require '.$bootstrap.'; $_ENV["DB_NAME"]='.$fixtureDatabase.'; App\Core\Session::start(); $_SESSION=["user_id"=>(int)($_SERVER["HTTP_X_FIXTURE_USER"]??1),"role"=>($_SERVER["HTTP_X_FIXTURE_WORKSPACE"]??"cashier"),"session_version"=>1,"csrf_token"=>"fixture-csrf","_authenticated_at"=>time(),"_last_activity"=>time(),"_restore_epoch"=>App\Backup\RecoveryStore::epoch()]; require '.$endpoint.';');
+    file_put_contents($router,'<?php require '.$bootstrap.'; $_ENV["DB_NAME"]='.$fixtureDatabase.'; App\Core\Session::start(); $_SESSION=["user_id"=>(int)($_SERVER["HTTP_X_FIXTURE_USER"]??1),"role"=>($_SERVER["HTTP_X_FIXTURE_WORKSPACE"]??"cashier"),"session_version"=>1,"csrf_token"=>"fixture-csrf","_authenticated_at"=>time(),"_last_activity"=>time(),"_restore_epoch"=>App\Backup\RecoveryStore::epoch()]; require str_contains($_SERVER["REQUEST_URI"],"/invoice") ? '.$storeEndpoint.' : '.$endpoint.';');
     $socket=stream_socket_server('tcp://127.0.0.1:0',$errno,$error);
     $assert(is_resource($socket),'Reserve refund HTTP fixture port');
     $address=stream_socket_get_name($socket,false);fclose($socket);
@@ -22,6 +23,7 @@ try {
         $body=file_get_contents('http://'.$address.'/'.($post?'':'?'.http_build_query($fields)),false,stream_context_create(['http'=>$options]));
         return [$http_response_header[0]??'',(string)$body];
     };
+    require __DIR__.'/refund_return_condition_scenarios.php';
     [$status,$body]=$request(['sale_id'=>11],1,'cashier',false);
     $assert(str_contains($status,'200') && !str_contains($body,'Refund sale #11'),'Unapproved HTTP access exposes no other seller sale');
     $post=['csrf_token'=>'fixture-csrf','sale_id'=>11,'quantity'=>[11=>1],'disposition'=>[11=>'damaged'],'reason'=>'customer_return','approved_by'=>2,'cashier_id'=>3,'shift_id'=>2];
@@ -54,7 +56,7 @@ try {
     [$status,$body]=$request(['refund_id'=>$row['refund_id']],1,'cashier',false);
     $assert(str_contains($body,'HTTP-CARD-SETTLEMENT') && str_contains($body,'Refund completed externally and recorded in RetailMind.'),'Saved customer receipt describes external settlement');
     [$status,$packFormBody]=$request(['sale_id'=>22],1,'cashier',false);
-    $assert(str_contains($status,'200') && str_contains($packFormBody,'Pack (6 pcs)') && str_contains($packFormBody,'Piece') && str_contains($packFormBody,'Restockable (Whole sealed pack)') && str_contains($packFormBody,'Restockable requires whole sealed, complete pack (6 pcs)'),'HTTP refund form distinguishes Pack and Piece lines and states sealed pack restock eligibility');
+    $assert(str_contains($status,'200') && str_contains($packFormBody,'Pack (6 pcs)') && str_contains($packFormBody,'Piece') && str_contains($packFormBody,'Restockable (whole, sealed, complete pack)'),'HTTP refund form distinguishes Pack and Piece lines and states sealed pack restock eligibility');
     $fractionalPackPost=['csrf_token'=>'fixture-csrf','sale_id'=>22,'quantity'=>[22=>'1.5'],'disposition'=>[22=>'restockable'],'reason'=>'customer_return','external_completed'=>'1','payment_reference'=>'HTTP-PACK-FRAC'];
     $before=$snapshot();$request($fractionalPackPost);
     $assert($snapshot()===$before,'HTTP fractional pack quantity is refused without partial writes');

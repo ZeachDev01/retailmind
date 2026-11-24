@@ -1107,3 +1107,14 @@
         .cashier-refunds-page .refund-empty { padding: 24px 8px; }
     }
 }
+
+.refund-condition-lines { margin-top: 1.25rem; }
+.refund-condition-line { border-top: 1px solid var(--border-color, #e5e7eb); padding: 1rem 0; overflow-wrap: anywhere; }
+.refund-condition-line p { margin: .5rem 0; }
+.refund-condition-line summary { cursor: pointer; color: var(--primary-color, #2563eb); padding: .5rem 0; }
+.refund-condition-form { display: grid; gap: .65rem; margin-top: .5rem; }
+.refund-condition-form input:not([type="checkbox"]), .refund-condition-form select { width: 100%; min-width: 0; }
+.cashier-refunds-page .refund-condition-form .refund-condition-confirm { display: flex; align-items: flex-start; gap: .5rem; font-weight: 400; }
+.cashier-refunds-page .refund-condition-form .refund-condition-confirm[hidden] { display: none; }
+.refund-condition-preview { line-height: 1.5; }
+.refund-condition-line ul { padding-left: 1.25rem; }
