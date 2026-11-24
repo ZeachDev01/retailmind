@@ -8,7 +8,6 @@ use App\Store\StoreWriteGate;
 use App\Audit\AuditRecordCategory;
 require_once __DIR__.'/FiscalPeriodGuardService.php';
 require_once __DIR__.'/SalesWorkflowService.php';
-require_once __DIR__.'/BatchInventoryLedger.php';
 use App\Dashboard\StoreOperationsDashboardWorkspace;
 
 /** Append-only condition history; money and the original receipt stay immutable. */
@@ -58,6 +57,19 @@ class RefundReturnConditionService
             try { $this->assertNoLegacyStockReview($refund); $legacyClear=true; } catch (DomainException $e) { $legacyClear=false; }
             $line['eligible']=$legacyClear && in_array($line['selling_form']??'piece',['piece','pack'],true) && (($line['selling_form']??'piece')!=='pack' || (int)($line['pack_size']??0)>1) && in_array($line['effective_condition'],['damaged','restockable'],true);
         }return $lines;
+    }
+    public function correctSubmission(int $actor, string $role, array $fields): array
+    {
+        $allowed=['csrf_token','action','refund_item_id','expected_version','request_token','new_condition','correction_reason','fit_for_sale'];
+        if(($fields['action']??'')!=='correct_condition'||array_diff(array_keys($fields),$allowed))throw new DomainException('Only the returned condition can be changed here. Reopen the refund details.');
+        $item=(int)($fields['refund_item_id']??0);
+        $target=(string)($fields['new_condition']??'');
+        $this->correct($actor,$role,$item,$target,(string)($fields['correction_reason']??''),
+            (int)($fields['expected_version']??-1),(string)($fields['request_token']??''),($fields['fit_for_sale']??'')==='1');
+        $q=$this->pdo->prepare('SELECT cr.sale_id,i.refund_id,i.quantity,i.selling_form,p.product_name FROM cash_refund_items i JOIN cash_refunds cr ON cr.refund_id=i.refund_id JOIN products p ON p.product_id=i.product_id WHERE i.refund_item_id=?');
+        $q->execute([$item]);$saved=$q->fetch(PDO::FETCH_ASSOC);
+        $saved['confirmation']='Correction saved. '.$saved['quantity'].' '.(($saved['selling_form']??'piece')==='pack'?((int)$saved['quantity']===1?'pack of ':'packs of '):'').$saved['product_name'].($target==='restockable'?' returned to available stock.':' removed from available stock.');
+        return $saved;
     }
     public function correct(int $actor,string $role,int $item,string $target,string $reason,int $expectedVersion,string $token,bool $fitForSale): int
     {

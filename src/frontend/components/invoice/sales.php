@@ -24,16 +24,9 @@ if ($action === 'refund_conditions') {
     try {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             verify_csrf_token($_POST['csrf_token'] ?? '');
-            $allowed = ['csrf_token','action','refund_item_id','expected_version','request_token','new_condition','correction_reason','fit_for_sale'];
-            if (($_POST['action'] ?? '') !== 'correct_condition' || array_diff(array_keys($_POST), $allowed)) throw new DomainException('Only the returned condition can be changed here. Reopen the refund details.');
-            $itemId = (int)($_POST['refund_item_id'] ?? 0);
-            $conditionService->correct($actorId, $actorRole, $itemId,
-                (string)($_POST['new_condition'] ?? ''), (string)($_POST['correction_reason'] ?? ''),
-                (int)($_POST['expected_version'] ?? -1), (string)($_POST['request_token'] ?? ''), ($_POST['fit_for_sale'] ?? '') === '1');
-            $saved = $pdo->prepare('SELECT cr.sale_id,i.quantity,i.selling_form,p.product_name FROM cash_refund_items i JOIN cash_refunds cr ON cr.refund_id=i.refund_id JOIN products p ON p.product_id=i.product_id WHERE i.refund_item_id=?');
-            $saved->execute([$itemId]); $saved = $saved->fetch(PDO::FETCH_ASSOC);
+            $saved = $conditionService->correctSubmission($actorId, $actorRole, $_POST);
             $sale_id = (int)$saved['sale_id'];
-            $conditionConfirmation = 'Correction saved. ' . $saved['quantity'] . (($saved['selling_form']??'piece')==='pack'?((int)$saved['quantity']===1?' pack of ':' packs of '):' ') . $saved['product_name'] . ($_POST['new_condition']==='restockable'?' returned to available stock.':' removed from available stock.');
+            $conditionConfirmation = $saved['confirmation'];
         }
         if (!(new \App\Receipts\ReceiptEngine($pdo))->fetchSale($sale_id, $storeId)) throw new DomainException('Receipt not found in the authorized Store.');
         $refundQuery = $pdo->prepare('SELECT refund_id FROM cash_refunds WHERE sale_id=?' . ($actorRole==='cashier'?' AND cashier_id=?':'') . ' ORDER BY refund_id');

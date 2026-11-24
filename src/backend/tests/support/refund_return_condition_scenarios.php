@@ -32,6 +32,10 @@ $assert(str_contains($history,'Inspected whole and fit for sale')&&str_contains(
 if($fixturePath=getenv('RETURN_CONDITION_BROWSER_FIXTURE'))file_put_contents($fixturePath,json_encode(['before'=>$details,'after'=>$history,'refund'=>$returnRefund],JSON_THROW_ON_ERROR));
 $conditionService->correct(1,'cashier',$returnItem,'damaged','Found concealed damage',1,str_repeat('f',32),false);
 $assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id=100')->fetchColumn()===9,'Latest-condition reversal removes one piece');
+$before=$snapshot();
+$refused(fn()=>$conditionService->correct(1,'cashier',$returnItem,'damaged','Condition unchanged',2,str_repeat('70',16),false));
+$refused(fn()=>$conditionService->correct(1,'cashier',$returnItem,'restockable','Not inspected',2,str_repeat('80',16),false));
+$assert($snapshot()===$before,'Same condition and missing physical confirmation change no stock, movement or history');
 foreach($financialBefore as $table=>$rows)$assert($rows===$pdo->query('SELECT * FROM '.$table)->fetchAll(PDO::FETCH_ASSOC),'Condition correction leaves '.$table.' immutable');
 $pdo->exec("UPDATE cashier_shifts SET status='open' WHERE shift_id=1");
 $before=$snapshot();$pdo->exec("CREATE TRIGGER reject_condition_audit BEFORE INSERT ON activity_log FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Injected condition audit failure'");
@@ -76,7 +80,19 @@ $pdo->exec("INSERT INTO product_batches(batch_id,product_id,batch_number,quantit
 $pdo->exec("INSERT INTO sales(sale_id,cashier_id,total_amount,payment_method) VALUES(102,1,30,'card')");
 $pdo->exec("INSERT INTO sale_items(sale_item_id,sale_id,product_id,quantity,unit_price,subtotal,selling_form) VALUES(102,102,102,3,10,30,'piece')");
 $pdo->exec('INSERT INTO sale_item_batches(sale_item_id,batch_id,quantity) VALUES(102,102,1),(102,103,2)');
-$service->refund(1,'cashier',102,[102=>['quantity'=>1,'disposition'=>'damaged']],'customer_return',null,'SPLIT-FIRST',true);
+$firstSplitRefund=$service->refund(1,'cashier',102,[102=>['quantity'=>1,'disposition'=>'damaged']],'customer_return',null,'SPLIT-FIRST',true);
+$firstSplitItem=(int)$conditionService->details(1,'cashier',$firstSplitRefund)[0]['refund_item_id'];
+$firstAllocation=$pdo->query('SELECT sale_item_batch_id,sale_item_id,batch_id,quantity FROM sale_item_batches WHERE sale_item_id=102 AND batch_id=102')->fetch(PDO::FETCH_ASSOC);
+$pdo->exec('DELETE FROM sale_item_batches WHERE sale_item_id=102 AND batch_id=102');$before=$snapshot();
+$refused(fn()=>$conditionService->correct(1,'cashier',$firstSplitItem,'restockable','Missing first historical source',0,str_repeat('a0',16),true));
+$assert($snapshot()===$before,'Incomplete piece allocation cannot restore the first returned piece into a later source; stock, movement and history stay unchanged');
+$pdo->prepare('INSERT INTO sale_item_batches(sale_item_batch_id,sale_item_id,batch_id,quantity) VALUES(?,?,?,?)')->execute(array_values($firstAllocation));
+foreach(['product_id'=>100,'selling_form'=>'pack','quantity'=>2] as $field=>$value){
+    $pdo->prepare('UPDATE sale_items SET '.$field.'=? WHERE sale_item_id=102')->execute([$value]);$before=$snapshot();
+    $refused(fn()=>$conditionService->correct(1,'cashier',$firstSplitItem,'restockable','Inconsistent historical sale',0,str_repeat('a2',16),true));
+    $assert($snapshot()===$before,'Inconsistent piece sale '.$field.' changes no stock, movement or history');
+    $pdo->prepare('UPDATE sale_items SET '.$field.'=? WHERE sale_item_id=102')->execute([['product_id'=>102,'selling_form'=>'piece','quantity'=>3][$field]]);
+}
 $splitRefund=$service->refund(1,'cashier',102,[102=>['quantity'=>2,'disposition'=>'damaged']],'customer_return',null,'SPLIT-SECOND',true);
 $splitLine=$conditionService->details(1,'cashier',$splitRefund)[0];
 $conditionService->correct(1,'cashier',(int)$splitLine['refund_item_id'],'restockable','Inspected both pieces',0,str_repeat('a1',16),true);

@@ -1080,23 +1080,27 @@ class BatchInventoryLedger
             if(!$this->hasColumn('products','pack_size')||!$this->hasColumn('sale_items','pack_size'))throw new DomainException('Historical Sales Pack evidence is missing.'.$reconcile);
             $q=$this->pdo->prepare('SELECT pack_size FROM products WHERE product_id=?'.$this->forUpdate());$q->execute([$product]);
             if((int)$q->fetchColumn()!==$packSize)throw new DomainException('The current Sales Pack configuration differs from this historical return.'.$reconcile);
-            $q=$this->pdo->prepare('SELECT product_id,selling_form,pack_size,quantity FROM sale_items WHERE sale_item_id=?');$q->execute([$line['sale_item_id']]);$sale=$q->fetch(PDO::FETCH_ASSOC);
-            if(!$sale||(int)$sale['product_id']!==$product||$sale['selling_form']!==$form||(int)$sale['pack_size']!==$packSize)throw new DomainException('Historical Sales Pack evidence is inconsistent.'.$reconcile);
         }
+        $q=$this->pdo->prepare('SELECT product_id,selling_form,pack_size,quantity FROM sale_items WHERE sale_item_id=?');$q->execute([$line['sale_item_id']]);$sale=$q->fetch(PDO::FETCH_ASSOC);
+        if(!$sale||(int)$sale['product_id']!==$product||$sale['selling_form']!==$form||(int)$sale['quantity']<1||($form==='pack'&&(int)$sale['pack_size']!==$packSize))throw new DomainException('Historical sale evidence is inconsistent.'.$reconcile);
         $skip=$this->pdo->prepare('SELECT quantity,selling_form,pack_size FROM cash_refund_items WHERE sale_item_id=? AND refund_item_id<?');
         $skip->execute([$line['sale_item_id'],$line['refund_item_id']]);$offset=0;
         foreach($skip->fetchAll(PDO::FETCH_ASSOC) as $earlier){
-            if(($earlier['selling_form']??'piece')!==$form||($form==='pack'&&(int)$earlier['pack_size']!==$packSize))throw new DomainException('Earlier return selling form is inconsistent.'.$reconcile);
+            if((int)$earlier['quantity']<1||($earlier['selling_form']??'piece')!==$form||($form==='pack'&&(int)$earlier['pack_size']!==$packSize))throw new DomainException('Earlier return selling form is inconsistent.'.$reconcile);
             $offset+=(int)$earlier['quantity']*$packSize;
         }
         $q=$this->pdo->prepare('SELECT sb.quantity AS allocation_quantity,b.* FROM sale_item_batches sb LEFT JOIN product_batches b ON b.batch_id=sb.batch_id WHERE sb.sale_item_id=? ORDER BY sb.sale_item_batch_id'.$this->forUpdate());$q->execute([$line['sale_item_id']]);
         $batches=$q->fetchAll(PDO::FETCH_ASSOC);
-        if($form==='pack'&&array_sum(array_column($batches,'allocation_quantity'))!==(int)$sale['quantity']*$packSize)throw new DomainException('Historical batch allocation is incomplete.'.$reconcile);
-        $remaining=$quantity;$allocations=[];$seen=[];
+        if(array_sum(array_column($batches,'allocation_quantity'))!==(int)$sale['quantity']*$packSize||$offset+$quantity>(int)$sale['quantity']*$packSize)throw new DomainException('Historical batch allocation is incomplete.'.$reconcile);
+        $seen=[];
         foreach($batches as $batch){
             $allocated=(int)$batch['allocation_quantity'];
             if($allocated<1||(int)$batch['product_id']!==$product||isset($seen[$batch['batch_id']])||($form==='pack'&&$allocated%$packSize!==0))throw new DomainException('Historical allocation is inconsistent.'.$reconcile);
             $seen[$batch['batch_id']]=true;
+        }
+        $remaining=$quantity;$allocations=[];
+        foreach($batches as $batch){
+            $allocated=(int)$batch['allocation_quantity'];
             if($offset>=$allocated){$offset-=$allocated;continue;}
             $amount=min($remaining,$allocated-$offset);$offset=0;
             if($amount<=0)break;
