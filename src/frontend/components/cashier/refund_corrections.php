@@ -372,6 +372,7 @@ function correction_e(mixed $value): string {
                                             <span class="task-mini-item">
                                                 <span class="task-dot dot-<?= correction_e($review['stock_status']) ?>"></span>
                                                 Stock: <strong><?= (int)($proposal['quantity'] ?? 0) >= 0 ? '+' : '' ?><?= (int)($proposal['quantity'] ?? 0) ?></strong>
+                                                <?= correction_e($productMap[(int)($proposal['product_id'] ?? 0)] ?? ('Product #' . (int)($proposal['product_id'] ?? 0))) ?>
                                             </span>
                                         <?php endif; ?>
                                     </div>
@@ -449,7 +450,7 @@ function correction_e(mixed $value): string {
                             <dd id="drawer-product-val">—</dd>
                         </div>
                         <div class="task-prop-row">
-                            <dt>Quantity</dt>
+                            <dt>Stock change</dt>
                             <dd id="drawer-quantity-val">—</dd>
                         </div>
                     </div>
@@ -615,7 +616,7 @@ window.refundContext = {
                 }
                 if (quantityValEl) {
                     const q = parseInt(proposal.quantity, 10) || 0;
-                    quantityValEl.textContent = `${q > 0 ? '+' : ''}${q}`;
+                    quantityValEl.textContent = `${q >= 0 ? 'Add' : 'Remove'} ${Math.abs(q)} base unit${Math.abs(q) === 1 ? '' : 's'} ${q >= 0 ? 'to' : 'from'} available stock`;
                     quantityValEl.className = q >= 0 ? 'amount-positive' : 'amount-negative';
                 }
             }

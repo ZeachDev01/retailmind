@@ -59,6 +59,7 @@ function fixture(action) {
         assert.match(await page.locator('.receiving-category-tile[data-category="all"]').innerText(), /All/);
         assert.equal(await page.locator('.receiving-catalog').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 2, '2-column responsive card grid');
         const firstCard = page.locator('.receiving-card').first();
+        assert.ok(await firstCard.locator('.receiving-card-media').evaluate(el => el.getBoundingClientRect().height) <= 96, 'catalog thumbnails stay compact');
         assert.match(await firstCard.locator('.receiving-card-stock').innerText(), /in stock|Out of stock|Low stock/);
         assert.match(await firstCard.locator('.receiving-card-pack').innerText(), /1 case = 24 pieces|1 package = 1 piece/);
         assert.match(await firstCard.locator('.receiving-card-add').innerText(), /Add to delivery/);

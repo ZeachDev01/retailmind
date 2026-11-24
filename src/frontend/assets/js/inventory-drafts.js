@@ -250,13 +250,17 @@ window.RetailMindInventoryDrafts = (() => {
                 retained.dataset.inventorySubmissionKind = draft.context.operationKind || '';
             }
             const panel = document.createElement('div'); panel.className = 'alert alert-info inventory-recovery-alert'; panel.setAttribute('role', 'note'); panel.dataset.recoveryId = draft.id;
-            const text = document.createElement('span'); text.textContent = 'Unfinished inventory work (' + draft.id + '). ';
+            const slot = document.querySelector('[data-inventory-recovery-slot]');
+            const label = slot && ({receiving_form: 'Unfinished receiving', 'add-product-form': 'Unfinished product'})[draft.id];
+            const text = document.createElement('span'); text.textContent = label || 'Unfinished inventory work (' + draft.id + '). ';
             const actions = document.createElement('div'); actions.className = 'inventory-recovery-actions';
             const restore = document.createElement('button'); restore.type = 'button'; restore.className = 'btn btn-small'; restore.textContent = 'Resume';
             const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn btn-small btn-secondary'; remove.textContent = 'Discard';
             restore.addEventListener('click', async () => { restore.disabled = true; if (await resume(draft)) panel.remove(); else restore.disabled = false; });
             remove.addEventListener('click', () => discard(draft.id));
-            actions.append(restore, remove); panel.append(text, actions); (document.querySelector('main') || document.body).prepend(panel);
+            actions.append(restore, remove); panel.append(text, actions);
+            if (slot) slot.append(panel);
+            else (document.querySelector('main') || document.body).prepend(panel);
         } catch (_) { notice('A draft could not be unlocked. Sign in with its original account; do not clear browser data.', true); }
     }
     async function legacyDrafts() {

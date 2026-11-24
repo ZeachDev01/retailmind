@@ -13,7 +13,7 @@ const { chromium } = require('playwright');
             route.fulfill({
                 status: 200,
                 contentType: 'text/html',
-                body: '<!DOCTYPE html><html><body><main id="product-table"><h1>Products</h1></main></body></html>'
+                body: '<!DOCTYPE html><html><body><main id="product-table"><div class="inventory-page-heading"><h1>Products</h1><div data-inventory-recovery-slot></div></div></main></body></html>'
             });
         });
 
@@ -60,6 +60,19 @@ const { chromium } = require('playwright');
         await page.locator('[name="note"]').fill('Temporary note');
         await page.waitForTimeout(100);
         assert.equal(await page.evaluate(() => localStorage.getItem('retailmind:inventory:v1:1:/products.php:entry:')), null, 'Products does not create another unnamed form draft');
+
+        await page.reload();
+        await page.addScriptTag({content: draftsJs});
+        await page.evaluate(() => {
+            RetailMindInventoryDrafts.start({key:btoa(String.fromCharCode(...new Uint8Array(32))), user:'1', confirmed:false});
+            document.dispatchEvent(new Event('DOMContentLoaded'));
+        });
+        const recovery = page.locator('.inventory-page-heading [data-inventory-recovery-slot] .inventory-recovery-alert');
+        await recovery.waitFor();
+        assert.match(await recovery.innerText(), /Unfinished product/);
+        await recovery.getByRole('button', {name:'Discard', exact:true}).click();
+        await recovery.waitFor({state:'detached'});
+        assert.equal(await page.evaluate(() => localStorage.getItem('retailmind:inventory:v1:1:/products.php:add-product-form')), null, 'Discard still clears only the selected Product draft');
 
         // Also test non-products page receives notice when key is null
         await page.route('http://localhost/stock_receiving.php', route => {

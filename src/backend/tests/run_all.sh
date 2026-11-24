@@ -115,6 +115,7 @@ php src/backend/tests/gcash_movement_schema_contract.php
 php src/backend/tests/failed_exchange_actual_returns_contract.php
 php src/backend/tests/gcash_closing_difference_review_contract.php
 php src/backend/tests/refund_correction_review_contract.php
+node src/backend/tests/refund_correction_details_browser_test.js
 php src/backend/tests/cashier_shift_variance_review_contract.php
 node src/backend/tests/integration_326_browser_test.js
 php src/backend/tests/held_sale_shift_contract.php

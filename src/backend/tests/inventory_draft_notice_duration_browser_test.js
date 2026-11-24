@@ -13,7 +13,7 @@ const { chromium } = require('playwright');
             route.fulfill({
                 status: 200,
                 contentType: 'text/html',
-                body: '<!DOCTYPE html><html><body><main id="receiving"><form id="receiving_form" method="post"><input name="item_name" value="test"></form></main></body></html>'
+                body: '<!DOCTYPE html><html><body><main id="receiving"><div class="inventory-page-heading"><h1>Stock Receiving</h1><div data-inventory-recovery-slot></div></div><form id="receiving_form" method="post"><input name="item_name" value="test"></form></main></body></html>'
             });
         });
 
@@ -56,6 +56,8 @@ const { chromium } = require('playwright');
             document.dispatchEvent(new Event('DOMContentLoaded'));
         }, encodedKey);
         await page.waitForSelector('.inventory-recovery-alert');
+        assert.equal(await page.locator('.inventory-page-heading [data-inventory-recovery-slot] .inventory-recovery-alert').count(), 1, 'Receiving recovery sits beside the title');
+        assert.match(await page.locator('.inventory-recovery-alert').innerText(), /Unfinished receiving/);
         await page.locator('[name="item_name"]').fill('third product');
         await page.evaluate(() => RetailMindInventoryDrafts.flush());
         assert.equal(await page.locator('#inventory-draft-status').count(), 0, 'Receiving notice must stay suppressed after reload');

@@ -727,7 +727,17 @@ html[data-theme="dark"] .analytics-tab.is-active {
 .receiving-history-page .history-table-panel { border:1px solid var(--border); border-radius:14px; background:var(--card-bg); }
 .receiving-history-page .history-table-panel table { display:table; width:100%; margin:0; white-space:normal; }
 .receiving-history-page .history-list-table { min-width:48rem; }
-.receiving-history-page .history-table { min-width:65rem; }
+.receiving-history-page .history-table { min-width:88rem; }
+.receiving-history-page .history-table td { vertical-align:top; }
+.receiving-history-page .history-table :is(th, td):nth-child(1) { min-width:11rem; }
+.receiving-history-page .history-table :is(th, td):nth-child(2) { min-width:12rem; }
+.receiving-history-page .history-table td:nth-child(2) code { white-space:nowrap; }
+.receiving-history-page .history-table :is(th, td):nth-child(n+3):nth-child(-n+5) { min-width:5.5rem; }
+.receiving-history-page .history-table :is(th, td):nth-child(6) { min-width:12rem; }
+.receiving-history-page .history-table :is(th, td):nth-child(7) { min-width:15rem; }
+.receiving-history-page .history-table :is(th, td):nth-child(8) { min-width:9rem; }
+.receiving-history-page .history-table td:nth-child(8) small { white-space:nowrap; }
+.receiving-history-page .history-table :is(th, td):nth-child(9) { min-width:12rem; }
 .receiving-history-page .history-table-panel th,
 .receiving-history-page .history-table-panel td { border-color:var(--border); overflow-wrap:anywhere; }
 .receiving-history-page .history-list-table th,

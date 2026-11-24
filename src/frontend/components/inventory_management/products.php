@@ -926,6 +926,9 @@ foreach ($products as $product) {
         #product-drawer .rm-drawer-header > div:last-child { margin-inline-start: auto; }
         #product-drawer-title { text-wrap: balance; }
         #product-drawer-title, #product-drawer-subtitle { overflow-wrap: anywhere; }
+        .product-barcode-heading { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+        .product-barcode-heading h3 { margin: 0; font-size: 1rem; }
+        .product-barcode-heading .btn { min-height: 44px; }
 
         .product-edit-intro { margin: 0 0 1.5rem; max-inline-size: 65ch; color: var(--muted); font-size: .95rem; line-height: 1.5; text-wrap: pretty; }
         .product-edit-section { padding-bottom: 1.5rem; margin-bottom: 1.5rem; }
@@ -1495,7 +1498,10 @@ foreach ($products as $product) {
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content" id="product-table">
-                <h1 class="products-page-heading">Product catalog</h1>
+                <div class="inventory-page-heading">
+                    <h1 class="products-page-heading">Product catalog</h1>
+                    <div class="inventory-recovery-slot" data-inventory-recovery-slot></div>
+                </div>
                 <div class="catalog-toolbar" aria-label="Product catalog controls">
                     <div class="catalog-toolbar-primary">
                         <div class="catalog-view-controls" aria-label="Table view controls">
@@ -2469,11 +2475,12 @@ foreach ($products as $product) {
         <div class="detail-item"><span>Sales Pack Price</span><strong>${product.pack_price ? formatMoney(product.pack_price) : '—'}</strong></div><div class="detail-item"><span>Sealed / Loose</span><strong>${Number(product.physical_sealed_packs || 0)} pk / ${Number(product.physical_loose_pieces || 0)} pcs</strong></div>` : '';
             const info = document.getElementById('product-panel-info');
             info.innerHTML = `${notice ? `<p id="barcode-correction-notice" class="alert alert-success" role="status" tabindex="-1">${escapeHtml(notice)}</p>` : ''}
-    ${canEditProduct ? '<p><button type="button" class="btn btn-secondary" id="correct-barcode-btn">Correct barcode</button></p>' : ''}
     <div class="detail-grid">
         <div class="detail-item"><span>Status</span><strong>${escapeHtml(safe(product.status))}</strong></div><div class="detail-item"><span>Category</span><strong>${escapeHtml(safe(product.category_name, 'Uncategorized'))}</strong></div>
         <div class="detail-item"><span>Brand</span><strong>${escapeHtml(safe(product.brand))}</strong></div><div class="detail-item"><span>Declared Size</span><strong>${escapeHtml(safe(product.declared_size))}</strong></div><div class="detail-item"><span>Variant Label</span><strong>${escapeHtml(safe(product.variant_label))}</strong></div>
-        <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div><div class="detail-item"><span>Individual Item Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
+        <div class="detail-item"><span>SKU</span><strong>${escapeHtml(safe(product.sku))}</strong></div>
+        <div class="product-barcode-heading"><h3>Barcodes</h3>${canEditProduct ? '<button type="button" class="btn btn-secondary" id="correct-barcode-btn">Correct barcode</button>' : ''}</div>
+        <div class="detail-item"><span>Individual Item Barcode</span><strong>${escapeHtml(safe(product.barcode, 'Not assigned'))}</strong></div>
         <div class="detail-item"><span>Receiving Package Barcode</span><strong>${escapeHtml(safe(product.case_barcode, 'Not assigned'))}</strong></div>
         <div class="detail-item"><span>Cost Price</span><strong>${knownProductCost(product) ? formatMoney(product.cost_price) : 'Not recorded'}</strong></div><div class="detail-item"><span>Selling Price</span><strong>${formatMoney(product.unit_price)}</strong></div>
         <div class="detail-item"><span>Next Expiration</span><strong>${escapeHtml(safe(product.next_expiration_date, '—'))}</strong></div><div class="detail-item"><span>Expiry Warning Lead Time</span><strong>${product.warning_lead_time_days ? escapeHtml(product.warning_lead_time_days) + ' day(s)' : 'Default'}</strong></div>${packItems}<div class="detail-item full"><span>Product Image</span><strong>${productPhotoPreview(product)}</strong></div>

@@ -241,7 +241,10 @@ $categoryIcon = static function (string $categoryName): string {
 <div class="app-shell">
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content" id="receiving_main" tabindex="-1">
-        <h1 class="u-sr-only">Stock Receiving</h1>
+        <div class="inventory-page-heading">
+            <h1 class="u-sr-only">Stock Receiving</h1>
+            <div class="inventory-recovery-slot" data-inventory-recovery-slot></div>
+        </div>
         <?php if ($message): ?>
             <div class="message success" role="status"><?= htmlspecialchars($message) ?></div>
         <?php endif; ?>

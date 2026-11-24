@@ -48,3 +48,17 @@ An inline recovery section below scan status uses the existing form typography, 
 Each product row keeps the entered quantity and accepted total visible when folded. Multiple batches show their count and accepted total. The open editor keeps lot and expiry together below quantity. Missing or invalid quantity stays visible on the row, and opening it takes staff to the field that needs attention. Scanning or adding opens the corresponding product, and folding a row retains its batch entries.
 
 Playwright checks quantity summaries, keyboard focus, retained inputs, reordering, and viewport fit. Compact-row captures are under ignored `output/playwright/stock-receiving/`. The existing receiving and rescan flow passed [TestSprite](https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/abe16d0b-21f0-432e-8a86-72b1436c42fe/test-cases/86af457c-c7b6-40b8-ac12-7d222e6053b5).
+
+## Compact catalog images — 2026-11-24
+
+Catalog image areas are 96px tall, with a 160px minimum card width so more products fit in the existing split editor. Cost and stock wrap within smaller cards. The incumbent themes, product photos, controls, mobile stacking and receiving behavior remain intact. `npm run check` and the disposable-database receiving UI browser suite passed, including 320–1440px layouts, both themes, contrast, touch targets and Review. Desktop/mobile captures and a product-photo render were inspected under `output/playwright/stock-receiving/`. The layout detector reported no findings. Live-site deployment is not verified.
+
+The existing TestSprite receiving flow passed all 16 steps against the disposable local Store: [run d81862f2](https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/abe16d0b-21f0-432e-8a86-72b1436c42fe/execution/dc267ff5-bace-459f-995f-6d7d1af993b5/test/d81862f2-faf3-4eb4-83fd-a6853eae6f06). No stock was saved by that flow.
+
+## Recovery notice placement — 2026-11-24
+
+Stock Receiving and Product catalog now provide a title-row recovery slot. Private draft offers appear there with compact Unfinished receiving / Unfinished product labels and the existing Resume / Discard controls. Other pages retain their existing placement. Desktop keeps the notice to the right; narrow screens wrap it below the title. The existing themes and 44px controls remain unchanged. Rendered checks at 1440, 1280, 390 and 320px found no overflow and confirmed Resume restores both receiving quantities and Add Product names. Captures are under ignored `output/recovery-*.png`.
+
+Focused Product draft and receiving notice tests, `npm run check`, and the rebuilt stylesheet check passed. The broader private-recovery suite did not complete: its offline submission scenario first advanced before asynchronous Review completed; a diagnostic wait then exposed an undefined `.html` value in that suite's response parser. Those diagnostic test edits were removed; the production recovery and submission logic was not changed.
+
+The receiving selection and Review flow passed TestSprite (14/14 steps): [run 70a75ca9](https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/abe16d0b-21f0-432e-8a86-72b1436c42fe/execution/c292e8ce-5d56-4e39-8ba5-d09fdc696c3d/test/70a75ca9-1a24-4f6a-9a02-6749fe300f5a). Live-site deployment remains unverified.
