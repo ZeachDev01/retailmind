@@ -180,6 +180,10 @@ final class ProductSeeder
                     }
                     $insert->execute([$row['sku'], $row['barcode'], $row['product_name'], $row['brand'], $categoryId, $row['unit_price'], $row['cost_price'], $row['reorder_level'], $row['preferred_supplier'], $row['preferred_supplier'], $row['supplier_lead_time_days'], $row['safety_stock'], $row['minimum_order_quantity'], $row['units_per_package']]);
                     $productId = (int)$pdo->lastInsertId();
+                    if (isset($row['product_image'])) {
+                        $pdo->prepare('UPDATE products SET product_image = ?, product_image_source = ?, declared_size = ?, cost_known = 0 WHERE product_id = ?')
+                            ->execute([$row['product_image'], $row['product_image_source'], $row['declared_size'], $productId]);
+                    }
                     $inventory->execute([$productId]);
                     $result['inserted']++;
                 }
@@ -190,6 +194,7 @@ final class ProductSeeder
                     throw new RuntimeException('Seed verification failed: missing category or inventory. No existing records repaired.');
                 }
                 $record['stock_seed'] = $stockResult;
+                $record['created'] = $matches === [];
                 $result['records'][] = $record;
             }
             $pdo->commit();

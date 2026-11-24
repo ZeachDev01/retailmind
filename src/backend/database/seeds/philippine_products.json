@@ -1,0 +1,409 @@
+{
+  "source": "Open Food Facts",
+  "source_url": "https://world.openfoodfacts.org/api/v2/search?countries_tags_en=philippines&page_size=100&sort_by=unique_scans_n&fields=code,product_name,brands,quantity,categories_tags,image_front_url,countries_tags",
+  "retrieved_on": "2026-11-24",
+  "data_license": "https://opendatacommons.org/licenses/odbl/1-0/",
+  "photo_license": "https://creativecommons.org/licenses/by-sa/3.0/",
+  "products": [
+    {
+      "barcode": "0750515018402",
+      "product_name": "sky flakes 25g",
+      "brand": "M. Y San",
+      "declared_size": "25 g",
+      "category_name": "Biscuits & Crackers",
+      "photo_url": "https://images.openfoodfacts.org/images/products/075/051/501/8402/front_en.92.400.jpg"
+    },
+    {
+      "barcode": "0750515017429",
+      "product_name": "fita crackers 30g",
+      "brand": "My.san",
+      "declared_size": "30 g",
+      "category_name": "Biscuits & Crackers",
+      "photo_url": "https://images.openfoodfacts.org/images/products/075/051/501/7429/front_en.70.400.jpg"
+    },
+    {
+      "barcode": "4800092113338",
+      "product_name": "rebisco crackers (g) 33g",
+      "brand": "Rebisco",
+      "declared_size": "33 g",
+      "category_name": "Biscuits & Crackers",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/009/211/3338/front_en.54.400.jpg"
+    },
+    {
+      "barcode": "8992760121014",
+      "product_name": "oreo (w) vanilla 27.6g",
+      "brand": "Oreo",
+      "declared_size": "27g",
+      "category_name": "Biscuits & Crackers",
+      "photo_url": "https://images.openfoodfacts.org/images/products/899/276/012/1014/front_en.54.400.jpg"
+    },
+    {
+      "barcode": "4807770122163",
+      "product_name": "Butter Coconut",
+      "brand": "Nissin",
+      "declared_size": "28 g",
+      "category_name": "Biscuits & Crackers",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/777/012/2163/front_en.17.400.jpg"
+    },
+    {
+      "barcode": "4800010075069",
+      "product_name": "cream o (b) vanilla 30g",
+      "brand": "Jack n' Jill, Jackwill",
+      "declared_size": "3l",
+      "category_name": "Biscuits & Crackers",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/001/007/5069/front_en.28.400.jpg"
+    },
+    {
+      "barcode": "4807770100406",
+      "product_name": "Eggnog Cookies",
+      "brand": "Monde Nissin",
+      "declared_size": "130g",
+      "category_name": "Biscuits & Crackers",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/777/010/0406/front_en.31.400.jpg"
+    },
+    {
+      "barcode": "4800092115707",
+      "product_name": "Wafer time",
+      "brand": "Rebisco",
+      "declared_size": "27 g",
+      "category_name": "Biscuits & Crackers",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/009/211/5707/front_en.26.400.jpg"
+    },
+    {
+      "barcode": "0038000138430",
+      "product_name": "Original Light",
+      "brand": "Pringles",
+      "declared_size": "5.5 oz / 158 g",
+      "category_name": "Chips & Snacks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/003/800/013/8430/front_en.93.400.jpg"
+    },
+    {
+      "barcode": "4800194104869",
+      "product_name": "crispy patata (bwn) 24g patato",
+      "brand": "Oishi",
+      "declared_size": "24g",
+      "category_name": "Chips & Snacks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/019/410/4869/front_en.23.400.jpg"
+    },
+    {
+      "barcode": "4800016663802",
+      "product_name": "nova (r) 38g cheddar",
+      "brand": "Jack 'n Jill, Nova",
+      "declared_size": "40 g",
+      "category_name": "Chips & Snacks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/001/666/3802/front_en.58.400.jpg"
+    },
+    {
+      "barcode": "4800016671807",
+      "product_name": "Piatto",
+      "brand": "JACK'nJILL",
+      "declared_size": "40 g",
+      "category_name": "Chips & Snacks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/001/667/1807/front_en.26.400.jpg"
+    },
+    {
+      "barcode": "4800216120013",
+      "product_name": "clover (b) cheesier 24g",
+      "brand": "Leslies",
+      "declared_size": "24g",
+      "category_name": "Chips & Snacks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/021/612/0013/front_en.46.400.jpg"
+    },
+    {
+      "barcode": "4800092331732",
+      "product_name": "dingdong (g) 95g chips & curls mix",
+      "brand": "Oing Dong",
+      "declared_size": "95 g",
+      "category_name": "Chips & Snacks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/009/233/1732/front_en.38.400.jpg"
+    },
+    {
+      "barcode": "4807770270024",
+      "product_name": "lm chicken 55g",
+      "brand": "Lucky Me!",
+      "declared_size": "55 g",
+      "category_name": "Instant Noodles",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/777/027/0024/front_en.84.400.jpg"
+    },
+    {
+      "barcode": "4807770270017",
+      "product_name": "lm beef 55g",
+      "brand": "Lucky",
+      "declared_size": "5l",
+      "category_name": "Instant Noodles",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/777/027/0017/front_en.71.400.jpg"
+    },
+    {
+      "barcode": "4807770271229",
+      "product_name": "Pancit Canton",
+      "brand": "Lucky Me!",
+      "declared_size": "60 g",
+      "category_name": "Instant Noodles",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/777/027/1229/front_en.45.400.jpg"
+    },
+    {
+      "barcode": "8998866200301",
+      "product_name": "Mi Sedaap",
+      "brand": "Mi Sedaap",
+      "declared_size": "90g",
+      "category_name": "Instant Noodles",
+      "photo_url": "https://images.openfoodfacts.org/images/products/899/886/620/0301/front_en.87.400.jpg"
+    },
+    {
+      "barcode": "0748485100401",
+      "product_name": "century tuna (p) 155g",
+      "brand": "Century Pacific Food Inc",
+      "declared_size": "155 g",
+      "category_name": "Canned Fish",
+      "photo_url": "https://images.openfoodfacts.org/images/products/074/848/510/0401/front_en.65.400.jpg"
+    },
+    {
+      "barcode": "0748485100081",
+      "product_name": "Century Tuna Flakes in Oil",
+      "brand": "Century Tuna",
+      "declared_size": "180g",
+      "category_name": "Canned Fish",
+      "photo_url": "https://images.openfoodfacts.org/images/products/074/848/510/0081/front_en.41.400.jpg"
+    },
+    {
+      "barcode": "4806504710126",
+      "product_name": "mega sardines (r) 155g",
+      "brand": "MEGA",
+      "declared_size": "155g",
+      "category_name": "Canned Fish",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/650/471/0126/front_en.30.400.jpg"
+    },
+    {
+      "barcode": "0748485200040",
+      "product_name": "555 spanish sardines 155g",
+      "brand": "555",
+      "declared_size": "155 g",
+      "category_name": "Canned Fish",
+      "photo_url": "https://images.openfoodfacts.org/images/products/074/848/520/0040/front_en.45.400.jpg"
+    },
+    {
+      "barcode": "4800361410816",
+      "product_name": "bear brand (w) milk 33g",
+      "brand": "Bear Brand",
+      "declared_size": "3",
+      "category_name": "Milk & Dairy Drinks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/036/141/0816/front_en.98.400.jpg"
+    },
+    {
+      "barcode": "8888440000048",
+      "product_name": "Pure milk",
+      "brand": "Cowhead",
+      "declared_size": "1L",
+      "category_name": "Milk & Dairy Drinks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/888/844/000/0048/front_fr.4.400.jpg"
+    },
+    {
+      "barcode": "4800361396677",
+      "product_name": "Bear brand Adult plus",
+      "brand": "Nestlé",
+      "declared_size": "33g",
+      "category_name": "Milk & Dairy Drinks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/036/139/6677/front_en.12.400.jpg"
+    },
+    {
+      "barcode": "4800361388313",
+      "product_name": "chuckie 180ml",
+      "brand": "Nestlé",
+      "declared_size": "180 mL",
+      "category_name": "Milk & Dairy Drinks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/036/138/8313/front_en.21.400.jpg"
+    },
+    {
+      "barcode": "4800361339568",
+      "product_name": "nescafe stick (r) 1.9g classic",
+      "brand": "Nescafé",
+      "declared_size": "1.9g",
+      "category_name": "Coffee",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/036/133/9568/front_en.38.400.jpg"
+    },
+    {
+      "barcode": "8996001410547",
+      "product_name": "Kopiko Brown Coffee Mix (Creamy Coffee Mix with Brown Sugar",
+      "brand": "Kopiko",
+      "declared_size": "20g",
+      "category_name": "Coffee",
+      "photo_url": "https://images.openfoodfacts.org/images/products/899/600/141/0547/front_en.10.400.jpg"
+    },
+    {
+      "barcode": "8998666001719",
+      "product_name": "kopiko twin (bwn) 40g brown",
+      "brand": "Kopiko",
+      "declared_size": "20 g",
+      "category_name": "Coffee",
+      "photo_url": "https://images.openfoodfacts.org/images/products/899/866/600/1719/front_en.55.400.jpg"
+    },
+    {
+      "barcode": "8998666001726",
+      "product_name": "kopiko twin (w) 40g blanca",
+      "brand": "PT Torabika Eka Semesta",
+      "declared_size": "52g",
+      "category_name": "Coffee",
+      "photo_url": "https://images.openfoodfacts.org/images/products/899/866/600/1726/front_en.69.400.jpg"
+    },
+    {
+      "barcode": "4801981118502",
+      "product_name": "Coke Mismo 290mL",
+      "brand": "Coca-Cola",
+      "declared_size": "290 mL",
+      "category_name": "Soft Drinks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/198/111/8502/front_en.56.400.jpg"
+    },
+    {
+      "barcode": "4801981116072",
+      "product_name": "Coca Cola original taste",
+      "brand": "Coca-Cola",
+      "declared_size": "1.5l",
+      "category_name": "Soft Drinks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/198/111/6072/front_en.20.400.jpg"
+    },
+    {
+      "barcode": "8850389100684",
+      "product_name": "Mogu lychee",
+      "brand": "Sappe Public Company Limited",
+      "declared_size": "320 ml",
+      "category_name": "Juice & Fruit Drinks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/885/038/910/0684/front_en.130.400.jpg"
+    },
+    {
+      "barcode": "8850389103142",
+      "product_name": "Mogu Mogu Strawberry Flavored Drink with Nata de Coco",
+      "brand": "Mogu Mogu",
+      "declared_size": "320 ml",
+      "category_name": "Juice & Fruit Drinks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/885/038/910/3142/front_en.56.400.jpg"
+    },
+    {
+      "barcode": "8850389101391",
+      "product_name": "Mogu Mogu Grape Flavored Drink with Nata de Coco",
+      "brand": "Mogu Mogu",
+      "declared_size": "10.82 FL.OZ (APPROX. 320ml)",
+      "category_name": "Juice & Fruit Drinks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/885/038/910/1391/front_en.4.400.jpg"
+    },
+    {
+      "barcode": "4800024558305",
+      "product_name": "Del Monte Four Season",
+      "brand": "Del Monte",
+      "declared_size": "240 ml",
+      "category_name": "Juice & Fruit Drinks",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/002/455/8305/front_en.3.400.jpg"
+    },
+    {
+      "barcode": "4801981107971",
+      "product_name": "Wilkins Pure Purified Drinking Water",
+      "brand": "Wilkins",
+      "declared_size": "500 ml",
+      "category_name": "Bottled Water",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/198/110/7971/front_en.19.400.jpg"
+    },
+    {
+      "barcode": "8996001600269",
+      "product_name": "Mountain Mineral Water",
+      "brand": "Le Minerale",
+      "declared_size": "600ml",
+      "category_name": "Bottled Water",
+      "photo_url": "https://images.openfoodfacts.org/images/products/899/600/160/0269/front_en.8.400.jpg"
+    },
+    {
+      "barcode": "8996001440124",
+      "product_name": "Energen Minuman Serbuk Sereal Susu Vanilla 34g",
+      "brand": "Energen",
+      "declared_size": "40 g",
+      "category_name": "Cereals & Oats",
+      "photo_url": "https://images.openfoodfacts.org/images/products/899/600/144/0124/front_en.80.400.jpg"
+    },
+    {
+      "barcode": "8996001440049",
+      "product_name": "ENERGEN COKLAT 34g",
+      "brand": "Energen",
+      "declared_size": "34g",
+      "category_name": "Cereals & Oats",
+      "photo_url": "https://images.openfoodfacts.org/images/products/899/600/144/0049/front_en.66.400.jpg"
+    },
+    {
+      "barcode": "4800274003518",
+      "product_name": "Oatmeal",
+      "brand": "Quaker",
+      "declared_size": "33",
+      "category_name": "Cereals & Oats",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/027/400/3518/front_en.12.400.jpg"
+    },
+    {
+      "barcode": "4806502720615",
+      "product_name": "Gardenia White Bread Classic 600G",
+      "brand": "Gardenia",
+      "declared_size": "600 g",
+      "category_name": "Bread & Cakes",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/650/272/0615/front_en.43.400.jpg"
+    },
+    {
+      "barcode": "4807770121326",
+      "product_name": "Mamon",
+      "brand": "Monde",
+      "declared_size": "43 g",
+      "category_name": "Bread & Cakes",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/777/012/1326/front_en.19.400.jpg"
+    },
+    {
+      "barcode": "4809010626011",
+      "product_name": "lemon square (y) cheese 30g",
+      "brand": "Lemon Square",
+      "declared_size": "30 g",
+      "category_name": "Bread & Cakes",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/901/062/6011/front_en.26.400.jpg"
+    },
+    {
+      "barcode": "0039000086639",
+      "product_name": "Vienna Sausage",
+      "brand": "Libby's",
+      "declared_size": "4.6 oz (130 g)",
+      "category_name": "Canned Meat",
+      "photo_url": "https://images.openfoodfacts.org/images/products/003/900/008/6639/front_en.84.400.jpg"
+    },
+    {
+      "barcode": "4808887010015",
+      "product_name": "Purefoods Corned Beef",
+      "brand": "San Miguel, Purefoods",
+      "declared_size": "210g",
+      "category_name": "Canned Meat",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/888/701/0015/front_en.40.400.jpg"
+    },
+    {
+      "barcode": "4800888218889",
+      "product_name": "Liquid Seasoning Chili",
+      "brand": "Knorr, Unilever",
+      "declared_size": "250mL (8.50 fl oz)",
+      "category_name": "Condiments & Seasonings",
+      "photo_url": "https://images.openfoodfacts.org/images/products/480/088/821/8889/front_en.8.400.jpg"
+    },
+    {
+      "barcode": "48025522",
+      "product_name": "magic sarap 8g",
+      "brand": "Maggi",
+      "declared_size": "8g",
+      "category_name": "Condiments & Seasonings",
+      "photo_url": "https://images.openfoodfacts.org/images/products/000/004/802/5522/front_en.56.400.jpg"
+    },
+    {
+      "barcode": "7614500010013",
+      "product_name": "Milk Chocolate Almond Nougat",
+      "brand": "Toblerone",
+      "declared_size": "100g",
+      "category_name": "Chocolates & Candies",
+      "photo_url": "https://images.openfoodfacts.org/images/products/761/450/001/0013/front_en.362.400.jpg"
+    },
+    {
+      "barcode": "5000159558914",
+      "product_name": "Snickers Miniatures",
+      "brand": "Snickers",
+      "declared_size": "150g",
+      "category_name": "Chocolates & Candies",
+      "photo_url": "https://images.openfoodfacts.org/images/products/500/015/955/8914/front_en.37.400.jpg"
+    }
+  ]
+}
