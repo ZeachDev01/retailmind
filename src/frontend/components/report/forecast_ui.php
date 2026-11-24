@@ -59,6 +59,9 @@ function forecast_workflow(string $current): void
     }
 
     $page = basename($_SERVER['SCRIPT_NAME'] ?? '');
+    if ($page === 'training_configuration.php') {
+        $page = 'ml_settings.php';
+    }
     ?>
     <nav class="forecast-studio-nav" aria-label="Forecasting workspace">
         <?php foreach ($pages as [$file, $label, $icon, $folder]): ?>

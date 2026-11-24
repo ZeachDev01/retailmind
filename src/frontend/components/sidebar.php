@@ -65,6 +65,10 @@ function sidebar_path(string $path): string
 function sidebar_is_active(string $path): bool
 {
     global $currentPath;
+    if ($path === 'components/system_administrator/ml_settings.php'
+        && rtrim($currentPath, '/') === sidebar_path('components/system_administrator/training_configuration.php')) {
+        return true;
+    }
     return rtrim($currentPath, '/') === rtrim(sidebar_path($path), '/');
 }
 

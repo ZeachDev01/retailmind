@@ -4,6 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const events = {};
+let rootWidth = 390;
 const box = {style: {}, offsetWidth: 240, offsetHeight: 80};
 const wrapper = {
     dismissed: false,
@@ -18,7 +19,8 @@ const trigger = {
     getBoundingClientRect() { return {left: 300, top: 700, bottom: 744}; },
 };
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../../frontend/assets/js/info-tooltip.js'), 'utf8'), {
-    document: { querySelectorAll: selector => selector === '.info-tooltip-trigger' ? [trigger] : [], querySelector: () => null },
+    document: { querySelectorAll: selector => selector === '.info-tooltip-trigger' ? [trigger] : [], querySelector: () => null,
+        documentElement: {getBoundingClientRect: () => ({right:rootWidth})} },
     window: {innerWidth: 390, innerHeight: 800, addEventListener() {}},
 });
 events.keydown({ key: 'Enter' });
@@ -32,4 +34,7 @@ for (const reopen of ['focus', 'click', 'mouseleave']) {
 events.focus();
 assert.equal(box.style.left, '142px', 'Help stays within the narrow viewport');
 assert.equal(box.style.top, '616px', 'Help flips above the trigger near the bottom');
+rootWidth = 375;
+events.focus();
+assert.equal(box.style.left, '127px', 'Help retains its right gutter when stable scrollbars narrow the painted root');
 console.log('Replenishment tooltip dismissal, placement and reopening checks passed.');

@@ -2,7 +2,7 @@
 version: 1
 slug: "forecast-workspace"
 primary_target: "src/frontend/components/report/predictions.php"
-related_targets: ["src/frontend/components/report/data_readiness.php", "src/frontend/components/report/forecast_exceptions.php", "src/frontend/components/report/forecast_analytics.php", "src/frontend/components/report/forecast_replay.php", "src/frontend/components/administrator/model_review.php", "src/frontend/components/inventory_management/product_investigation.php", "src/frontend/components/inventory_management/replenishment_queue.php", "src/frontend/components/system_administrator/ml_settings.php", "src/frontend/components/system_administrator/forecast_import.php", "src/frontend/assets/css/forecast-workspace.css"]
+related_targets: ["src/frontend/components/report/data_readiness.php", "src/frontend/components/report/forecast_exceptions.php", "src/frontend/components/report/forecast_analytics.php", "src/frontend/components/report/forecast_replay.php", "src/frontend/components/administrator/model_review.php", "src/frontend/components/inventory_management/product_investigation.php", "src/frontend/components/inventory_management/replenishment_queue.php", "src/frontend/components/system_administrator/ml_settings.php", "src/frontend/components/system_administrator/training_configuration.php", "src/frontend/components/system_administrator/forecast_import.php", "src/frontend/assets/css/forecast-workspace.css"]
 ---
 
 # Forecast workspace
@@ -87,3 +87,101 @@ Confirmed through grill-with-docs. Lead with whether the Administrator has a mod
 Implementation shows training queue status and observation progress from saved evidence. A review starts with the 28-day error comparison. Technical metrics disclose WAPE, MAE, and RMSE by forecast horizon with keyboard and touch help. Product coverage uses the selected training run. Its search and difference sort cover all products, ten per page, with a single expandable chart. Product totals pair one forecast with recorded sales per usable date in the first 28 usable Store dates of observation. Approval, rejection, pause, resume and rollback stay on their existing local, audited flows.
 
 Verification: Administrator Model Review component, approval and recovery contracts, forecast landing browser suite, and Playwright checks using 50 fixture Products. Checked chart expansion, search across all rows, difference sorting, five pages, metric period switching, keyboard tooltip dismissal and narrow layouts. The dedicated forecasting navigation contract still flags Store Calendar grouping and the Data Readiness link.
+
+
+## Model Training arrangement - 2026-11-24
+
+Confirmed through grill-with-docs: organize Model Training into Training overview, Training settings, How it works, and Training history. Supporting explanations use the existing keyboard/touch info tooltip, with Escape dismissal. Keep operational warnings, validation errors, actual status and next actions visible.
+
+- Group the weekly schedule and Candidate Error Limits within Training settings; preserve separate forms and saves. Name WAPE controls as error limits rather than model parameters. Tooltips explain stricter/looser limits and distinguish training from daily Forecast Generation.
+- How it works shows eligible Product coverage, the read-only Random Forest recipe and the approval sequence. Its eligibility tooltip reuses the effective policy rendered on Data Readiness; the full Product table lives on Data Readiness instead of being duplicated here.
+- Training history shows actual recent job/run counts and two independent, initially collapsed tables. Jobs describe requests and diagnostics; runs describe execution statistics. Do not merge records or add filler rows.
+- Preserve AM/PM, Asia/Manila, automatic opening on invalid quality settings, CSRF, field allowlists, existing role permissions and Demo/replay restrictions. Saving settings does not queue training or approve a model.
+
+Reuse existing RetailMind tokens and native disclosures. No new visual system, dependency or ADR is needed. The glossary distinguishes Model Retraining, Forecast Generation and Candidate Error Limit.
+
+Verification: npm run check, npm run check:contracts, PHP syntax and diff whitespace passed. The dedicated Administrator training settings browser test passed persistence, validation, role/CSRF/allowlist boundaries, atomic audit, independent histories, tooltip click/Escape and viewport bounds for Administrator/Super Administrator at 320/390/640/1440px in light/dark. The training-request browser test passed with its history selector updated. Local screenshots are in tmp/ml-settings-final/; desktop/mobile captures were visually inspected. TestSprite run 0a3d5b2e-1250-45e6-a955-9ec7df774caf passed all 25 steps against an isolated synthetic Store. The broader forecast landing suite stopped at the unrelated Analytics assertion that expected no trendChart (actual count 1), before its Model Training checks. No forecasting calculations or authorization changes were made.
+
+## Separate Training Configuration direction - 2026-11-24
+
+Confirmed through grill-with-docs. This direction supersedes the four-section Model Training arrangement above. Implemented below as separate training and configuration pages.
+
+- **Model Training:** retain the header and existing forecasting navigation, Training overview, and Training history. Add a **Configure** link in the header to a separate **Training Configuration** page. Keep actual training status, scheduler health, readiness status, **Check Data Readiness**, training actions and essential warnings visible with the overview. Existing candidate and accuracy evidence remains available through its overview disclosures.
+- **Training Configuration:** move the weekly retraining schedule and Candidate Error Limits here, preserving separate save actions. Move **How it works** here as an expandable guide for eligibility, the read-only recipe and the approval sequence. Provide a clear return link to Model Training. Saving configuration neither requests training nor approves a model; the daily forecast schedule remains read-only.
+- **Training history:** replace the two independent collapsed history tables with **Training jobs** and **Recent training runs** tabs within this section only. Keep Training overview visible above both tabs. Open on Training jobs, retain each history's actual records and counts, and keep job requests distinct from completed-run evidence. Tab navigation must work with keyboard and without JavaScript; empty histories show an honest empty state.
+- **Access and presentation:** both Administrator and Super Administrator retain access to operational training configuration. Use a shared forecasting destination rather than placing it exclusively in Platform Settings or Store Configuration. Preserve technical model permissions, CSRF, validation, independent saves, Asia/Manila and AM/PM controls, Demo/replay restrictions, and candidate-versus-approved distinctions. Retain RetailMind's existing visual system and responsive light/dark presentation. No new domain term or ADR is needed for this reversible page-structure change.
+
+Implementation verification must cover both roles, direct unauthorized access, saving and invalid input on the new page, training/readiness actions on Model Training, both history tabs and their empty states, keyboard and JavaScript-free navigation, and narrow layouts in both themes. Update the existing training-settings, training-request and forecast-landing browser expectations for the new structure. Earlier verification above applies only to the existing arrangement.
+
+### Separate-page implementation
+
+Model Training now links to training_configuration.php through Configure. Its overview keeps readiness and the training action together; history uses Jobs / Runs query links and renders the selected table. Training Configuration owns the existing setting validation, independent atomic saves and audit attribution, with How it works collapsed by default. Shared segmented navigation styling is reused without sharing the workspace navigation selector; both full-page and fetch navigation retain Model Training as the parent destination. No dependency, model calculation or authorization changes.
+
+Verification: npm run check, npm run check:contracts, PHP syntax and diff whitespace checks passed. The disposable-database Administrator training settings browser suite passed for both authorized roles, 320/390/640/1440px in light/dark, independent persistence, validation, CSRF and field allowlists, audit rollback, no training or approval side effects, history navigation, parent selection and keyboard/JavaScript-free links. The training-request browser suite and shared fetch-navigation browser suite passed. TestSprite run 33a27b18-c2e9-4674-8b58-21210e683d5e passed the separate-page flow on an isolated synthetic Store; inspected its recorded steps. Refreshed desktop/mobile captures in tmp/training-configuration/ were visually inspected. Landing-page contracts passed; the dedicated forecast navigation contract retains its two previously documented failures for Store Calendar grouping and the Data Readiness link.
+
+The broader forecast landing browser rerun passed workspace switching, including the new training page, then stopped at the previously documented unrelated Analytics assertion: expected no trendChart, actual count 1. Its later route-specific checks remain unverified in that suite; the focused training suites above passed.
+
+## Training readiness action clarity - 2026-11-24
+
+Follow-up clarify/distill: the initial no-model status retains the top readiness action, renamed Check training readiness, with the next step Check which Products meet the training data requirements. Remove the duplicate overview readiness button while retaining its Product count and all blockers. Remove the repeated No candidate model yet card and its unused CSS because the top status already states that fact. Data Readiness remains available through forecast navigation in every state; configuration guidance keeps its contextual link. This supersedes the earlier instruction to keep a readiness action within the overview.
+
+Verification: npm run check, PHP syntax, diff whitespace and the focused Administrator training settings browser suite passed. Both authorized roles, 320/390/640/1440px in light/dark, one top readiness action and its destination, no duplicate overview action/empty card, saves and validation, CSRF/role boundaries, histories and JavaScript-free access are covered. Desktop and mobile light/dark captures in tmp/training-readiness-clarity/ were visually inspected.
+
+TestSprite run 11497ccf-75df-4aa5-8b49-7288a5942557 failed its final destination visibility assertion after recording a successful click. Its saved final HTML has base /components/report/data_readiness.php, title Forecast Data Readiness and the matching h1; the failure is not reported as a pass. The failure bundle was unavailable because the service reported that its environment had changed; inspected the run-scoped steps and downloaded HTML instead. The focused local browser check also exercises the actual link click, destination heading and URL. Full forecasting/ML suites were not rerun for this copy and duplicate-removal refinement.
+
+## Training overview grouping - 2026-11-24
+
+User-requested refinement: group the readiness verdict, ready Product count, short blocker explanation and training button in one action row. Place Latest training job and Automatic training in two aligned status columns beneath one divider; stack them on small screens. Move the full eligibility policy into the shared accessible info help. Preserve Demo/replay warnings, readiness rules, disabled/busy actions and candidate evidence. Remove the standalone Forecast analytics button; the existing Analytics workspace navigation remains available.
+
+On Model Training only, render scheduler health as a short state and last-check timestamp without the Windows task/log instruction or diagnostic reference. The Model Review scheduler partial is unchanged. No scheduler logic, training eligibility, jobs or model approval rules change. Remove unused section-link CSS.
+
+Verification: npm run check, PHP syntax and diff whitespace passed. Focused Administrator training settings and actual training-request browser suites passed; coverage includes blocked/queued/completed/failed jobs, both authorized roles, 320/390/640/1440px in light/dark, removed overview diagnostic copy/Analytics button and intact setting, history and permission behavior. Inspected refreshed desktop/mobile captures in tmp/training-overview-refresh/. TestSprite run aa78431a-3870-4190-881d-833a92981392 passed the overview layout and requirements-help checks; inspected its steps. Layout detector returned no findings, but also reported a PHP ENOENT on a file that exists, so its scan is not treated as full verification. No full forecast suite rerun for this presentation-only refinement.
+
+## Forecast Analytics discussion - 2026-11-24
+
+Confirmed through grill-with-docs; discovery remains open and UI implementation is not yet authorized.
+
+- Lead with forecast-versus-actual sales. Each selected tab should present one main chart and its related table; historical checks and prediction logs belong in secondary tabs rather than competing with the primary view.
+- Keep labels concise. Put supporting explanations in existing accessible info help or View details disclosures; keep essential warnings, results and next actions visible.
+- Still to resolve: how historical Training Candidate evidence and subsequent Store sales evidence are selected, and how dense tables are presented. Preserve their distinct meanings and existing calculations.
+
+### Analytics source and table decisions
+
+Confirmed in the next interview round:
+- Provide a clear Historical test / Store sales source selector. The visible results follow that selection; do not leave a historical section visible beside a Store-sales selection.
+- Tables show ten rows per page with search and pagination. Show essential columns first and expose supplementary row details on demand.
+- Default source, final tab grouping and initial comparison-table columns remain open. No UI implementation has started.
+
+### Analytics final direction for confirmation
+
+The user accepted the remaining source, grouping and column decisions. This completes the discovery choices above and supersedes their open-decision notes. Await final shared-understanding confirmation before UI implementation.
+
+- Open on Historical test. Keep Historical test / Store sales selection visible and make all source-dependent charts, tables and result labels follow it. Model metadata and training-only measurements remain clearly identified; do not present them as Store sales evidence. Missing results show an honest empty state.
+- Use four main tabs: Forecasts vs Sales, Product Errors, Model Details, Prediction Logs. Forecasts vs Sales is the initial tab. Product Errors groups the existing lowest/highest error views behind a selector. Model Details groups error trend, input influence and technical checks with explicit internal selection or disclosure so their contents do not compete at once. Prediction Logs contains the detailed records.
+- The primary comparison table shows Product, Date, Forecast and Actual sales. Forecast origin and baseline remain available in row Details where recorded. Retain original evidence dates and values; distinguish otherwise similar observations by their disclosed origin rather than merging evidence silently. Use available Product identifiers when names are not recorded.
+- Keep ten rows per page, search and pagination for record tables, and essential columns with on-demand supplementary details. One main chart and its related table per selected view where that evidence exists; do not invent charts or table data for views lacking them.
+- Supporting prose uses existing accessible info help and View details. Essential warnings, results, source identity and next actions remain visible. Preserve the existing RetailMind visual system, responsive light/dark behavior, accessible keyboard/touch interaction, calculations, records, authorization and server actions.
+- This is a reversible presentation change using existing domain meanings; no glossary addition or ADR is needed. Browser access was unavailable during discussion, so findings are source-based. UI implementation and runtime verification have not started.
+
+## Direction contract - Analytics redesign
+
+THESIS: One evidence source and one task at a time, replacing the competing historical block and chart collection.
+OWN-WORLD: Inherit RetailMind navy shell, action-blue selection, neutral work surfaces, semantic forecast/sales series and system UI type. Retain light/dark preference for staff reviewing results in the Store.
+STORY: Select the completed run and Historical test or Store sales; compare forecast and actual sales, inspect Product errors, then open model checks or logs as needed.
+FIRST VIEWPORT: Existing shell and workspace navigation; aligned source/run controls; concise provenance and essential warning; four navigation tabs; one comparison chart followed by its four-column searchable table. Supporting metadata stays disclosed. The signature is the consistent Product/date/forecast/actual comparison rhythm.
+FORM: User-pinned four-tab analysis workspace, code-led within the established world; no concept tournament because composition was explicitly settled. seed: none (user-pinned direction; concept-seed not applicable).
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+
+Implementation authorized by the user's final confirmation and explicit impeccable redesign request. No new visual system or model calculation is authorized.
+
+## Analytics implementation and verification - 2026-11-24
+
+Implemented the confirmed direction in forecast_analytics.php with surface-scoped forecast-analytics.css. Historical test is the default; source/run controls govern source-dependent evidence across four query-link views: Forecasts vs Sales, Product Errors (highest/lowest), Model Details (trend, input influence, checks), and Prediction Logs. Input influence remains historical-only. The first comparison has one chart and Product, Date, Forecast and Actual sales columns. Search spans recorded rows with ten per page; Details retains recorded origins, baselines, SKU, horizon and differences. Original daily values and distinct origins remain available. Rankings now include all recorded Products for search; Store logs retain their latest-25 scope and the chart its latest-ten matched comparisons.
+
+Native links, forms and disclosures retain JavaScript-free navigation and evidence access. Mobile tables become labelled rows, the current main tab centres on load/resize, and the shared info-tooltip helper clamps help to the painted root when a stable scrollbar gutter narrows it. Existing navy shell, Action Blue selection, neutral surfaces, system type, semantic series colours, focus treatment and light/dark preference remain the design authority. This is a local extension: docs/DESIGN.md and .impeccable/design.json were neither rewritten nor regenerated; no new global tokens, shipping raster assets or ADR were introduced. Local review captures are evidence only.
+
+Verification: npm run check, npm run check:contracts, PHP syntax, diff whitespace, forecast_analytics_contract.php, forecast_landing_page_contract_test.php and forecast_analytics_chart_test.js passed in the implementation pass. The focused disposable-database candidate_analytics_browser_test.js passed for Administrator/Super Administrator and direct Inventory Manager/Cashier denial, 320/390/640/1440px in light/dark, populated/empty/unknown source isolation, distinct origins, search/pagination, grouping, JavaScript-free access, active-tab visibility, tooltip Escape/gutters, retina resize and unchanged database state. The broader forecast_landing_browser_test.js passed after adapting existing Training Configuration expectations and resetting hover. Shared replenishment_tooltips_test.js and stock_movement_tooltip_browser_test.js passed after the tooltip fix. A final independent general-check rerun is not claimed here.
+
+TestSprite run a42b7001-4dc2-4488-a8ae-bd29a50b20fb passed 36/36 on an isolated synthetic Store; result and steps were inspected in tmp/analytics-testsprite/. This preceded the final tab-centering and gutter corrections, which the focused and shared local suites verified. The independent finish reviewer marked the hidden mobile current-tab and clipped-tooltip findings RESOLVED after refreshed captures and returned SHIP for those two fixes only. Captures are in .impeccable/review/forecast-analytics/, including comparison/errors/model/logs in desktop/mobile light/dark, mobile row details/help, empty state and 320px Store views. The actual signed-in localhost dataset was not inspected; no full ML training/backtest suite ran. Existing global-system drift was preserved rather than promoted into new design rules.
+
+Final independent checks: npm run check and npm run check:contracts passed, as did PHP syntax, Analytics contracts, chart grouping, tooltip unit checks and diff whitespace. The pre-existing duplicate open-register ID warning in cashier/shifts.php remains. The final broad forecast_landing_browser_test.js rerun after the shared tooltip clamp passed. Training Configuration expectations now target its separate page; its recipe-help check uses keyboard activation to avoid hover re-entry during pointer scrolling.

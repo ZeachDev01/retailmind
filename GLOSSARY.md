@@ -299,6 +299,18 @@ _Avoid_: Training candidate, approved Product
 A model produced by a completed training run and awaiting quality review and explicit approval. It is not a forecast and is not the approved Store model.
 _Avoid_: Eligible Product, approved model
 
+**Model Retraining**:
+The creation of a new Training Candidate from eligible Store history. It does not itself approve the candidate or replace the approved Store model.
+_Avoid_: Forecast Generation, model activation
+
+**Forecast Generation**:
+The production of estimated future Product sales using the approved Store model. It is separate from Model Retraining.
+_Avoid_: Model training, model approval
+
+**Candidate Error Limit**:
+The maximum permitted prediction error for a Training Candidate over a stated forecast period. Meeting the limit alone does not qualify or approve the candidate.
+_Avoid_: Accuracy guarantee, model tuning parameter
+
 **Training Readiness Notice**:
 An operational notice explaining whether Store Products are ready for model training, including when no Product currently satisfies Store Training Eligibility.
 _Avoid_: Training failure, model approval notice

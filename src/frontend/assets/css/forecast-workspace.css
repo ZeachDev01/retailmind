@@ -244,16 +244,16 @@
 }
 
 /* Forecast workspace: navigation shows location, never completion. */
-.forecast-studio-nav { display: flex; gap: .15rem; padding: .3rem; margin-top: 1.25rem; background: var(--card-bg, #fff); border: 1px solid var(--border, #e5e7eb); border-radius: 12px; overflow-x: auto; scrollbar-width: thin; scroll-snap-type: x proximity; }
-.forecast-studio-nav::-webkit-scrollbar { height: 4px; }
-.forecast-studio-nav::-webkit-scrollbar-thumb { background: var(--border, #e5e7eb); border-radius: 999px; }
-.forecast-studio-nav a { display: flex; flex: 1 0 auto; align-items: center; justify-content: center; gap: .45rem; min-height: 44px; padding: .5rem .8rem; border-radius: 9px; white-space: nowrap; text-decoration: none; color: var(--muted, #64748b); font-size: .875rem; font-weight: 600; scroll-snap-align: center; transition: background-color 160ms ease-out, color 160ms ease-out; }
-.forecast-studio-nav a > i { font-size: 1.05rem; opacity: .85; }
-.forecast-studio-nav a:hover { background: var(--theme-surface-soft, #f8fafc); color: var(--text, #1f2937); }
-.forecast-studio-nav a:focus-visible { outline: 2px solid var(--text, #1f2937); outline-offset: 2px; }
-.forecast-studio-nav a[aria-current="page"] { background: var(--primary, #2563eb); color: #fff; }
-.forecast-studio-nav a[aria-current="page"]:focus-visible { outline-color: #fff; outline-offset: -2px; }
-.forecast-studio-nav a[aria-current="page"] > i { opacity: 1; }
+:is(.forecast-studio-nav, .ml-history-tabs) { display: flex; gap: .15rem; padding: .3rem; margin-top: 1.25rem; background: var(--card-bg, #fff); border: 1px solid var(--border, #e5e7eb); border-radius: 12px; overflow-x: auto; scrollbar-width: thin; scroll-snap-type: x proximity; }
+:is(.forecast-studio-nav, .ml-history-tabs)::-webkit-scrollbar { height: 4px; }
+:is(.forecast-studio-nav, .ml-history-tabs)::-webkit-scrollbar-thumb { background: var(--border, #e5e7eb); border-radius: 999px; }
+:is(.forecast-studio-nav, .ml-history-tabs) a { display: flex; flex: 1 0 auto; align-items: center; justify-content: center; gap: .45rem; min-height: 44px; padding: .5rem .8rem; border-radius: 9px; white-space: nowrap; text-decoration: none; color: var(--muted, #64748b); font-size: .875rem; font-weight: 600; scroll-snap-align: center; transition: background-color 160ms ease-out, color 160ms ease-out; }
+:is(.forecast-studio-nav, .ml-history-tabs) a > i { font-size: 1.05rem; opacity: .85; }
+:is(.forecast-studio-nav, .ml-history-tabs) a:hover { background: var(--theme-surface-soft, #f8fafc); color: var(--text, #1f2937); }
+:is(.forecast-studio-nav, .ml-history-tabs) a:focus-visible { outline: 2px solid var(--text, #1f2937); outline-offset: 2px; }
+:is(.forecast-studio-nav, .ml-history-tabs) a[aria-current="page"] { background: var(--primary, #2563eb); color: #fff; }
+:is(.forecast-studio-nav, .ml-history-tabs) a[aria-current="page"]:focus-visible { outline-color: #fff; outline-offset: -2px; }
+:is(.forecast-studio-nav, .ml-history-tabs) a[aria-current="page"] > i { opacity: 1; }
 .forecast-status-content { display: grid; grid-template-columns: 1fr auto; align-items: start; column-gap: .75rem; }
 .forecast-status-content h2 { grid-column: 1; align-self: center; margin: 0; }
 .forecast-status-content h2 > i { color: var(--primary, #2563eb); margin-right: .35rem; }
@@ -280,8 +280,8 @@
 .forecast-import-page input[type="file"] { width: 100%; box-sizing: border-box; padding: 1.5rem; border: 1px dashed var(--muted, #64748b); border-radius: 10px; background: var(--theme-surface-soft, #f8fafc); color: var(--text, #1f2937); }
 .forecast-import-page input[type="file"]::file-selector-button { padding: .65rem 1rem; margin-right: 1rem; border: 0; border-radius: 8px; background: var(--primary, #2563eb); color: #fff; cursor: pointer; }
 @media (max-width: 760px) {
-    .forecast-studio-nav { justify-content: flex-start; }
-    .forecast-studio-nav a { flex: 0 0 auto; }
+    :is(.forecast-studio-nav, .ml-history-tabs) { justify-content: flex-start; }
+    :is(.forecast-studio-nav, .ml-history-tabs) a { flex: 0 0 auto; }
 }
 @media (max-width: 640px) {
     .forecast-workspace .forecast-stack-table { min-width: 0; overflow-x: visible; white-space: normal; }
@@ -304,11 +304,11 @@
 }
 @media (max-width: 640px) {
     .forecast-readiness-visual { grid-template-columns: 1fr; gap: 1rem; }
-    .forecast-studio-nav a { min-height: 44px; font-size: .82rem; }
+    :is(.forecast-studio-nav, .ml-history-tabs) a { min-height: 44px; font-size: .82rem; }
     .forecast-import-page input[type="file"] { padding: .75rem; }
 }
-@media print { .forecast-studio-nav { display: none; } }
-html[data-theme="dark"] .forecast-workspace .forecast-studio-nav a[aria-current="page"] { background: #2563eb; color: #fff; }
+@media print { :is(.forecast-studio-nav, .ml-history-tabs) { display: none; } }
+html[data-theme="dark"] .forecast-workspace :is(.forecast-studio-nav, .ml-history-tabs) a[aria-current="page"] { background: #2563eb; color: #fff; }
 html[data-theme="dark"] .forecast-import-page input[type="file"]::file-selector-button { background: #2563eb; color: #fff; }
 
 .forecast-predictions-page .forecast-status-card {

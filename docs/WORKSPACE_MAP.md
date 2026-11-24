@@ -134,8 +134,12 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
 - **Forecasting Pipeline**:
   - Import Sales: `components/system_administrator/forecast_import.php` (`App\Services\ForecastHistoryImportService`)
   - Data Readiness: `components/report/data_readiness.php` (`App\Forecasting\DemandHistoryService`)
-  - Model Training & Settings: `components/system_administrator/ml_settings.php` (`App\Services\MlJobService`)
+  - Model Training: `components/system_administrator/ml_settings.php` (`App\Services\MlJobService`); overview and Jobs / Runs history navigation.
+  - Training Configuration: `components/system_administrator/training_configuration.php`; weekly schedule, Candidate Error Limits, and expandable guidance. Open through Configure on Model Training; both Administrator and Super Administrator retain access.
+  - Verification: `admin_training_settings_browser_test.js` (settings persistence, authorization, validation, history navigation and JavaScript-free access), `admin_training_request_browser_test.js`, `forecast_landing_browser_test.js`.
   - Analytics & Exceptions: `components/report/forecast_analytics.php`, `forecast_exceptions.php` (`App\Forecasting\ForecastAggregateReader`)
+    - Analytics presentation: `src/frontend/assets/css/forecast-analytics.css`; chart grouping: `src/frontend/assets/js/forecast-analytics-chart.js`; shared accessible help: `src/frontend/assets/js/info-tooltip.js`.
+    - Analytics verification: `src/backend/tests/candidate_analytics_browser_test.js`, `forecast_analytics_contract.php`, `forecast_analytics_chart_test.js`; shared help regression: `replenishment_tooltips_test.js`, `stock_movement_tooltip_browser_test.js`.
 
 ---
 

@@ -114,7 +114,7 @@
             dropdown.querySelector('.dropbtn')?.setAttribute('aria-expanded', 'false');
         });
         document.querySelectorAll('#appSidebar a[href]').forEach(link => {
-            const active = new URL(link.href).pathname === url.pathname;
+            const active = new URL(link.href).pathname === url.pathname.replace(/\/training_configuration\.php$/, '/ml_settings.php');
             link.classList.toggle('active', active);
             if (active) {
                 link.setAttribute('aria-current', 'page');

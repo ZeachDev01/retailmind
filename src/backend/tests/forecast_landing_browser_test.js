@@ -70,6 +70,23 @@ const fixture = action => {
             }
         };
 
+        const analyticsView = async view => {
+            const follow = async id => {
+                const link = page.locator('#analytics-tab-' + id);
+                const href = new URL(await link.getAttribute('href'), page.url()).href;
+                await link.click();
+                await page.waitForURL(href);
+                await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') !== 'true');
+            };
+            if (['features','trend','checks'].includes(view)) {
+                await follow('model');
+                await follow(view);
+            } else if (['best','attention'].includes(view)) {
+                await follow('errors');
+                await follow(view);
+            } else await follow(view);
+        };
+
         const legacyReports = fs.readFileSync('src/frontend/assets/css/reports.css', 'utf8').split('.analytics-empty-state {')[0];
         await page.route('**/assets/css/reports.css', route => route.fulfill({contentType: 'text/css', body: legacyReports}));
         await login('super_admin');
@@ -88,8 +105,8 @@ const fixture = action => {
                 await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') === 'false');
                 assert.ok(await page.locator('link[rel="stylesheet"]').evaluateAll(links => links.some(link => new URL(link.href).pathname.endsWith('/assets/css/reports.css') && new URL(link.href).searchParams.has('v'))), 'Analytics uses versioned CSS even with an older service-worker cache');
                 for (const tab of ['actual', 'features', 'trend', 'best', 'attention', 'actual']) {
-                    await page.locator('#analytics-tab-' + tab).click();
-                    const empty = page.locator('#analytics-panel-' + tab + ' .analytics-empty-state');
+                    await analyticsView(tab);
+                    const empty = page.locator('.analytics-tab-panel .analytics-empty-state');
                     const geometry = await empty.locator('.analytics-empty-art').evaluate(el => {
                         const art = el.getBoundingClientRect();
                         const icon = el.querySelector('.analytics-empty-icon').getBoundingClientRect();
@@ -120,8 +137,8 @@ const fixture = action => {
             for (const width of [1440, 390, 320]) {
                 await page.setViewportSize({width, height: 900});
                 for (const tab of ['actual', 'features', 'trend', 'best', 'attention']) {
-                    await page.locator('#analytics-tab-' + tab).click();
-                    const panel = page.locator('#analytics-panel-' + tab);
+                    await analyticsView(tab);
+                    const panel = page.locator('.analytics-tab-panel');
                     const empty = panel.locator('.analytics-empty-state');
                     assert.equal(await empty.isVisible(), true, tab + ' explains missing evidence');
                     assert.ok((await empty.locator('h3').innerText()).length > 0);
@@ -139,10 +156,9 @@ const fixture = action => {
                 }
             }
         }
-        for (const label of ['Historical model checks · 7, 14 & 28 days', 'Recent prediction logs']) {
-            const details = page.locator('details').filter({has: page.getByText(label, {exact: true})});
-            await details.locator('summary').click();
-            assert.equal(await details.locator('.analytics-empty-state').isVisible(), true, label + ' has an empty state');
+        for (const view of ['checks', 'logs']) {
+            await analyticsView(view);
+            assert.equal(await page.locator('.analytics-tab-panel .analytics-empty-state').isVisible(), true, view + ' has an empty state');
         }
         await page.evaluate(() => document.documentElement.dataset.theme = 'light');
         await page.setViewportSize({width: 1440, height: 900});
@@ -480,7 +496,7 @@ const fixture = action => {
         await page.evaluate(() => { window.savedForecastTransition = document.startViewTransition; document.startViewTransition = undefined; });
         await page.locator('.forecast-studio-nav a[href$="/ml_settings.php"]').click();
         await page.waitForURL('**/ml_settings.php');
-        await page.locator('#schedule_weekly_retrain_day').waitFor();
+        await page.locator('#training-title').waitFor();
         assert.equal(await page.locator('.main-content [data-navigation-status][role="alert"]').count(), 0, 'Navigation still works without View Transitions');
         await page.evaluate(() => { document.startViewTransition = window.savedForecastTransition; });
         for (const route of ['report/forecast_analytics.php', 'system_administrator/ml_settings.php', 'system_administrator/forecast_import.php', 'report/data_readiness.php', 'report/predictions.php', 'report/forecast_exceptions.php']) {
@@ -549,11 +565,6 @@ const fixture = action => {
                 for (const width of [1440, 640, 390, 320]) {
                     await page.setViewportSize({width, height: 900});
                     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, route + ' fits ' + width + ' in ' + theme);
-                    if (route.includes('ml_settings') && width === 1440) {
-                        const fields = await page.locator('.ml-schedule-grid select').evaluateAll(elements => elements.map(el => el.getBoundingClientRect()));
-                        assert.ok(Math.abs(fields[0].top - fields[1].top) < 1, 'Weekday and hour fields align despite the help button');
-                        assert.ok(Math.abs(fields[2].top - fields[3].top) < 1, 'Minute and period fields align');
-                    }
                     if (process.env.FORECAST_SCREENSHOTS && [1440, 390].includes(width)) {
                         fs.mkdirSync(process.env.FORECAST_SCREENSHOTS, {recursive: true});
                         await page.screenshot({path: path.join(process.env.FORECAST_SCREENSHOTS, path.basename(route, '.php') + '-' + theme + '-' + width + '.png'), fullPage: true, animations: 'disabled'});
@@ -561,26 +572,43 @@ const fixture = action => {
                 }
             }
             if (route.includes('forecast_analytics')) {
-                assert.equal(await page.locator('#analytics-tab-actual').getAttribute('aria-selected'), 'true');
-                await page.locator('#analytics-tab-trend').click();
-                assert.equal(await page.locator('#trendChart').count(), 0, 'Missing recorded training errors never produce a sample trend');
-                await page.locator('#analytics-tab-features').click();
+                assert.equal(await page.locator('#analytics-tab-actual').getAttribute('aria-current'), 'page');
+                await analyticsView('trend');
+                assert.equal(await page.locator('#trendChart').count(), 0, 'Missing comparable historical errors never produce a sample trend');
+                await analyticsView('features');
                 assert.equal(await page.locator('#featureChart').count(), 0, 'Missing weights never produce invented feature importance');
             }
             if (route.includes('ml_settings')) {
-                const eligibility = page.locator('details').filter({has: page.locator('[aria-label="Training Eligibility policy"]')}).first();
-                assert.equal(await eligibility.getAttribute('open'), null, 'Training policy starts collapsed');
-                await eligibility.locator('summary').first().click();
-                await page.getByText('Fixed model recipe & approval requirements', {exact: true}).click();
-                assert.equal(await page.getByRole('region', {name: 'Training Eligibility policy', exact: true}).innerText(), eligibilityPolicy, 'Readiness and settings explain one effective policy');
-                assert.match(await page.getByRole('region', {name: 'Effective model recipe', exact: true}).innerText(), /15 trees, maximum depth 8, random seed 42/);
+                assert.deepEqual((await page.locator('main > .dashboard-section > .section-header h2').allInnerTexts()).map(text => text.trim()), ['Training overview', 'Training history']);
+                for (const [title, table] of [['Training jobs', 'Recent training jobs'], ['Recent training runs', 'Recent training runs log']]) {
+                    await page.getByRole('navigation', {name: 'Training history', exact: true}).getByRole('link', {name: title, exact: true}).click();
+                    await page.getByRole('table', {name: table, exact: true}).waitFor();
+                }
+                const trainingStatus = await page.locator('.ml-job-status:not([data-scheduler-state])').innerText();
+                await page.getByRole('link', {name: 'Configure', exact: true}).click();
+                await page.locator('#schedule_weekly_retrain_day').waitFor();
+                await page.setViewportSize({width:1440,height:900});
+                const fields = await page.locator('.ml-schedule-grid select').evaluateAll(elements => elements.map(el => el.getBoundingClientRect()));
+                assert.ok(Math.abs(fields[0].top - fields[1].top) < 1, 'Weekday and hour fields align on Training Configuration');
+                assert.ok(Math.abs(fields[2].top - fields[3].top) < 1, 'Minute and period fields align on Training Configuration');
+                await page.setViewportSize({width:320,height:900});
+                await page.locator('#training-guide-heading').click();
+                const eligibilityHelp = page.getByRole('button', {name: 'About training eligibility', exact: true});
+                await eligibilityHelp.click();
+                assert.equal((await page.locator('#training-eligibility-help').innerText()).replace(/\s+/g, ' ').trim(), eligibilityPolicy.replace(/\s+/g, ' ').trim(), 'Readiness and settings explain one effective policy');
+                await eligibilityHelp.press('Escape');
+                await page.mouse.move(0,0);
+                const recipeHelp = page.getByRole('button', {name: 'About the fixed model recipe', exact: true});
+                await recipeHelp.focus();
+                await recipeHelp.press('Enter');
+                assert.match(await page.locator('#model-recipe-help').innerText(), /15 trees, maximum depth 8, random seed 42/);
+                await page.keyboard.press('Escape');
                 assert.equal(await page.locator('[name="min_training_days"], [name="preferred_training_days"], [name="min_nonzero_days"], [name="max_training_days"], [name="forecast_horizon_days"], [name="lower_percentile"], [name="upper_percentile"], [name="n_estimators"], [name="max_depth"]').count(), 0, 'Disconnected inputs remain removed');
                 assert.equal(await page.locator('#schedule_weekly_retrain_day').inputValue(), 'Sunday');
                 assert.match(await page.locator('#effective-training-schedule').innerText(), /Sunday at 1:00 AM, Philippine time \(Asia\/Manila\)/);
                 assert.equal(await page.locator('[name="retrain_frequency_days"], [name="retrain_new_sales_records"], [name="schedule_daily_forecast_time"]').count(), 0, 'Only weekly training is editable');
                 const scheduleForm = page.locator('form').filter({has: page.locator('[name="action"][value="save_schedule"]')});
                 const scheduleUrl = page.url();
-                const trainingStatus = await page.locator('.ml-job-status:not([data-scheduler-state])').innerText();
                 const timeHelp = page.getByRole('button', {name: 'About training time', exact: true});
                 await page.mouse.move(0, 0);
                 await timeHelp.scrollIntoViewIfNeeded();
@@ -610,7 +638,11 @@ const fixture = action => {
                     assert.equal(await page.locator('#effective-training-schedule').innerText(), `Every Wednesday at ${display}, Philippine time (Asia/Manila).`);
                     assert.equal(await page.locator('#schedule_hour').inputValue(), hour);
                     assert.equal(await page.locator('#schedule_period').inputValue(), period);
+                    await page.getByRole('link', {name: 'Back to Model Training', exact: true}).click();
+                    await page.locator('#training-title').waitFor();
                     assert.equal(await page.locator('.ml-job-status:not([data-scheduler-state])').innerText(), trainingStatus, 'Saving does not queue training');
+                    await page.getByRole('link', {name: 'Configure', exact: true}).click();
+                    await page.locator('#schedule_weekly_retrain_day').waitFor();
                 }
                 const scheduleValues = await scheduleForm.evaluate(form => Object.fromEntries(new FormData(form)));
                 assert.equal((await page.context().request.post(scheduleUrl, {form: {...scheduleValues, csrf_token: ''}})).status(), 403, 'Schedule saves require CSRF');
@@ -629,13 +661,13 @@ const fixture = action => {
         }
         for (const role of ['inventory_manager', 'cashier']) {
             await login(role);
-            const response = await page.context().request.post(origin + '/components/system_administrator/ml_settings.php', {form: {
+            const response = await page.context().request.post(origin + '/components/system_administrator/training_configuration.php', {form: {
                 action: 'save_schedule', schedule_weekly_retrain_day: 'Friday', schedule_hour: '3', schedule_minute: '00', schedule_period: 'AM',
             }});
             assert.equal(response.status(), 403, role + ' cannot save a training schedule');
         }
         await login('super_admin');
-        await page.goto(origin + '/components/system_administrator/ml_settings.php');
+        await page.goto(origin + '/components/system_administrator/training_configuration.php');
         assert.match(await page.locator('#effective-training-schedule').innerText(), /Wednesday at 11:59 PM/, 'Unauthorized saves preserve the schedule');
         await page.goto(origin + '/components/report/data_readiness.php');
         assert.equal(await page.locator('.forecast-studio-nav a[href*="ml_settings.php"]').count(), 1, 'Forecast studio links authorized users to training settings');

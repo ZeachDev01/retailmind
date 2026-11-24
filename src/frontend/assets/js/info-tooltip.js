@@ -19,7 +19,9 @@
             box.style.overflowY = 'auto';
             const placeBelow = box.offsetHeight <= below || below >= above;
             box.style.maxHeight = (placeBelow ? below : above) + 'px';
-            box.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - box.offsetWidth - 8)) + 'px';
+            // The stable scrollbar gutter can make the painted root narrower than innerWidth.
+            const viewportWidth = Math.min(window.innerWidth, document.documentElement.getBoundingClientRect().right);
+            box.style.left = Math.max(8, Math.min(rect.left, viewportWidth - box.offsetWidth - 8)) + 'px';
             box.style.top = Math.max(top, Math.min(window.innerHeight - box.offsetHeight - 8,
                 placeBelow ? rect.bottom + 4 : rect.top - box.offsetHeight - 4)) + 'px';
         };

@@ -83,7 +83,7 @@ try {
         assert.match(await page.locator('main').innerText(),/Training queued/);
         assert.equal(fixture('state').jobs.length,1);
         const job = fixture('state').jobs[0];
-        assert.match(await page.locator('.ml-action-bar .ml-job-status').innerText(),new RegExp('#' + job.job_id + '.*Queued'));
+        assert.match(await page.locator('.ml-training-status .ml-job-status:not([data-scheduler-state])').innerText(),new RegExp('#' + job.job_id + '.*Queued'));
         assert.equal(Number(job.requester_id),role === 'admin' ? 1 : 2);
         const audit = fixture('state').audit.at(-1);
         assert.equal(Number(audit.record_id),Number(job.job_id));
@@ -101,7 +101,7 @@ try {
             assert.deepEqual(completed.trained_product_ids,[1],'worker excludes Product without eligible history');
             assert.equal(completed.candidate_qualification,'failed','successful training can fail baseline quality');
             await page.reload({waitUntil:'domcontentloaded'});
-            await page.locator('#runs-heading').click();
+            await page.getByRole('navigation', {name:'Training history',exact:true}).getByRole('link',{name:'Training jobs',exact:true}).click();
             const history = await page.getByRole('table',{name:'Recent training jobs',exact:true}).innerText();
             assert.match(history,/Completed/);
             assert.match(history,/Failed - approval separate/);
@@ -111,7 +111,7 @@ try {
             assert.equal(orphan.diagnostic_reference,'UNCOMMITTED_RESULTS');
             fixture('fail_latest');
             await page.reload({waitUntil:'domcontentloaded'});
-            await page.locator('#runs-heading').click();
+            await page.getByRole('navigation', {name:'Training history',exact:true}).getByRole('link',{name:'Training jobs',exact:true}).click();
             assert.match(await page.locator('main').innerText(),/ERR-TEST-502/);
             assert.doesNotMatch(await page.locator('main').innerText(),/DO-NOT-EXPOSE|Traceback/);
         }

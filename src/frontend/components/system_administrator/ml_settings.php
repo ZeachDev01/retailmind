@@ -2,61 +2,9 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_capability(\App\Authorization\RoleCapabilityPolicy::CONFIGURE_TRAINING_SETTINGS);
 
-// Each settings action accepts only its own fields, including crafted requests.
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $settingFields = [
-        'save_schedule' => ['schedule_weekly_retrain_day', 'schedule_hour', 'schedule_minute', 'schedule_period'],
-        'save_model_quality' => ['ml_max_wape_7d', 'ml_max_wape_14d', 'ml_max_wape_28d'],
-    ];
-    $action = is_string($_POST['action'] ?? null) ? $_POST['action'] : '';
-    if (isset($settingFields[$action])) {
-        csrf_verify();
-        if (array_diff(array_keys($_POST), ['action', 'csrf_token', ...$settingFields[$action]])) {
-            http_response_code(403);
-            exit('Only the weekly training schedule and candidate error limits can be changed here.');
-        }
-    }
-}
-
 $message = '';
 $messageClass = '';
-$fieldErrors = [];
-$fieldGroups = [
-    'accuracy' => [
-        'title' => 'Candidate error limits',
-        'description' => 'WAPE measures prediction error: lower is better. Each horizon must meet its limit and strictly beat repeating last weekâ€™s sales. Missing evidence blocks qualification.',
-    ],
-];
-$definitions = [];
-foreach ([7, 14, 28] as $horizon) {
-    $definitions["ml_max_wape_{$horizon}d"] = [
-        'label' => "{$horizon}-day maximum WAPE (%)",
-        'help' => 'Allowed error from 0% to 200%. This is not an accuracy guarantee.',
-        'min' => 0, 'max' => 200, 'step' => '0.1', 'type' => 'number',
-        'required' => true, 'group' => 'accuracy',
-    ];
-}
 $governance = new \App\Forecasting\StoreModelGovernanceService($pdo);
-$loadLimits = static function () use ($governance): array {
-    $values = [];
-    foreach ($governance->getThresholds() as $horizon => $fraction) {
-        $values["ml_max_wape_{$horizon}d"] = $fraction === null ? '' : (string)($fraction * 100);
-    }
-    return $values;
-};
-
-$settings = $loadLimits();
-$scheduler = new \App\Forecasting\ForecastingSchedulerService($pdo);
-$effectiveSchedule = $scheduler->getEffectiveSchedule();
-$weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-$trainingTime = DateTimeImmutable::createFromFormat('!H:i', $effectiveSchedule['weekly_retrain_time']);
-$scheduleFields = [
-    'schedule_weekly_retrain_day' => $effectiveSchedule['weekly_retrain_day'],
-    'schedule_hour' => $trainingTime->format('g'),
-    'schedule_minute' => $trainingTime->format('i'),
-    'schedule_period' => $trainingTime->format('A'),
-];
-$scheduleErrors = [];
 $demoMetadata = $pdo->query("SELECT setting_value FROM platform_settings WHERE setting_key='demo_import_metadata'")->fetchColumn();
 $demoDatabase = (string)$pdo->query('SELECT DATABASE()')->fetchColumn();
 $isLocalDemo = $demoMetadata !== false
@@ -115,94 +63,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_schedule') {
-    csrf_verify();
-    foreach ($scheduleFields as $key => $value) {
-        $scheduleFields[$key] = is_string($_POST[$key] ?? null) ? trim($_POST[$key]) : '';
-    }
-    if (!in_array($scheduleFields['schedule_weekly_retrain_day'], $weekdays, true)) {
-        $scheduleErrors['schedule_weekly_retrain_day'] = 'Select a weekday from Sunday through Saturday.';
-    }
-    if (!preg_match('/^(?:[1-9]|1[0-2])$/D', $scheduleFields['schedule_hour'])
-        || !preg_match('/^[0-5][0-9]$/D', $scheduleFields['schedule_minute'])
-        || !in_array($scheduleFields['schedule_period'], ['AM', 'PM'], true)) {
-        $scheduleErrors['schedule_time'] = 'Select a time from 12:00 AM to 11:59 PM.';
-    }
-    if (!$scheduleErrors) {
-        $hour = (int)$scheduleFields['schedule_hour'] % 12 + ($scheduleFields['schedule_period'] === 'PM' ? 12 : 0);
-        $scheduleUpdates = [
-            'schedule_weekly_retrain_day' => $scheduleFields['schedule_weekly_retrain_day'],
-            'schedule_weekly_retrain_time' => sprintf('%02d:%s', $hour, $scheduleFields['schedule_minute']),
-        ];
-        try {
-            $pdo->beginTransaction();
-            $saveSchedule = $pdo->prepare('INSERT INTO platform_settings (setting_key, setting_value, updated_by) VALUES (?, ?, ?)
-                ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)');
-            foreach ($scheduleUpdates as $key => $value) {
-                $saveSchedule->execute([$key, $value, (int)$_SESSION['user_id']]);
-            }
-            $pdo->exec("DELETE FROM ml_settings WHERE setting_key IN ('schedule_weekly_retrain_day', 'schedule_weekly_retrain_time')");
-            log_activity($pdo, (int)$_SESSION['user_id'], 'ML schedule update', 'Demand Forecasting', null, null, $scheduleUpdates);
-            $pdo->commit();
-            $effectiveSchedule = $scheduler->getEffectiveSchedule();
-            $message = 'Weekly schedule saved. Training starts when due, subject to eligible history and worker availability. No training was queued or model approved by this save.';
-            $messageClass = 'tag-success';
-        } catch (Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            $message = \App\Support\OperatorAlert::message($e, 'Could not save the weekly schedule. Retry.');
-            $messageClass = 'tag-warning';
-        }
-    } else {
-        $message = 'Schedule was not saved. Review the highlighted fields below.';
-        $messageClass = 'tag-warning';
-    }
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_model_quality') {
-    csrf_verify();
-    $updates = [];
-    $errors = [];
-    foreach ($definitions as $key => $definition) {
-        $value = is_string($_POST[$key] ?? null) ? trim($_POST[$key]) : '';
-        $settings[$key] = $value;
-        if ($definition['type'] === 'number') {
-            $step = (string)($definition['step'] ?? '1');
-            $isFloatStep = strpos($step, '.') !== false;
-            $numericValid = is_numeric($value) && ($isFloatStep || preg_match('/^-?\d+$/', $value) === 1);
-            if (!$numericValid || !is_finite((float)$value) || (float)$value < $definition['min'] || (float)$value > $definition['max']) {
-                $rangeMessage = sprintf(
-                    '%s must be between %s and %s.',
-                    $definition['label'],
-                    number_format((float)$definition['min'], $isFloatStep ? 1 : 0),
-                    number_format((float)$definition['max'], $isFloatStep ? 1 : 0)
-                );
-                $fieldErrors[$key] = $rangeMessage;
-                $errors[] = $rangeMessage;
-                continue;
-            }
-        }
-        $updates[$key] = $value;
-    }
-
-    if (!$errors) {
-        try {
-            $pdo->beginTransaction();
-            $governance->setThresholds(array_map(static fn($value): float => (float)$value / 100, $updates), (int)$_SESSION['user_id']);
-            log_activity($pdo, (int)$_SESSION['user_id'], 'ML settings update', 'Demand Forecasting', null, null, $updates);
-            $pdo->commit();
-            $settings = $loadLimits();
-            $message = 'Forecast settings saved. Training Eligibility remains fixed; saving does not train or approve a model.';
-            $messageClass = 'tag-success';
-        } catch (Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            $message = \App\Support\OperatorAlert::message($e, 'Could not save candidate error limits. Retry.');
-            $messageClass = 'tag-warning';
-        }
-    } else {
-        $message = 'Settings were not saved. Review the highlighted fields below.';
-        $messageClass = 'tag-warning';
-    }
-}
 
 try {
     $runs = $pdo->query("SELECT started_at, trigger_type, status, duration_seconds, eligible_products, sales_records_used, error_message FROM model_training_runs ORDER BY started_at DESC LIMIT 12")->fetchAll(PDO::FETCH_ASSOC);
@@ -254,6 +114,8 @@ $formatRunDetails = static function (?string $errorMessage): string {
     return 'Review the job diagnostic reference before retrying.';
 };
 
+$historyView = is_string($_GET['history'] ?? null) && $_GET['history'] === 'runs' ? 'runs' : 'jobs';
+
 $stylePath = __DIR__ . '/../../assets/css/style.css';
 $styleVersion = is_file($stylePath) ? (string)filemtime($stylePath) : '1';
 $candidateEvidence = json_decode($latestCandidate['metrics_json'] ?? '{}', true);
@@ -287,6 +149,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
             <div>
                 <h1>Model Training</h1>
             </div>
+            <div class="ml-page-actions"><a class="btn btn-secondary" href="training_configuration.php">Configure</a></div>
         </div>
 
         <?php if ($message): ?>
@@ -302,7 +165,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
         } elseif (($trainingJob['status'] ?? '') === 'failed') {
             forecast_status_summary('Latest training attempt failed', 'The worker could not complete the latest job.', 'Review the training history and worker status before retrying. Any earlier model keeps its existing approval status.');
         } elseif (!$latestCandidate) {
-            forecast_status_summary('No trained model yet', 'There are no completed training results to review.', 'Check sales data first, then train a candidate.', app_url('components/report/data_readiness.php'), 'Check sales data');
+            forecast_status_summary('No trained model yet', 'There are no completed training results to review.', 'Check which Products meet the training data requirements.', app_url('components/report/data_readiness.php'), 'Check training readiness');
         } elseif ($approvedVersion === $latestCandidate['model_version']) {
             forecast_status_summary($isLocalDemo ? 'Demo model approved' : 'Latest model is selected', 'Approval alone does not confirm todayâ€™s product coverage.', 'Check Demand Forecast for usable expected sales.', app_url('components/report/predictions.php'), 'See forecast status');
         } elseif (empty($candidateQuality['passed'])) {
@@ -317,7 +180,7 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
         <section class="dashboard-section" aria-labelledby="training-title">
             <div class="section-header">
                 <div>
-                    <h2 id="training-title"><i class="bi bi-cpu" aria-hidden="true"></i> Candidate model &amp; training <?php forecast_help('training-scope-help', 'Training creates a candidate. It does not replace the approved model.', 'About candidate training'); ?></h2>
+                    <h2 id="training-title"><i class="bi bi-cpu" aria-hidden="true"></i> Training overview <?php forecast_help('training-scope-help', 'Training creates a candidate. It does not replace the approved model.', 'About candidate training'); ?></h2>
                 </div>
             </div>
 
@@ -335,34 +198,45 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                 </div>
             <?php endif; ?>
 
-            <?php if (!$isLocalDemo && !$isHostedReplay && $eligibleTrainingProducts === []): ?>
-                <div class="ml-banner tag-warning" role="alert">
-                    No Product is ready for training. Each Product needs
-                    <?= (int)\App\Forecasting\StoreTrainingEligibilityService::MINIMUM_USABLE_DAYS ?>
-                    accumulated usable days, supported recent inputs and chronological holdouts through yesterday. Review the eligibility details below.
-                </div>
-            <?php elseif (!$isLocalDemo && !$isHostedReplay && count($eligibleTrainingProducts) < count($trainingReadiness)): ?>
-                <div class="ml-banner ml-banner-info" role="note">
-                    <?= count($eligibleTrainingProducts) ?> of <?= count($trainingReadiness) ?> Products are ready for training.
-                    Training will use eligible Products only; excluded Product reasons are listed below.
-                </div>
-            <?php endif; ?>
-
             <div class="ml-training-panel">
-            <div class="ml-action-bar">
-                <form class="ml-action-form" method="post">
-                    <?= csrf_field() ?>
-                    <button class="btn" type="submit" name="action" value="train" <?= $isTraining || $isHostedReplay || (!$isLocalDemo && !$isHostedReplay && $eligibleTrainingProducts === []) ? 'disabled' : '' ?>>
-                        <?= $isTraining ? 'Training in progressâ€¦' : 'Train candidate model' ?>
-                    </button>
-                </form>
-                <div class="ml-job-status" role="status" aria-live="polite">
-                    <span>Latest training job</span>
-                    <strong><?= htmlspecialchars($trainingJob ? '#' . $trainingJob['job_id'] . ' Â· ' . (($trainingJob['status'] ?? '') === 'succeeded' ? 'Completed' : ucfirst($trainingJob['status'])) : 'Not started') ?></strong>
+                <div class="ml-action-bar">
+                    <div class="ml-readiness" aria-label="Training readiness">
+                        <div class="ml-setting-heading">
+                            <h3><?= $isHostedReplay ? 'Saved replay' : ($isLocalDemo ? 'Demo training' : ($eligibleTrainingProducts === [] ? 'Not ready to train' : 'Ready to train')) ?></h3>
+                            <?php
+                            ob_start();
+                            require __DIR__ . '/../report/training_eligibility_policy.php';
+                            $eligibilityHelp = trim(preg_replace('/\s+/', ' ', html_entity_decode(strip_tags(ob_get_clean()), ENT_QUOTES, 'UTF-8')));
+                            forecast_help('overview-training-requirements', $eligibilityHelp, 'About training requirements');
+                            ?>
+                        </div>
+                        <p class="ml-readiness-count"><?= count($eligibleTrainingProducts) ?> of <?= count($trainingReadiness) ?> Products ready</p>
+                        <?php if (!$isLocalDemo && !$isHostedReplay): ?>
+                            <p class="ml-readiness-note"><?= $eligibleTrainingProducts === [] ? 'No Products meet the training requirements yet.' : 'Training uses ready Products only.' ?></p>
+                        <?php endif; ?>
+                    </div>
+                    <form class="ml-action-form" method="post">
+                        <?= csrf_field() ?>
+                        <button class="btn" type="submit" name="action" value="train" <?= $isTraining || $isHostedReplay || (!$isLocalDemo && !$isHostedReplay && $eligibleTrainingProducts === []) ? 'disabled' : '' ?>>
+                            <?= $isTraining ? 'Training in progress…' : 'Train candidate model' ?>
+                        </button>
+                    </form>
                 </div>
-            </div>
-
-            <?php require __DIR__ . '/../report/forecast_scheduler_health.php'; ?>
+                <div class="ml-training-status" aria-label="Training status">
+                    <div class="ml-job-status" role="status" aria-live="polite">
+                        <span>Latest training job</span>
+                        <strong><?= htmlspecialchars($trainingJob ? '#' . $trainingJob['job_id'] . ' · ' . (($trainingJob['status'] ?? '') === 'succeeded' ? 'Completed' : ucfirst($trainingJob['status'])) : 'Not started') ?></strong>
+                    </div>
+                    <?php
+                    $schedulerHealth = \App\Forecasting\ForecastingSchedulerService::getSchedulerHealth();
+                    $schedulerLabels = ['idle' => 'Up to date', 'work_pending' => 'Work waiting', 'stale' => 'Check overdue', 'unavailable' => 'Status unavailable'];
+                    ?>
+                    <div class="ml-job-status" role="status" aria-live="polite" data-scheduler-state="<?= htmlspecialchars($schedulerHealth['state']) ?>">
+                        <span>Automatic training</span>
+                        <strong><?= htmlspecialchars($schedulerLabels[$schedulerHealth['state']]) ?></strong>
+                        <p><?= $schedulerHealth['checked_at'] ? 'Last checked: ' . htmlspecialchars($schedulerHealth['checked_at']) . ' · Asia/Manila' : 'No check recorded yet.' ?></p>
+                    </div>
+                </div>
             <?php if ($latestCandidate): ?>
                 <div class="candidate-card">
                     <details class="forecast-details"><summary>Candidate data &amp; model version</summary>
@@ -387,8 +261,8 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                     </details>
 
                     <details class="forecast-details"><summary>Accuracy results &amp; observation details</summary>
-                    <div class="table-wrap">
-                        <table aria-label="Candidate evaluation metrics">
+                    <div class="table-wrap" tabindex="0" role="region" aria-label="Candidate evaluation metrics">
+                        <table aria-label="Candidate evaluation metrics" data-no-ghost-rows>
                             <thead>
                                 <tr>
                                     <th scope="col">Forecast horizon</th>
@@ -432,175 +306,21 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                         </form>
                     <?php endif; ?>
                 </div>
-            <?php else: ?>
-                    <div class="ml-empty-state">
-                        <i class="bi bi-cpu" aria-hidden="true"></i>
-                        <div>
-                            <strong>No candidate model yet</strong>
-                            <p>Import product-level history, verify worker status, then train a candidate for review.</p>
-                        </div>
-                    </div>
-                <?php endif; ?>
+            <?php endif; ?>
 
-                <div class="ml-section-links">
-                    <a class="btn btn-secondary" href="../report/forecast_analytics.php">Forecast analytics</a>
-                </div>
                 </div>
         </section>
 
-        <section class="dashboard-section" aria-labelledby="schedule-heading">
-            <div class="section-header"><div>
-                <h2 id="schedule-heading">Weekly Model Retraining</h2>
-                <p id="effective-training-schedule" class="section-description">Every <?= htmlspecialchars($effectiveSchedule['weekly_retrain_day']) ?> at <?= htmlspecialchars(DateTimeImmutable::createFromFormat('!H:i', $effectiveSchedule['weekly_retrain_time'])->format('g:i A')) ?>, Philippine time (Asia/Manila).</p>
-            </div></div>
-            <form method="post">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="save_schedule">
-                <div class="form-grid ml-schedule-grid">
-                    <div class="form-group<?= isset($scheduleErrors['schedule_weekly_retrain_day']) ? ' invalid' : '' ?>">
-                        <label for="schedule_weekly_retrain_day">Training weekday</label>
-                        <select id="schedule_weekly_retrain_day" name="schedule_weekly_retrain_day" required<?= isset($scheduleErrors['schedule_weekly_retrain_day']) ? ' aria-invalid="true" aria-describedby="schedule_day_error"' : '' ?>>
-                            <?php foreach ($weekdays as $day): ?>
-                                <option value="<?= $day ?>"<?= $scheduleFields['schedule_weekly_retrain_day'] === $day ? ' selected' : '' ?>><?= $day ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <?php if (isset($scheduleErrors['schedule_weekly_retrain_day'])): ?><small id="schedule_day_error" class="field-error"><?= htmlspecialchars($scheduleErrors['schedule_weekly_retrain_day']) ?></small><?php endif; ?>
-                    </div>
-                    <?php foreach ([
-                        'schedule_hour' => ['Training hour', range(1, 12)],
-                        'schedule_minute' => ['Training minute', range(0, 59)],
-                        'schedule_period' => ['AM or PM', ['AM', 'PM']],
-                    ] as $key => [$label, $options]): ?>
-                        <div class="form-group<?= isset($scheduleErrors['schedule_time']) ? ' invalid' : '' ?>">
-                            <div class="forecast-field-label">
-                                <label for="<?= $key ?>"><?= $label ?></label>
-                                <?php if ($key === 'schedule_hour'): ?>
-                                    <?php forecast_help('schedule_time_help', 'Select a time from 12:00 AM to 11:59 PM, Philippine time (Asia/Manila). Prefer a time after Store close. Missed training runs catch up when the PC starts.', 'About training time'); ?>
-                                <?php endif; ?>
-                            </div>
-                            <select id="<?= $key ?>" name="<?= $key ?>" required aria-describedby="schedule_time_help<?= isset($scheduleErrors['schedule_time']) ? ' schedule_time_error' : '' ?>"<?= isset($scheduleErrors['schedule_time']) ? ' aria-invalid="true"' : '' ?>>
-                                <?php foreach ($options as $option): $value = $key === 'schedule_minute' ? sprintf('%02d', $option) : (string)$option; ?>
-                                    <option value="<?= $value ?>"<?= $scheduleFields[$key] === $value ? ' selected' : '' ?>><?= $value ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-                <?php if (isset($scheduleErrors['schedule_time'])): ?><small id="schedule_time_error" class="field-error"><?= htmlspecialchars($scheduleErrors['schedule_time']) ?></small><?php endif; ?>
-                <div class="form-actions">
-                    <button class="btn" type="submit">Save Weekly Schedule</button>
-                    <p class="section-description">Daily Forecast Generation remains separate at <?= htmlspecialchars(DateTimeImmutable::createFromFormat('!H:i', $effectiveSchedule['daily_forecast_time'])->format('g:i A')) ?>, Philippine time (Asia/Manila).</p>
-                </div>
-            </form>
-        </section>
-        <section class="ml-secondary"><details class="forecast-details"><summary>Training eligibility &amp; product history</summary>
-            <?php require __DIR__ . '/../report/training_eligibility_policy.php'; ?>
-            <details>
-                <summary>Training Eligibility by Product</summary>
-                <div class="table-wrap" tabindex="0" role="region" aria-label="Product Training Eligibility">
-                    <table class="data-table" aria-label="Product data collection progress">
-                        <thead><tr><th scope="col">Product</th><th scope="col">Usable days collected</th><th scope="col">Evidence and next steps</th></tr></thead>
-                        <tbody>
-                        <?php foreach (get_forecasting_readiness($pdo) as $readiness): ?>
-                            <tr>
-                                <td><?= htmlspecialchars($readiness['product_name']) ?></td>
-                                <td><?= (int)$readiness['accumulated_usable_days'] ?> / <?= (int)$readiness['required_usable_days'] ?> usable days<br>
-                                    <?= (int)$readiness['calendar_history_days'] ?> calendar days; <?= (int)$readiness['days_with_sales'] ?> days with sales; <?= (int)$readiness['genuine_zero_days'] ?> genuine zero days</td>
-                                <td><strong><?= $readiness['training_eligible'] ? 'Ready for training' : 'Insufficient Data' ?></strong>
-                                    <?php foreach (array_merge($readiness['eligibility_blockers'], $readiness['eligibility_actions']) as $detail): ?>
-                                        <p><?= htmlspecialchars($detail) ?></p>
-                                    <?php endforeach; ?>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </details>
-        </details></section>
-
-        <section class="ml-secondary" aria-label="Effective model recipe">
-            <details class="forecast-details"><summary>Fixed model recipe &amp; approval requirements</summary>
-            <p>Shared Random Forest: 15 trees, maximum depth 8, random seed 42.</p>
-            <p>Forecast Horizons: 7, 14 and 28 days. Forecasts are point quantities; prediction intervals are unavailable.</p>
-            <p>Training completion does not qualify a candidate. Chronological quality checks, required observation evidence,
-                compatible Store artifacts and explicit local Administrator approval remain required.
-                Failed or rejected candidates leave the approved model unchanged. Demo review never activates a Store model.</p>
-            </details>
-        </section>
-
-        <?php if (!$isLocalDemo): ?>
-        <section class="ml-secondary" aria-labelledby="settings-heading"><details class="forecast-details"<?= $fieldErrors ? ' open' : '' ?>><summary id="settings-heading">Forecast &amp; model parameters</summary>
-            <div class="section-header">
-                <div>
-
-                    <p class="section-description">Review forecasting settings. Training Eligibility uses the fixed policy above.</p>
-                </div>
-            </div>
-            <form id="model-quality-settings" method="post" novalidate>
-                <input type="hidden" name="action" value="save_model_quality">
-                <?= csrf_field() ?>
-                <?php foreach ($fieldGroups as $groupKey => $groupMeta): ?>
-                    <fieldset class="settings-fieldset">
-                        <legend><?= htmlspecialchars($groupMeta['title']) ?></legend>
-                        <?php if (isset($groupMeta['description'])): ?>
-                            <?php forecast_help('group-' . $groupKey, $groupMeta['description'], 'About ' . $groupMeta['title']); ?>
-                        <?php endif; ?>
-                        <div class="form-grid">
-                            <?php foreach ($definitions as $key => $definition):
-                                if (($definition['group'] ?? '') !== $groupKey) {
-                                    continue;
-                                }
-                                $isRequired = !empty($definition['required']);
-                                $hasError = isset($fieldErrors[$key]);
-                                $errorId = $key . '_error';
-                                $helpId = $key . '_help';
-                                $describedBy = trim((isset($definition['help']) ? $helpId : '') . ($hasError ? ' ' . $errorId : ''));
-                                $groupClasses = 'form-group' . (!empty($definition['full']) ? ' full' : '') . ($hasError ? ' invalid' : '');
-                                $inputMode = $definition['type'] === 'number' ? (isset($definition['step']) ? 'decimal' : 'numeric') : null;
-                            ?>
-                                <div class="<?= $groupClasses ?>">
-                                    <div class="forecast-field-label">
-                                        <label for="<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($definition['label']) ?></label>
-                                        <?php if (isset($definition['help'])): ?>
-                                            <?php forecast_help($helpId, $definition['help'], 'About ' . $definition['label']); ?>
-                                        <?php endif; ?>
-                                    </div>
-                                    <input id="<?= htmlspecialchars($key) ?>"
-                                           name="<?= htmlspecialchars($key) ?>"
-                                           type="<?= htmlspecialchars($definition['type']) ?>"
-                                           value="<?= htmlspecialchars((string)($settings[$key] ?? '')) ?>"
-                                           <?= $inputMode ? ' inputmode="' . $inputMode . '"' : '' ?>
-                                           <?= isset($definition['min']) ? ' min="' . (int)$definition['min'] . '"' : '' ?>
-                                           <?= isset($definition['max']) ? ' max="' . (int)$definition['max'] . '"' : '' ?>
-                                           <?= isset($definition['step']) ? ' step="' . htmlspecialchars((string)$definition['step']) . '"' : '' ?>
-                                           <?= isset($definition['placeholder']) ? ' placeholder="' . htmlspecialchars((string)$definition['placeholder']) . '"' : '' ?>
-                                           autocomplete="off"
-                                           <?= $describedBy !== '' ? ' aria-describedby="' . htmlspecialchars($describedBy) . '"' : '' ?>
-                                           <?= $hasError ? ' aria-invalid="true"' : '' ?>
-                                           <?= $isRequired ? ' required' : '' ?>>
-                                    <?php if ($hasError): ?>
-                                        <small id="<?= htmlspecialchars($errorId) ?>" class="field-error"><?= htmlspecialchars($fieldErrors[$key]) ?></small>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </fieldset>
-
-                <?php endforeach; ?>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn">Save Settings</button>
-                    <p class="section-description">Saved limits are used when candidate quality is evaluated. Saving does not train or approve a model.</p>
-                </div>
-            </form>
-        </details></section>
-        <?php endif; ?>
-
-        <section class="ml-secondary" aria-labelledby="runs-heading">
-<details class="forecast-details"><summary id="runs-heading">Recent training runs</summary>
+        <section class="dashboard-section" aria-labelledby="history-heading">
+            <div class="section-header"><h2 id="history-heading">Training history</h2></div>
+            <div class="ml-history-summary"><span><?= count($trainingJobs) ?> recent jobs</span><span><?= count($runs) ?> recent runs</span><?php forecast_help('training-history-help', 'Jobs track requests, waiting work and diagnostic references. Runs record actual training execution, duration and the history used. A completed job or run does not mean the candidate passed quality checks or received approval. Switch between jobs and runs to investigate a training attempt.', 'About training history'); ?></div>
+            <nav class="ml-history-tabs" aria-label="Training history">
+                <a href="?history=jobs#history-heading"<?= $historyView === 'jobs' ? ' aria-current="page"' : '' ?>>Training jobs</a>
+                <a href="?history=runs#history-heading"<?= $historyView === 'runs' ? ' aria-current="page"' : '' ?>>Recent training runs</a>
+            </nav>
+            <?php if ($historyView === 'jobs'): ?>
             <div class="table-wrap" tabindex="0" role="region" aria-label="Training job history">
-                <table aria-label="Recent training jobs">
+                <table aria-label="Recent training jobs" data-no-ghost-rows>
                     <thead><tr><th scope="col">Job</th><th scope="col">Requested</th><th scope="col">State</th><th scope="col">Candidate qualification</th><th scope="col">Result / diagnostic</th></tr></thead>
                     <tbody>
                     <?php foreach ($trainingJobs as $job): $jobStatus = $formatRunStatus($job['status']); ?>
@@ -619,14 +339,9 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                     </tbody>
                 </table>
             </div>
-            <div class="section-header">
-                <div>
-
-                    <p class="section-description">Latest 12 training runs, newest first. Job completion does not grant candidate qualification or approval.</p>
-                </div>
-            </div>
-            <div class="table-wrap">
-                <table aria-label="Recent training runs log">
+            <?php else: ?>
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Training run history">
+                <table aria-label="Recent training runs log" data-no-ghost-rows>
                     <thead>
                         <tr>
                             <th scope="col">Started</th>
@@ -658,8 +373,8 @@ $approvedVersion = (string)($pdo->query("SELECT setting_value FROM platform_sett
                     </tbody>
                 </table>
             </div>
-        </details>
-</section>
+            <?php endif; ?>
+        </section>
     </main>
 </div>
 <?php if ($isTraining): ?>
