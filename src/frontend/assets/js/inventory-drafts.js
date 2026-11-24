@@ -249,7 +249,7 @@ window.RetailMindInventoryDrafts = (() => {
                 submitted.set(retained, {token:retained.elements.operation_token.value, original:draft.context.submittedFingerprint, latest:draft.context.latestSubmittedFingerprint});
                 retained.dataset.inventorySubmissionKind = draft.context.operationKind || '';
             }
-            const panel = document.createElement('div'); panel.className = 'alert alert-info inventory-recovery-alert'; panel.setAttribute('role', 'note'); panel.dataset.recoveryId = draft.id;
+            const panel = document.createElement('div'); panel.className = 'alert inventory-recovery-alert'; panel.setAttribute('role', 'note'); panel.dataset.recoveryId = draft.id;
             const slot = document.querySelector('[data-inventory-recovery-slot]');
             const label = slot && ({receiving_form: 'Unfinished receiving', 'add-product-form': 'Unfinished product'})[draft.id];
             const text = document.createElement('span'); text.textContent = label || 'Unfinished inventory work (' + draft.id + '). ';

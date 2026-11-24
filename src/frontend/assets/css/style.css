@@ -2672,8 +2672,15 @@ tr:last-child td { border-bottom: none; }
 .inventory-page-heading > h1 { margin: 0; }
 .inventory-recovery-slot { display: grid; gap: .5rem; min-width: 0; max-width: 100%; margin-left: auto; }
 .inventory-recovery-slot:empty { display: none; }
-.inventory-recovery-slot .inventory-recovery-alert { flex-wrap: nowrap; margin: 0; padding: .5rem .75rem; gap: .5rem .75rem; font-size: .8125rem; font-weight: 500; }
+.inventory-recovery-slot .inventory-recovery-alert { flex-wrap: nowrap; margin: 0; padding: .25rem .5rem .25rem .875rem; gap: .25rem 1rem; background: var(--card-bg); color: var(--text); font-size: .8125rem; font-weight: 500; }
 .inventory-recovery-slot .inventory-recovery-alert > span { flex: 1 1 auto; }
+.inventory-recovery-slot .inventory-recovery-actions { width: auto; flex-wrap: nowrap; gap: .25rem; }
+.inventory-recovery-slot .inventory-recovery-actions .btn { flex: none; min-height: 44px; padding: .375rem .75rem; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--theme-info-text, #1d4ed8); font-size: .8125rem; font-weight: 600; line-height: 1.25; box-shadow: none; transform: none; white-space: nowrap; }
+.inventory-recovery-slot .inventory-recovery-actions .btn:hover { background: var(--theme-info-surface, #eff6ff); }
+.inventory-recovery-slot .inventory-recovery-actions .btn-secondary { border-color: transparent; color: var(--muted); font-weight: 500; }
+.inventory-recovery-slot .inventory-recovery-actions .btn-secondary:hover { background: var(--surface-soft, #f8fafc); color: var(--text); }
+.inventory-recovery-slot .inventory-recovery-actions .btn:focus-visible { outline: 2px solid var(--primary, #2563eb); outline-offset: 2px; }
+.inventory-recovery-slot .inventory-recovery-actions .btn:disabled { opacity: .55; cursor: wait; }
 #inventory-draft-status { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.75rem 1rem; border-radius: 10px; border: 1px solid var(--border); margin: 0 0 1rem; font-size: 0.92rem; font-weight: 500; line-height: 1.45; background: var(--theme-info-surface, #eff6ff); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); }
 #inventory-draft-status[role="alert"] { background: var(--theme-danger-surface, #fee2e2); color: var(--theme-danger-text, #991b1b); border-color: #fecaca; }
 .inventory-draft-dismiss { background: transparent; border: none; font-size: 1.25rem; line-height: 1; color: inherit; opacity: 0.6; cursor: pointer; padding: 0.15rem 0.35rem; border-radius: 6px; margin-left: auto; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
