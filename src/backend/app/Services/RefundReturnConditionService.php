@@ -47,7 +47,7 @@ class RefundReturnConditionService
             $h=$this->pdo->prepare('SELECT c.*,u.'.$actorColumn.' AS actor_name FROM refund_return_condition_corrections c JOIN users u ON u.user_id=c.actor_id WHERE refund_item_id=? ORDER BY version DESC');$h->execute([$line['refund_item_id']]);$line['corrections']=$h->fetchAll(PDO::FETCH_ASSOC);
             $line['version']=(int)($line['corrections'][0]['version']??0);$line['effective_condition']=$line['corrections'][0]['new_condition']??$line['disposition'];
             try { $this->assertNoLegacyStockReview($refund); $legacyClear=true; } catch (DomainException $e) { $legacyClear=false; }
-            $line['eligible']=$legacyClear && ($line['selling_form']??'piece')==='piece' && in_array($line['effective_condition'],['damaged','restockable'],true);
+            $line['eligible']=$legacyClear && in_array($line['selling_form']??'piece',['piece','pack'],true) && (($line['selling_form']??'piece')!=='pack' || (int)($line['pack_size']??0)>1) && in_array($line['effective_condition'],['damaged','restockable'],true);
         }return $lines;
     }
     public function correct(int $actor,string $role,int $item,string $target,string $reason,int $expectedVersion,string $token,bool $fitForSale): int
