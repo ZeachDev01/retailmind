@@ -529,20 +529,16 @@ $pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES (204, 10
 $pdo->prepare("INSERT INTO product_batches (batch_id, product_id, quantity, remaining_quantity, cost_price, expiration_date, date_received)
                VALUES (2041, 204, 10, 10, NULL, ?, ?)")->execute([$futureExpiry, $nowTime]);
 
-$sale4B = $salesWorkflow->checkout(
-    [['product_id' => 204, 'qty' => 2]],
-    $cashierId,
-    'cashier',
-    'cash',
-    ['cash_received' => 30.00, 'tendered' => 30.00]
+$throws(
+    static fn() => $salesWorkflow->checkout(
+        [['product_id' => 204, 'qty' => 2]], $cashierId, 'cashier', 'cash',
+        ['cash_received' => 30.00, 'tendered' => 30.00]
+    ),
+    DomainException::class,
+    'New sales with ambiguous zero or missing cost are blocked'
 );
-$alloc4B = $pdo->query("SELECT sib.* FROM sale_item_batches sib
-                        JOIN sale_items si ON si.sale_item_id = sib.sale_item_id
-                        WHERE si.sale_id = {$sale4B['sale_id']}")->fetch();
-
-$assert($alloc4B['unit_cost'] === null, 'Ambiguous zero cost is stored as NULL (uncertainty)');
-$assert($alloc4B['cost_status'] === 'missing', 'Ambiguous zero cost status is missing');
-$assert($alloc4A['cost_status'] !== $alloc4B['cost_status'], 'Confirmed zero is distinguishable from unknown/missing cost');
+$assert((int)$pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id=204')->fetchColumn() === 10, 'Missing-cost refusal preserves stock');
+$assert((int)$pdo->query('SELECT COUNT(*) FROM sale_items WHERE product_id=204')->fetchColumn() === 0, 'Missing-cost refusal creates no sale item or cost snapshot');
 
 // Scenario 4C: Estimated Cost (batch has no cost, but catalog product has cost_price > 0)
 $pdo->exec("INSERT INTO products (product_id, sku, barcode, product_name, unit_price, cost_price, status)

@@ -1,0 +1,3 @@
+# Direct Manager Stock Issue recording
+
+On 2026-11-25, the user chose direct Inventory Manager recording of confirmed Stock Issues and a single Manager decision for Cashier reports, retiring the active clarification conversation and reply-dependent waiting state. Requiring a report followed by a separate approval offers no independent check when one person holds both roles; Manager authority therefore stays within the active Inventory Manager Workspace, with attribution and quantity history providing accountability. The Manager may change the confirmed quantity before recording or approval, while a Cashier's original report remains preserved; see [the agreed design](../specs/simplified-stock-issues.md), implemented after explicit user authorization.

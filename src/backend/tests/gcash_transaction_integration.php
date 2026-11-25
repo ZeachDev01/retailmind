@@ -20,7 +20,7 @@ if (in_array($argv[2] ?? '', ['--save-race', '--review-race', '--open-race', '--
     for ($attempt = 0; $attempt < 5; $attempt++) {
         try {
             if ($argv[2] === '--save-race') { $service->save(4, '0000000000004', '1', 'Payment'); }
-            elseif ($argv[2] === '--open-race') { $service->openSession((int)$argv[3], 1000.0, 5000.0); }
+            elseif ($argv[2] === '--open-race') { $service->openSession((int)$argv[3], 1000.0, 5000.0, '09171234567'); }
             elseif ($argv[2] === '--cash-in-race') {
                 $service->recordCashIn((int)$argv[3], [
                     'principal' => 100,
@@ -147,13 +147,13 @@ foreach ([['--save-race'], ['--review-race', (string)$id3]] as $arguments) {
 // Ticket #239: Open, reconcile, and hand over GCash responsibility
 
 // 1. Shift requirement & register lock checks
-$refuse(fn() => $service->openSession(999, 1000.0, 5000.0));
-$refuse(fn() => $service->openSession(4, -10.0, 5000.0));
-$refuse(fn() => $service->openSession(4, 1000.0, -50.0));
+$refuse(fn() => $service->openSession(999, 1000.0, 5000.0, '09171234567'));
+$refuse(fn() => $service->openSession(4, -10.0, 5000.0, '09171234567'));
+$refuse(fn() => $service->openSession(4, 1000.0, -50.0, '09171234567'));
 
 // Register lock blocks opening
 $pdo->exec("UPDATE cashier_shifts SET locked_at=NOW() WHERE cashier_id=4 AND status='open'");
-try { $refuse(fn() => $service->openSession(4, 1000.0, 5000.0)); }
+try { $refuse(fn() => $service->openSession(4, 1000.0, 5000.0, '09171234567')); }
 finally { $pdo->exec("UPDATE cashier_shifts SET locked_at=NULL WHERE cashier_id=4 AND status='open'"); }
 
 // Setup a second cashier (user 5) with an open unlocked shift
@@ -164,7 +164,7 @@ $pdo->exec("INSERT INTO cashier_shifts (shift_id, cashier_id, register_id, openi
 
 // 2. Open session for Cashier 4
 $check($service->getCurrentSession() === null, 'No session open initially');
-$sess1 = $service->openSession(4, 1000.00, 5000.00);
+$sess1 = $service->openSession(4, 1000.00, 5000.00, '09171234567');
 $current = $service->getCurrentSession();
 $check($current !== null && (int)$current['session_id'] === $sess1 && (int)$current['cashier_id'] === 4, 'Session 1 open by cashier 4');
 $expectedInit = $service->calculateSessionExpected($sess1);
@@ -173,7 +173,7 @@ $check($expectedInit['expected_service_cash'] === 1000.00 && $expectedInit['expe
 // 3. Second cashier cannot open session concurrently (409)
 $secondOpenBlocked = false;
 try {
-    $service->openSession(5, 500.00, 2000.00);
+    $service->openSession(5, 500.00, 2000.00, '09171234567');
 } catch (DomainException $e) {
     if ($e->getCode() === 409 && str_contains($e->getMessage(), 'Only one Cashier may control GCash at a time')) {
         $secondOpenBlocked = true;
@@ -231,7 +231,7 @@ $check($sessRow['status'] === 'closed' && $sessRow['closed_by'] == 4 && $sessRow
 $check($service->getCurrentSession() === null, 'No session open after closing');
 
 // 7. Handover transfers responsibility and preserves continuity
-$sess2 = $service->openSession(4, 1500.00, 4520.00);
+$sess2 = $service->openSession(4, 1500.00, 4520.00, '09171234567');
 $handover = $service->handoverSession(4, 5, 1500.00, 4520.00, 'Shift change handover');
 $check($handover['outgoing_session_id'] === $sess2, 'Outgoing session closed');
 $sess3 = $handover['incoming_session_id'];
@@ -253,7 +253,7 @@ $service->closeSession(4, 1500.00, 4520.00, 'Close clean');
 $pdo->exec("CREATE TRIGGER gcash_session_audit_fail BEFORE INSERT ON activity_log FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Audit injection fail'");
 try {
     $auditThrew = false;
-    try { $service->openSession(4, 1000.0, 5000.0); } catch (PDOException $e) { $auditThrew = true; }
+    try { $service->openSession(4, 1000.0, 5000.0, '09171234567'); } catch (PDOException $e) { $auditThrew = true; }
     $check($auditThrew && $service->getCurrentSession() === null, 'Audit failure must roll back openSession');
 } finally { $pdo->exec('DROP TRIGGER gcash_session_audit_fail'); }
 
@@ -279,7 +279,7 @@ $check($raceOutcomes === ['accepted', 'duplicate'], 'Concurrent open must accept
 $pdo->exec("UPDATE gcash_service_sessions SET status='closed', closed_at=NOW() WHERE status='open'");
 
 // 11. Ticket #240: Accountable Cash-In movements
-$sess5 = $service->openSession(4, 1000.00, 5000.00);
+$sess5 = $service->openSession(4, 1000.00, 5000.00, '09171234567');
 
 // Unlocked register check / wrong cashier
 $refuse(fn() => (new GCashTransactionService($pdo, ['min_length' => 13, 'max_length' => 13]))->recordCashIn(5, [
@@ -461,7 +461,7 @@ $check($legacyRow['session_id'] === null && $legacyRow['verification_status'] ==
 $service->closeSession(4, 2520.00, 3900.00, 'Closing session 5', 1);
 
 // 12. Ticket #241: Accountable Cash-Out movements with either fee payment method
-$sess6 = $service->openSession(4, 3000.00, 5000.00);
+$sess6 = $service->openSession(4, 3000.00, 5000.00, '09171234567');
 
 // Unlocked register check / wrong cashier
 $refuse(fn() => (new GCashTransactionService($pdo, ['min_length' => 13, 'max_length' => 13]))->recordCashOut(5, [
@@ -632,7 +632,7 @@ $refuse(fn() => $service->recordCashOut(4, [
 $service->closeSession(4, 1010.00, 7010.00, 'Closing session 6');
 
 // Session 7 for Centavo fees and Needs checking
-$sess7 = $service->openSession(4, 20000.00, 10000.00);
+$sess7 = $service->openSession(4, 20000.00, 10000.00, '09171234567');
 
 // Centavo fee: PHP 12,345 principal with PHP 123.45 fee in cash
 $co12kId = $service->recordCashOut(4, [
@@ -758,7 +758,7 @@ $check((int)$pdo->query("SELECT COUNT(*) FROM gcash_transactions WHERE reference
 $service->closeSession(4, 7288.45, 23355.00, 'Closing session 7', 2);
 
 // Ticket #242: Session 8 - Funding movements, linked corrections, resolving needs checking, discrepancy waivers, emergency handover
-$sess8 = $service->openSession(4, 2000.00, 5000.00);
+$sess8 = $service->openSession(4, 2000.00, 5000.00, '09171234567');
 
 // Funding movements: permissions, evidence, validation, balance updates
 $refuse(fn() => $service->recordFundingMovement(4, 'cashier', [
@@ -819,7 +819,7 @@ $fundId1 = $service->recordFundingMovement(4, 'cashier', [
 ]);
 $check($fundId1 > 0, 'Funding replenishment recorded');
 $fRow1 = $pdo->query('SELECT * FROM gcash_funding_movements WHERE movement_id = ' . $fundId1)->fetch(PDO::FETCH_ASSOC);
-$check((int)$fRow1['authorized_by'] === 1 && (int)$fRow1['recorded_by'] === 4, 'Authorized by admin 1, recorded by cashier 4');
+$check($fRow1['authorized_by'] === null && (int)$fRow1['recorded_by'] === 4, 'Direct recording by cashier 4 without an Administrator approver');
 $exp8 = $service->calculateSessionExpected($sess8);
 $check($exp8['expected_service_cash'] === 3000.00, 'Expected service cash: 3000.00');
 $check($exp8['expected_wallet_balance'] === 5000.00, 'Expected wallet: 5000.00');
@@ -1061,7 +1061,7 @@ $pdo->exec("INSERT INTO registers (register_id, name) VALUES ({$newRegisterId}, 
 $pdo->exec("INSERT INTO cashier_shifts (shift_id, cashier_id, register_id, opening_cash, status) VALUES ({$newShiftId}, {$newUserId}, {$newRegisterId}, 100, 'open')");
 
 // Cashier 4 opens Session 9
-$sess9 = $service->openSession(4, 1000.00, 2000.00);
+$sess9 = $service->openSession(4, 1000.00, 2000.00, '09171234567');
 
 // Non-admin emergency handover refused
 $refuse(fn() => $service->emergencyHandover(4, $newUserId, 1000.00, 2000.00, 'Cashier cannot do emergency handover'));
@@ -1082,7 +1082,7 @@ $check($newSessRow['status'] === 'open' && (int)$newSessRow['cashier_id'] === $n
 $service->closeSession($newUserId, 1000.00, 2000.00, 'Closing handed-over session', 0);
 
 // Ticket #243: Cashier Overview, fee split, needs_checking scoping, and history cashier authorization
-$sess10 = $service->openSession(4, 2000.00, 5000.00);
+$sess10 = $service->openSession(4, 2000.00, 5000.00, '09171234567');
 $ciId = $service->recordCashIn(4, [
     'principal' => 1000,
     'reference' => '0000000000701',
@@ -1423,7 +1423,7 @@ $pdo->exec("UPDATE users SET full_name = '=GCASH_CSV_TEST' WHERE user_id = 4");
 $pdo->exec("INSERT INTO gcash_transactions (session_id, transaction_type, reference_number, amount, cashier_id, verification_status, notes) VALUES (NULL, 'Payment', '7990000000999', 50.00, 4, 'Needs checking', 'Legacy unresolved reference')");
 // Maximum configured reference and centavo fee preserved through the completion boundary.
 $pdo->exec("UPDATE gcash_service_sessions SET status='closed' WHERE status='open'");
-$service->openSession(4, 1000.00, 50000.00);
+$service->openSession(4, 1000.00, 50000.00, '09171234567');
 $wideReferenceService = new GCashTransactionService($pdo, ['min_length' => 6, 'max_length' => 32]);
 $longId = $wideReferenceService->recordCashIn(4, ['principal' => 12345, 'reference' => '00000000000000000000000000123456', 'confirmed_wallet' => true, 'confirmed_cash' => true]);
 $longReceipt = $receipts->fetch($longId, 4, 'cashier');

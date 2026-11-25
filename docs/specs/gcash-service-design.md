@@ -119,9 +119,9 @@ The sign says 10,000 and above is 1%; at exactly 10,000 this also gives 100. The
 Operational policies settled on 2026-10-19 for implementation (#237):
 
 ### 1. Funding, replenishment, and balance adjustments
-- **Authority**: Only Store Administrators or Managers may perform or authorize replenishment and withdrawal of GCash Service Cash and Service Wallet funds.
+- **Authority (revised 2026-11-25)**: The responsible Cashier directly records Service funds movements in an open GCash session without Administrator approval. Preserve balance checks, source/destination and evidence rules, confirmed actual movement, and recorder attribution; historical approvals remain intact.
 - **Cashier handoff**: The responsible Cashier may request replenishment when service cash or wallet balances run low, and must confirm actual receipt upon physical cash or wallet handover.
-- **Cross-fund transfers**: Any transfer between Service Cash and the Product cash drawer requires explicit Administrator authorization, logged with reason, amount, timestamp, movement type, and authorization credentials.
+- **Cross-fund transfers (revised 2026-11-25)**: Product Drawer Transfer is included in direct Cashier recording. Preserve both service-fund and opposite Product-drawer entries with reason, evidence, amount, timestamp, and recorder.
 - **Owner injection/withdrawal**: Owner capital additions or withdrawals must be recorded with external documentation (bank deposit reference, transfer slip, or acknowledgment receipt).
 - **Movement form and history (2026-11-11)**: Apply the movement-details and Service Fund Movements history policies in `gcash-service-spec.md`: routine reasons are optional, cash source/destination remains recorded, special explanations and applicable evidence remain required, Administrator sees all recorders and Cashier only their own recorded movements across sessions. Keep customer exchanges distinct and preserve access to the complete money timeline.
 - **Audit trail**: Every actual money movement must be logged immediately so expected balances continuously match physical and wallet realities.

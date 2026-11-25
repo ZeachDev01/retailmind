@@ -1,0 +1,1161 @@
+{
+  "source": "Open Food Facts contributors",
+  "source_urls": [
+    "https://ph.openfoodfacts.org/api/v2/search?countries_tags_en=philippines&page_size=100&page=3&sort_by=unique_scans_n&fields=code%2Cproduct_name%2Cproduct_name_en%2Cbrands%2Cquantity%2Ccategories_tags%2Ccountries_tags",
+    "https://ph.openfoodfacts.org/api/v2/search?countries_tags_en=philippines&page_size=100&page=6&sort_by=unique_scans_n&fields=code%2Cproduct_name%2Cproduct_name_en%2Cbrands%2Cquantity%2Ccategories_tags%2Ccountries_tags"
+  ],
+  "retrieved_on": "2026-11-25",
+  "data_license": "https://opendatacommons.org/licenses/odbl/1-0/",
+  "existing_products_checked": 106,
+  "price_note": "PHP 1.00 demo placeholders; replace before real use. Unknown cost; zero stock.",
+  "products": [
+    {
+      "brands": "Royal",
+      "categories_tags": [
+        "en:beverages-and-beverages-preparations",
+        "en:beverages",
+        "en:carbonated-drinks",
+        "en:sodas",
+        "en:Softdrink"
+      ],
+      "code": "4801981127207",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "tru-orange",
+      "product_name_en": "tru-orange",
+      "quantity": "195ml",
+      "import_product_name": "Royal tru-orange - 195ml",
+      "import_category_name": "Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/4801981127207"
+    },
+    {
+      "brands": "Delfi",
+      "categories_tags": [
+        "en:snacks",
+        "en:sweet-snacks",
+        "en:biscuits-and-cakes",
+        "en:biscuits-and-crackers",
+        "en:biscuits",
+        "en:wafers"
+      ],
+      "code": "8991001780898",
+      "countries_tags": [
+        "en:brunei",
+        "en:india",
+        "en:malaysia",
+        "en:philippines",
+        "en:singapore"
+      ],
+      "product_name": "Twister",
+      "product_name_en": "Twister",
+      "quantity": "320 g",
+      "import_product_name": "Delfi Twister - 320 g",
+      "import_category_name": "Biscuits & Crackers",
+      "product_url": "https://world.openfoodfacts.org/product/8991001780898"
+    },
+    {
+      "brands": "Sm Bonus",
+      "categories_tags": [
+        "en:plant-based-foods-and-beverages",
+        "en:plant-based-foods",
+        "en:fruit-based-foods-and-beverages",
+        "en:fruits-and-vegetables-based-foods",
+        "en:snacks",
+        "en:fruit-based-foods",
+        "en:salty-snacks",
+        "en:appetizers",
+        "en:chips-and-fries",
+        "en:dried-products",
+        "en:crisps",
+        "en:dried-plant-based-foods",
+        "en:dried-fruits",
+        "en:banana-crisps"
+      ],
+      "code": "4802222046141",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Banana chips",
+      "product_name_en": "Banana chips",
+      "quantity": "80 g",
+      "import_product_name": "Sm Bonus Banana chips - 80 g",
+      "import_category_name": "Chips & Snacks",
+      "product_url": "https://world.openfoodfacts.org/product/4802222046141"
+    },
+    {
+      "brands": "Marby",
+      "categories_tags": [
+        "en:plant-based-foods-and-beverages",
+        "en:plant-based-foods",
+        "en:cereals-and-potatoes",
+        "en:cereals-and-their-products",
+        "en:breads",
+        "en:white-breads",
+        "en:Whole Wheat breads"
+      ],
+      "code": "4800148531598",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Whole Wheat Bread",
+      "product_name_en": "Whole Wheat Bread",
+      "quantity": "600g",
+      "import_product_name": "Marby Whole Wheat Bread - 600g",
+      "import_category_name": "Bread & Cakes",
+      "product_url": "https://world.openfoodfacts.org/product/4800148531598"
+    },
+    {
+      "brands": "Choco Mucho, Multirich, Multirich Foods Corp.",
+      "categories_tags": [
+        "en:snacks",
+        "en:sweet-snacks",
+        "en:cocoa-and-its-products",
+        "en:confectioneries",
+        "en:chocolate-candies",
+        "en:bars",
+        "en:chocolates",
+        "en:milk-chocolates",
+        "en:candy-chocolate-bars",
+        "en:caramel-chocolates",
+        "en:milk-chocolate-with-caramel"
+      ],
+      "code": "4800092660634",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Choco Mucho Caramel",
+      "product_name_en": "choco mucho (pp) 30g milk chocolate",
+      "quantity": "33g",
+      "import_product_name": "Choco Mucho, Multirich, Multirich Foods Corp. Choco Mucho Caramel - 33g",
+      "import_category_name": "Chocolates & Candies",
+      "product_url": "https://world.openfoodfacts.org/product/4800092660634"
+    },
+    {
+      "brands": "Gardenia",
+      "categories_tags": [
+        "en:plant-based-foods-and-beverages",
+        "en:plant-based-foods",
+        "en:cereals-and-potatoes",
+        "en:cereals-and-their-products",
+        "en:breads"
+      ],
+      "code": "4806502721476",
+      "countries_tags": [
+        "en:japan",
+        "en:philippines"
+      ],
+      "product_name": "Chocolate Chip Loaf",
+      "product_name_en": "Chocolate Chip Loaf",
+      "quantity": "400g",
+      "import_product_name": "Gardenia Chocolate Chip Loaf - 400g",
+      "import_category_name": "Bread & Cakes",
+      "product_url": "https://world.openfoodfacts.org/product/4806502721476"
+    },
+    {
+      "brands": "Payless",
+      "categories_tags": [
+        "en:plant-based-foods-and-beverages",
+        "en:plant-based-foods",
+        "en:dried-products",
+        "en:dried-products-to-be-rehydrated",
+        "en:pastas",
+        "en:noodles",
+        "en:instant-noodles"
+      ],
+      "code": "4800016561436",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "payless pc sweet & spicy 128g",
+      "product_name_en": "payless pc sweet & spicy 128g",
+      "quantity": "128 g",
+      "import_product_name": "payless pc sweet & spicy 128g",
+      "import_category_name": "Instant Noodles",
+      "product_url": "https://world.openfoodfacts.org/product/4800016561436"
+    },
+    {
+      "brands": "Mondelez",
+      "categories_tags": [
+        "en:biscuits-and-crackers",
+        "en:crackers-breakfast"
+      ],
+      "code": "7622300743000",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Tiger Vanilla",
+      "product_name_en": "Tiger Vanilla",
+      "quantity": "22.8 g",
+      "import_product_name": "Mondelez Tiger Vanilla - 22.8 g",
+      "import_category_name": "Biscuits & Crackers",
+      "product_url": "https://world.openfoodfacts.org/product/7622300743000"
+    },
+    {
+      "brands": "Monde Nissin, Nissin, Nissin Wafer, Nissin Wafer Choco",
+      "categories_tags": [
+        "en:snacks",
+        "en:sweet-snacks",
+        "en:biscuits-and-cakes",
+        "en:biscuits-and-crackers",
+        "en:biscuits",
+        "en:wafers",
+        "en:chocolate-biscuits",
+        "en:stuffed-wafers",
+        "en:chocolate-stuffed-wafers"
+      ],
+      "code": "4807770120206",
+      "countries_tags": [
+        "en:philippines",
+        "en:united-states"
+      ],
+      "product_name": "Wafer Choco",
+      "product_name_en": "Wafer Choco",
+      "quantity": "12 g",
+      "import_product_name": "Monde Nissin, Nissin, Nissin Wafer, Nissin Wafer Choco Wafer Choco - 12 g",
+      "import_category_name": "Biscuits & Crackers",
+      "product_url": "https://world.openfoodfacts.org/product/4807770120206"
+    },
+    {
+      "brands": "Jack 'n Jill, Universal Robina, Vcut",
+      "categories_tags": [
+        "en:plant-based-foods-and-beverages",
+        "en:plant-based-foods",
+        "en:snacks",
+        "en:cereals-and-potatoes",
+        "en:salty-snacks",
+        "en:appetizers",
+        "en:chips-and-fries",
+        "en:potatoes-and-their-products",
+        "en:crisps",
+        "en:salty-snacks-made-from-potato",
+        "en:potato-crisps",
+        "en:flavoured-potato-crisps",
+        "en:barbecue-crisps",
+        "en:wavy-potato-crisps"
+      ],
+      "code": "4800016622533",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "vcut (o) spicy barbeque 25g",
+      "product_name_en": "vcut (o) spicy barbeque 25g",
+      "quantity": "0.88 oz (25g)",
+      "import_product_name": "Jack 'n Jill, Universal Robina, Vcut vcut (o) spicy barbeque 25g - 0.88 oz (25g)",
+      "import_category_name": "Chips & Snacks",
+      "product_url": "https://world.openfoodfacts.org/product/4800016622533"
+    },
+    {
+      "brands": "Del Monte",
+      "categories_tags": [
+        "en:beverages-and-beverages-preparations",
+        "en:plant-based-foods-and-beverages",
+        "en:beverages",
+        "en:fruit-based-foods-and-beverages",
+        "en:plant-based-beverages",
+        "en:fruit-based-beverages",
+        "en:juices-and-nectars",
+        "en:fruit-juices",
+        "en:fruit-nectars",
+        "en:mango-nectars"
+      ],
+      "code": "4800024550194",
+      "countries_tags": [
+        "en:norway",
+        "en:philippines"
+      ],
+      "product_name": "Del Monte Mango Can",
+      "product_name_en": "Del Monte Mango Can",
+      "quantity": "240ml",
+      "import_product_name": "Del Monte Mango Can - 240ml",
+      "import_category_name": "Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/4800024550194"
+    },
+    {
+      "brands": "vida",
+      "categories_tags": [
+        "en:beverages-and-beverages-preparations",
+        "en:plant-based-foods-and-beverages",
+        "en:beverages",
+        "en:fruit-based-foods-and-beverages",
+        "en:non-alcoholic-beverages",
+        "en:plant-based-beverages",
+        "en:waters",
+        "en:carbonated-drinks",
+        "en:fruit-based-beverages",
+        "en:soft-drinks",
+        "en:fruit-soft-drinks",
+        "en:sodas",
+        "en:carbonated-fruit-soft-drink",
+        "en:Vitamin drink"
+      ],
+      "code": "9551001410332",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Vitamin C Lemon Sparkling flavoured drink",
+      "product_name_en": "Vitamin C Lemon Sparkling flavoured drink",
+      "quantity": "325ml",
+      "import_product_name": "vida Vitamin C Lemon Sparkling flavoured drink - 325ml",
+      "import_category_name": "Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/9551001410332"
+    },
+    {
+      "brands": "General Nutrifoods, Gold Seas",
+      "categories_tags": [
+        "en:seafood",
+        "en:fishes-and-their-products",
+        "en:canned-foods",
+        "en:fishes",
+        "en:canned-seafood",
+        "en:fatty-fishes",
+        "en:canned-fishes",
+        "en:tunas",
+        "en:canned-tunas",
+        "en:tunas-in-oil",
+        "en:tuna-in-olive-oil",
+        "en:tuna-chunks"
+      ],
+      "code": "4806530070010",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Yellowfin Tuna Chunks in Olive Oil",
+      "product_name_en": "Yellowfin Tuna Chunks in Olive Oil",
+      "quantity": "185 g",
+      "import_product_name": "General Nutrifoods, Gold Seas Yellowfin Tuna Chunks in Olive Oil - 185 g",
+      "import_category_name": "Canned Fish",
+      "product_url": "https://world.openfoodfacts.org/product/4806530070010"
+    },
+    {
+      "brands": "Coca-Cola",
+      "categories_tags": [
+        "en:beverages-and-beverages-preparations",
+        "en:beverages",
+        "en:non-alcoholic-beverages",
+        "en:soft-drinks",
+        "en:artificially-sweetened-beverages",
+        "en:carbonated-drinks",
+        "en:flavoured-soft-drinks",
+        "en:diet-beverages",
+        "en:sodas",
+        "en:colas",
+        "en:diet-sodas",
+        "en:diet-cola-soft-drink"
+      ],
+      "code": "4801981120642",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Zero Sugar",
+      "product_name_en": "Zero Sugar",
+      "quantity": "500 ml",
+      "import_product_name": "Coca-Cola Zero Sugar - 500 ml",
+      "import_category_name": "Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/4801981120642"
+    },
+    {
+      "brands": "Heineken",
+      "categories_tags": [
+        "en:beverages-and-beverages-preparations",
+        "en:beverages",
+        "en:non-alcoholic-beverages",
+        "en:non-alcoholic-beers"
+      ],
+      "code": "8888017300571",
+      "countries_tags": [
+        "en:philippines",
+        "en:singapore"
+      ],
+      "product_name": "Heineken 0.0 Non alco beer",
+      "product_name_en": "Heineken 0.0 Non alco beer",
+      "quantity": "330 ml",
+      "import_product_name": "Heineken 0.0 Non alco beer - 330 ml",
+      "import_category_name": "Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/8888017300571"
+    },
+    {
+      "brands": "Rebisco",
+      "categories_tags": [
+        "en:snacks",
+        "en:sweet-snacks",
+        "en:biscuits-and-cakes",
+        "en:biscuits-and-crackers",
+        "en:biscuits"
+      ],
+      "code": "4800092113413",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "bravo 30g",
+      "product_name_en": "bravo 30g",
+      "quantity": "30g",
+      "import_product_name": "Rebisco bravo 30g",
+      "import_category_name": "Biscuits & Crackers",
+      "product_url": "https://world.openfoodfacts.org/product/4800092113413"
+    },
+    {
+      "brands": "rebisco",
+      "categories_tags": [
+        "en:snacks",
+        "en:sweet-snacks",
+        "en:biscuits-and-cakes",
+        "en:biscuits-and-crackers",
+        "en:biscuits",
+        "en:tartlet-biscuits-with-chocolate"
+      ],
+      "code": "4800092113253",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "rebisco (bwn) 32g chocolate",
+      "product_name_en": "rebisco (bwn) 32g chocolate",
+      "quantity": "32 g",
+      "import_product_name": "rebisco (bwn) 32g chocolate",
+      "import_category_name": "Biscuits & Crackers",
+      "product_url": "https://world.openfoodfacts.org/product/4800092113253"
+    },
+    {
+      "brands": "M&M's",
+      "categories_tags": [
+        "en:snacks",
+        "en:sweet-snacks",
+        "en:cocoa-and-its-products",
+        "en:confectioneries",
+        "en:chocolate-candies",
+        "en:bars",
+        "en:Chico"
+      ],
+      "code": "9300682053761",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "MnM's Crispy",
+      "product_name_en": "MnM's Crispy",
+      "quantity": "44g",
+      "import_product_name": "M&M's MnM's Crispy - 44g",
+      "import_category_name": "Chocolates & Candies",
+      "product_url": "https://world.openfoodfacts.org/product/9300682053761"
+    },
+    {
+      "brands": "Nissin",
+      "categories_tags": [
+        "en:plant-based-foods-and-beverages",
+        "en:plant-based-foods",
+        "en:dried-products",
+        "en:dried-products-to-be-rehydrated",
+        "en:pastas",
+        "en:noodles",
+        "en:instant-noodles",
+        "en:instant-noodle-soups"
+      ],
+      "code": "4800016560910",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "nr seafood spicy 59g",
+      "product_name_en": "nr seafood spicy 59g",
+      "quantity": "59 g",
+      "import_product_name": "Nissin nr seafood spicy 59g",
+      "import_category_name": "Instant Noodles",
+      "product_url": "https://world.openfoodfacts.org/product/4800016560910"
+    },
+    {
+      "brands": "Jack 'N Jill",
+      "categories_tags": [
+        "en:snacks",
+        "en:sweet-snacks",
+        "en:biscuits-and-cakes",
+        "en:biscuits-and-crackers",
+        "en:biscuits",
+        "en:filled-biscuits",
+        "en:sandwich-biscuits",
+        "en:chocolate-sandwich-cookies"
+      ],
+      "code": "4800010075878",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "presto (y) chocolate 30g",
+      "product_name_en": "presto (y) chocolate 30g",
+      "quantity": "30 g",
+      "import_product_name": "Jack 'N Jill presto (y) chocolate 30g",
+      "import_category_name": "Biscuits & Crackers",
+      "product_url": "https://world.openfoodfacts.org/product/4800010075878"
+    },
+    {
+      "brands": "Nescafé",
+      "categories_tags": [
+        "en:3-in-1 Coffee",
+        "en:Dessert Coffee",
+        "en:Flavored Coffee"
+      ],
+      "code": "4800361413992",
+      "countries_tags": [
+        "en:philippines",
+        "en:united-states"
+      ],
+      "product_name": "nescafe twin (bwn) creamy latte 40g",
+      "product_name_en": "nescafe twin (bwn) creamy latte 40g",
+      "quantity": "40g",
+      "import_product_name": "Nescafé nescafe twin (bwn) creamy latte 40g",
+      "import_category_name": "Food",
+      "product_url": "https://world.openfoodfacts.org/product/4800361413992"
+    },
+    {
+      "brands": "Argentina",
+      "categories_tags": [
+        "en:meats-and-their-products",
+        "en:beef-and-its-products",
+        "en:meat-preparations",
+        "en:meats",
+        "en:beef",
+        "en:meatloafs"
+      ],
+      "code": "0748485800738",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "argentina beef loaf 150g",
+      "product_name_en": "argentina beef loaf 150g",
+      "quantity": "1 x 150g",
+      "import_product_name": "argentina beef loaf 150g - 1 x 150g",
+      "import_category_name": "Food",
+      "product_url": "https://world.openfoodfacts.org/product/0748485800738"
+    },
+    {
+      "brands": "Stateline",
+      "categories_tags": [
+        "en:snacks",
+        "en:sweet-snacks",
+        "en:cocoa-and-its-products",
+        "en:confectioneries",
+        "en:chocolate-candies",
+        "en:bars",
+        "en:candy-chocolate-bars",
+        "en:chocolate-snack-bar-dairy-filling"
+      ],
+      "code": "4800523441955",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "loaded (y) chocolate 32g",
+      "product_name_en": "loaded (y) chocolate 32g",
+      "quantity": "32 g",
+      "import_product_name": "Stateline loaded (y) chocolate 32g",
+      "import_category_name": "Chocolates & Candies",
+      "product_url": "https://world.openfoodfacts.org/product/4800523441955"
+    },
+    {
+      "brands": "Del Monte",
+      "categories_tags": [
+        "en:plant-based-foods-and-beverages",
+        "en:plant-based-foods",
+        "en:fruits-and-vegetables-based-foods",
+        "en:vegetable-based-foods-and-beverages",
+        "en:canned-foods",
+        "en:vegetables-based-foods",
+        "en:canned-plant-based-foods",
+        "en:tomatoes-and-their-products",
+        "en:canned-tomato-products",
+        "en:concentrated-tomato-products",
+        "en:tomato-pastes"
+      ],
+      "code": "4800024556899",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "dm tomato paste 150g",
+      "product_name_en": "dm tomato paste 150g",
+      "quantity": "150g",
+      "import_product_name": "Del Monte dm tomato paste 150g",
+      "import_category_name": "Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/4800024556899"
+    },
+    {
+      "brands": "Quaker",
+      "categories_tags": [
+        "en:plant-based-foods-and-beverages",
+        "en:plant-based-foods",
+        "en:cereals-and-potatoes",
+        "en:seeds",
+        "en:cereals-and-their-products",
+        "en:cereal-grains",
+        "en:oat"
+      ],
+      "code": "4800274506002",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Whole grain rolled oats",
+      "product_name_en": "Whole grain rolled oats",
+      "quantity": "500 g",
+      "import_product_name": "Quaker Whole grain rolled oats - 500 g",
+      "import_category_name": "Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/4800274506002"
+    },
+    {
+      "brands": "FOUNDERS",
+      "categories_tags": [
+        "en:meats-and-their-products",
+        "en:canned-foods",
+        "en:meats",
+        "en:canned-meats"
+      ],
+      "code": "8120001415893",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Luncheon Meat",
+      "product_name_en": "Luncheon Meat",
+      "quantity": "340g",
+      "import_product_name": "FOUNDERS Luncheon Meat - 340g",
+      "import_category_name": "Canned Meat",
+      "product_url": "https://world.openfoodfacts.org/product/8120001415893"
+    },
+    {
+      "brands": "Ricoa",
+      "categories_tags": [
+        "en:snacks",
+        "en:sweet-snacks",
+        "en:cocoa-and-its-products",
+        "en:chocolates",
+        "en:cocoa-and-chocolate-powders",
+        "en:cocoa-powders"
+      ],
+      "code": "4800040241229",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Breakfast Cocoa",
+      "product_name_en": "Breakfast Cocoa",
+      "quantity": "70g",
+      "import_product_name": "Ricoa Breakfast Cocoa - 70g",
+      "import_category_name": "Chocolates & Candies",
+      "product_url": "https://world.openfoodfacts.org/product/4800040241229"
+    },
+    {
+      "brands": "M.Y. San",
+      "categories_tags": [
+        "en:snacks",
+        "en:salty-snacks",
+        "en:appetizers",
+        "en:biscuits-and-crackers",
+        "en:crackers-appetizers"
+      ],
+      "code": "0750515030008",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Skyflakes Fit Crackers with Flax Seeds",
+      "product_name_en": "Skyflakes Fit Crackers with Flax Seeds",
+      "quantity": "25g",
+      "import_product_name": "M.Y. San Skyflakes Fit Crackers with Flax Seeds - 25g",
+      "import_category_name": "Biscuits & Crackers",
+      "product_url": "https://world.openfoodfacts.org/product/0750515030008"
+    },
+    {
+      "brands": "Rebisco",
+      "categories_tags": [
+        "en:snacks",
+        "en:sweet-snacks",
+        "en:biscuits-and-cakes",
+        "en:biscuits-and-crackers",
+        "en:biscuits",
+        "en:chocolate-biscuits"
+      ],
+      "code": "4800092113536",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "combi (b) choco 30g",
+      "product_name_en": "combi (b) choco 30g",
+      "quantity": "30 g",
+      "import_product_name": "Rebisco combi (b) choco 30g",
+      "import_category_name": "Biscuits & Crackers",
+      "product_url": "https://world.openfoodfacts.org/product/4800092113536"
+    },
+    {
+      "brands": "Nissin",
+      "categories_tags": [
+        "en:plant-based-foods-and-beverages",
+        "en:plant-based-foods",
+        "en:snacks",
+        "en:cereals-and-potatoes",
+        "en:salty-snacks",
+        "en:appetizers",
+        "en:biscuits-and-crackers",
+        "en:cereals-and-their-products",
+        "en:breads",
+        "en:crackers-appetizers",
+        "en:breadsticks"
+      ],
+      "code": "4807770100703",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Bread Stix",
+      "product_name_en": "Bread Stix",
+      "quantity": "20 g",
+      "import_product_name": "Nissin Bread Stix - 20 g",
+      "import_category_name": "Bread & Cakes",
+      "product_url": "https://world.openfoodfacts.org/product/4807770100703"
+    },
+    {
+      "brands": "Anchor",
+      "categories_tags": [
+        "en:plant-based-foods-and-beverages",
+        "en:plant-based-foods",
+        "en:cereals-and-potatoes",
+        "en:cereals-and-their-products",
+        "en:powdered-plant-milks",
+        "en:powdered-cereal-milks",
+        "en:powdered-millet-milks"
+      ],
+      "code": "4806501599687",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Anchor protein",
+      "product_name_en": "Anchor protein",
+      "quantity": "800g",
+      "import_product_name": "Anchor protein - 800g",
+      "import_category_name": "Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/4806501599687"
+    },
+    {
+      "brands": "Bear Brand",
+      "categories_tags": [
+        "en:dairies",
+        "en:fermented-foods",
+        "en:fermented-milk-products",
+        "en:cheeses",
+        "en:unpasteurised-products",
+        "en:goat-cheeses",
+        "en:unpasteurised-cheeses",
+        "en:fresh-goat-cheese",
+        "en:cheese-from-goat-s-milk-fresh-from-raw-milk"
+      ],
+      "code": "4800361331500",
+      "countries_tags": [
+        "en:philippines",
+        "en:singapore"
+      ],
+      "product_name": "bear brand sterilized 200ml",
+      "product_name_en": "bear brand sterilized 200ml",
+      "quantity": "200 mL",
+      "import_product_name": "bear brand sterilized 200ml",
+      "import_category_name": "Milk & Dairy Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/4800361331500"
+    },
+    {
+      "brands": "Gardenia",
+      "categories_tags": [
+        "en:plant-based-foods-and-beverages",
+        "en:plant-based-foods",
+        "en:cereals-and-potatoes",
+        "en:cereals-and-their-products",
+        "en:breads",
+        "en:white-breads",
+        "en:wheat-breads"
+      ],
+      "code": "4806502726822",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Neu Bake White Bread",
+      "product_name_en": "Neu Bake White Bread",
+      "quantity": "450 g",
+      "import_product_name": "Gardenia Neu Bake White Bread - 450 g",
+      "import_category_name": "Bread & Cakes",
+      "product_url": "https://world.openfoodfacts.org/product/4806502726822"
+    },
+    {
+      "brands": "Nescafé",
+      "categories_tags": [
+        "en:3-in-1 Coffee",
+        "en:Diabetic-Friendly Options",
+        "en:Keto-Friendly (in moderation)",
+        "en:Sugar-Free Coffee"
+      ],
+      "code": "4800361423588",
+      "countries_tags": [
+        "en:philippines",
+        "en:united-states"
+      ],
+      "product_name": "Nescafé Creamy White 3-in-1 Coffee Mix (Sugar Free)",
+      "product_name_en": "Nescafé Creamy White 3-in-1 Coffee Mix (Sugar Free)",
+      "quantity": "22.4g",
+      "import_product_name": "Nescafé Creamy White 3-in-1 Coffee Mix (Sugar Free) - 22.4g",
+      "import_category_name": "Food",
+      "product_url": "https://world.openfoodfacts.org/product/4800361423588"
+    },
+    {
+      "brands": "Centennial Food Corporation, Popsnaks",
+      "categories_tags": [
+        "en:snacks",
+        "en:salty-snacks",
+        "en:appetizers",
+        "en:biscuits-and-crackers",
+        "en:crackers-appetizers",
+        "en:puffed-salty-snacks",
+        "en:puffed-salty-snacks-made-from-maize"
+      ],
+      "code": "4806505854874",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Popsnaks Crunchy Popnik",
+      "product_name_en": "Popsnaks Crunchy Popnik",
+      "quantity": "520g",
+      "import_product_name": "Centennial Food Corporation, Popsnaks Popsnaks Crunchy Popnik - 520g",
+      "import_category_name": "Biscuits & Crackers",
+      "product_url": "https://world.openfoodfacts.org/product/4806505854874"
+    },
+    {
+      "brands": "Soyfresh",
+      "categories_tags": [
+        "en:beverages-and-beverages-preparations",
+        "en:plant-based-foods-and-beverages",
+        "en:beverages",
+        "en:plant-based-foods",
+        "en:legumes-and-their-products",
+        "en:dairy-substitutes",
+        "en:milk-substitutes",
+        "en:plant-based-beverages",
+        "en:plant-based-milk-alternatives",
+        "en:legume-based-drinks",
+        "en:soy-based-drinks"
+      ],
+      "code": "9556007002222",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Hershey's Cookies 'N' Cream",
+      "product_name_en": "Hershey's Cookies 'N' Cream",
+      "quantity": "946ml",
+      "import_product_name": "Soyfresh Hershey's Cookies 'N' Cream - 946ml",
+      "import_category_name": "Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/9556007002222"
+    },
+    {
+      "brands": "Jack n Jill",
+      "categories_tags": [
+        "en:snacks",
+        "en:sweet-snacks",
+        "en:confectioneries",
+        "en:candies"
+      ],
+      "code": "4800016304019",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "maxx (r) 4g cherry",
+      "product_name_en": "maxx (r) 4g cherry",
+      "quantity": "50 pcs Net wt.  7.05 oz (200g)",
+      "import_product_name": "Jack n Jill maxx (r) 4g cherry - 50 pcs Net wt.  7.05 oz (200g)",
+      "import_category_name": "Chocolates & Candies",
+      "product_url": "https://world.openfoodfacts.org/product/4800016304019"
+    },
+    {
+      "brands": "Minute Maid",
+      "categories_tags": [
+        "en:beverages-and-beverages-preparations",
+        "en:plant-based-foods-and-beverages",
+        "en:beverages",
+        "en:fruit-based-foods-and-beverages",
+        "en:non-alcoholic-beverages",
+        "en:plant-based-beverages",
+        "en:fruit-based-beverages",
+        "en:juices-and-nectars",
+        "en:fruit-juices",
+        "en:unsweetened-beverages",
+        "en:apple-juices"
+      ],
+      "code": "4801981164851",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Minute Maid Apple Juice",
+      "product_name_en": "Minute Maid Apple Juice",
+      "quantity": "180 mL",
+      "import_product_name": "Minute Maid Apple Juice - 180 mL",
+      "import_category_name": "Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/4801981164851"
+    },
+    {
+      "brands": "pocari sweat",
+      "categories_tags": [
+        "en:Electrolyte Drinks",
+        "en:Functional Beverages",
+        "en:Sports Drinks"
+      ],
+      "code": "4800350108878",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Pocari Sweat Ion Supply Drink",
+      "product_name_en": "Pocari Sweat Ion Supply Drink",
+      "quantity": "900ml",
+      "import_product_name": "Pocari Sweat Ion Supply Drink - 900ml",
+      "import_category_name": "Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/4800350108878"
+    },
+    {
+      "brands": "Valda",
+      "categories_tags": [
+        "en:Menthol candy"
+      ],
+      "code": "9314057013403",
+      "countries_tags": [
+        "en:malaysia",
+        "en:philippines"
+      ],
+      "ecoscore_tags": [
+        "unknown"
+      ],
+      "product_name": "Pastilles Original Menthol",
+      "product_name_en": "Pastilles Original Menthol",
+      "quantity": "20 g",
+      "import_product_name": "Valda Pastilles Original Menthol - 20 g",
+      "import_category_name": "Food",
+      "product_url": "https://world.openfoodfacts.org/product/9314057013403"
+    },
+    {
+      "brands": "The Belgian",
+      "categories_tags": [
+        "en:snacks",
+        "en:sweet-snacks",
+        "en:cocoa-and-its-products",
+        "en:chocolates",
+        "en:milk-chocolates"
+      ],
+      "code": "5413121356829",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Belgian no sugar added milk",
+      "product_name_en": "Belgian no sugar added milk",
+      "quantity": "100 g",
+      "import_product_name": "The Belgian Belgian no sugar added milk - 100 g",
+      "import_category_name": "Chocolates & Candies",
+      "product_url": "https://world.openfoodfacts.org/product/5413121356829"
+    },
+    {
+      "brands": "Magnolia",
+      "categories_tags": [
+        "en:dairies",
+        "en:fermented-foods",
+        "en:fermented-milk-products",
+        "en:spreads",
+        "en:cheeses",
+        "en:salted-spreads",
+        "en:cheese-spreads"
+      ],
+      "code": "4805358324664",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Cheese Squeeze Cheddar",
+      "product_name_en": "Cheese Squeeze Cheddar",
+      "quantity": "220g",
+      "import_product_name": "Magnolia Cheese Squeeze Cheddar - 220g",
+      "import_category_name": "Milk & Dairy Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/4805358324664"
+    },
+    {
+      "brands": "Hughlands",
+      "categories_tags": [
+        "en:canned-foods",
+        "en:meats-and-their-products",
+        "en:beef-and-its-products",
+        "en:meats",
+        "en:prepared-meats",
+        "en:prepared-beef-meats",
+        "en:canned-meats",
+        "en:corned-beef"
+      ],
+      "code": "4800249011319",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Classic Corned Beef",
+      "product_name_en": "Classic Corned Beef",
+      "quantity": "150g",
+      "import_product_name": "Hughlands Classic Corned Beef - 150g",
+      "import_category_name": "Canned Meat",
+      "product_url": "https://world.openfoodfacts.org/product/4800249011319"
+    },
+    {
+      "brands": "Dairy Plus, Dutch Mill, Monde Nissin",
+      "categories_tags": [
+        "en:beverages-and-beverages-preparations",
+        "en:beverages",
+        "en:dairies",
+        "en:fermented-foods",
+        "en:desserts",
+        "en:fermented-milk-products",
+        "en:dairy-desserts",
+        "en:dairy-drinks",
+        "en:fermented-dairy-desserts",
+        "en:fermented-drinks",
+        "en:fermented-milk-drinks",
+        "en:yogurts",
+        "en:yogurt-drinks",
+        "en:flavoured-yogurt-drinks",
+        "en:fruit-flavoured-yogurt-drinks",
+        "en:yogurt-drinks-with-sugar",
+        "en:flavoured-yogurt-drinks-with-sugar"
+      ],
+      "code": "8853002302038",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "dutch mill 4-in-1 mixed berry",
+      "product_name_en": "dutch mill 4-in-1 mixed berry",
+      "quantity": "180mL",
+      "import_product_name": "Dairy Plus, Dutch Mill, Monde Nissin dutch mill 4-in-1 mixed berry - 180mL",
+      "import_category_name": "Milk & Dairy Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/8853002302038"
+    },
+    {
+      "brands": "Mega Tuna",
+      "categories_tags": [
+        "en:seafood",
+        "en:fishes-and-their-products",
+        "en:canned-foods",
+        "en:fishes",
+        "en:fatty-fishes",
+        "en:canned-fishes",
+        "en:tunas",
+        "en:canned-tunas",
+        "en:tuna-flakes-in-oil"
+      ],
+      "code": "4806504712045",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Premium Flakes in Oil",
+      "product_name_en": "Premium Flakes in Oil",
+      "quantity": "155g",
+      "import_product_name": "Mega Tuna Premium Flakes in Oil - 155g",
+      "import_category_name": "Canned Fish",
+      "product_url": "https://world.openfoodfacts.org/product/4806504712045"
+    },
+    {
+      "brands": "Red Bull",
+      "categories_tags": [
+        "en:beverages-and-beverages-preparations",
+        "en:beverages",
+        "en:energy-drinks"
+      ],
+      "code": "9002490218119",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "redbull energy drink",
+      "product_name_en": "redbull energy drink",
+      "quantity": "250 ml",
+      "import_product_name": "Red Bull redbull energy drink - 250 ml",
+      "import_category_name": "Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/9002490218119"
+    },
+    {
+      "brands": "Goya",
+      "categories_tags": [
+        "en:beverages-and-beverages-preparations",
+        "en:beverages",
+        "en:dairies",
+        "en:snacks",
+        "en:sweet-snacks",
+        "en:cocoa-and-its-products",
+        "en:dried-products",
+        "en:milks-liquid-and-powder",
+        "en:beverage-preparations",
+        "en:chocolates",
+        "en:dried-products-to-be-rehydrated",
+        "en:milks",
+        "en:instant-beverages",
+        "en:dehydrated-beverages",
+        "en:Goya",
+        "en:Goya-everyday-instant-powder-choco",
+        "en:Milk-chocolate-powder"
+      ],
+      "code": "4806517043457",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Goya Everyday Instant Powder Chocolate Drink",
+      "product_name_en": "Goya Everyday Instant Powder Chocolate Drink",
+      "quantity": "28g",
+      "import_product_name": "Goya Everyday Instant Powder Chocolate Drink - 28g",
+      "import_category_name": "Chocolates & Candies",
+      "product_url": "https://world.openfoodfacts.org/product/4806517043457"
+    },
+    {
+      "brands": "Coca-Cola",
+      "categories_tags": [
+        "en:beverages-and-beverages-preparations",
+        "en:beverages",
+        "en:carbonated-drinks",
+        "en:artificially-sweetened-beverages",
+        "en:sodas",
+        "en:diet-beverages",
+        "en:colas",
+        "en:diet-sodas",
+        "en:diet-cola-soft-drink"
+      ],
+      "code": "4801981120963",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "Coca Cola light",
+      "product_name_en": "Coca Cola light",
+      "quantity": "500 ml",
+      "import_product_name": "Coca-Cola Coca Cola light - 500 ml",
+      "import_category_name": "Drinks",
+      "product_url": "https://world.openfoodfacts.org/product/4801981120963"
+    },
+    {
+      "brands": "Rebisco",
+      "categories_tags": [
+        "en:snacks",
+        "en:sweet-snacks",
+        "en:biscuits-and-cakes",
+        "en:biscuits-and-crackers",
+        "en:cocoa-and-its-products",
+        "en:biscuits",
+        "en:chocolate-biscuits",
+        "en:biscuit-with-a-chocolate-bar-covering"
+      ],
+      "code": "4800092116513",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "cm cookies (pp) 33g double chocolate",
+      "product_name_en": "cm cookies (pp) 33g double chocolate",
+      "quantity": "33 g",
+      "import_product_name": "Rebisco cm cookies (pp) 33g double chocolate",
+      "import_category_name": "Biscuits & Crackers",
+      "product_url": "https://world.openfoodfacts.org/product/4800092116513"
+    },
+    {
+      "brands": "M&M's",
+      "categories_tags": [
+        "en:snacks",
+        "en:sweet-snacks",
+        "en:cocoa-and-its-products"
+      ],
+      "code": "9300682051507",
+      "countries_tags": [
+        "en:philippines"
+      ],
+      "product_name": "MnM's Choco",
+      "product_name_en": "MnM's Choco",
+      "quantity": "46g",
+      "import_product_name": "M&M's MnM's Choco - 46g",
+      "import_category_name": "Food",
+      "product_url": "https://world.openfoodfacts.org/product/9300682051507"
+    }
+  ]
+}

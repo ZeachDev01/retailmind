@@ -10,7 +10,7 @@
     const reference = el('reference');
     const save = el('save');
     let saving = false, reviewing = false, checking = false, duplicate = false;
-    let debounce, lookup, historyRequest = 0, page = 1, rows = [], reviewRow;
+    let debounce, lookup, historyRequest = 0, sessionRequest = 0, page = 1, rows = [], reviewRow;
     let worker, photoUrl, cameraVersion = 0, leaving = false;
     let currentSession = null, lastClosedSession = null, resolveTx = null, correctionTx = null, waiverSession = null, returnToken = null;
     let bannerDismissTimer = null, bannerAnimationTimer = null, closedBannerDismissed = false;
@@ -126,7 +126,7 @@
             closeBtn.hidden = false;
             handoverBtn.hidden = false;
             if (fundingBtn) fundingBtn.hidden = false;
-            disableTransactionForm(false);
+            if (!saving) disableTransactionForm(false);
             scanStatus(duplicate ? 'Duplicate reference. Save blocked.' : '');
             return;
         }
@@ -145,8 +145,10 @@
     }
 
     async function loadSessionStatus() {
+        const version = ++sessionRequest;
         try {
             const result = await request({action: 'session_status'});
+            if (version !== sessionRequest || leaving) return;
             currentSession = result.session;
             lastClosedSession = result.last_closed_session || null;
             el('open-session-btn').disabled = result.has_open_shift !== true;
@@ -154,6 +156,7 @@
             el('session-panel').hidden = false;
             await loadFollowUp();
         } catch (e) {
+            if (version !== sessionRequest || leaving) return;
             currentSession = null;
             el('open-session-btn').disabled = true;
             renderSessionStatus();
@@ -503,22 +506,20 @@
                 duplicate = false;
                 scanStatus('Cash-In completed successfully.');
                 notify('GCash Cash-In #' + data.id + ' completed.', 'success');
-                if (data.receipt_id) await window.viewReceipt(data.receipt_id, el('amount'));
+                if (data.receipt_id) window.viewReceipt(data.receipt_id, el('amount'));
                 page = 1;
-                await loadHistory();
-                await loadSessionStatus();
             } catch (error) {
                 notify(error.message + ' Refresh history before retrying if the connection was interrupted.', 'error');
-                await loadHistory();
-                await loadSessionStatus();
             } finally {
                 saving = false;
-                if (!currentSession || currentSession.is_controlling_cashier) {
+                if (currentSession?.is_controlling_cashier) {
                     for (const input of el('form').elements) input.disabled = false;
                 }
                 updateSave();
                 updatePreview();
             }
+            loadHistory();
+            loadSessionStatus();
         });
     }
 
@@ -565,22 +566,20 @@
                 duplicate = false;
                 scanStatus('Cash-Out completed successfully.');
                 notify('GCash Cash-Out #' + data.id + ' completed.', 'success');
-                if (data.receipt_id) await window.viewReceipt(data.receipt_id, el('amount'));
+                if (data.receipt_id) window.viewReceipt(data.receipt_id, el('amount'));
                 page = 1;
-                await loadHistory();
-                await loadSessionStatus();
             } catch (error) {
                 notify(error.message + ' Refresh history before retrying if the connection was interrupted.', 'error');
-                await loadHistory();
-                await loadSessionStatus();
             } finally {
                 saving = false;
-                if (!currentSession || currentSession.is_controlling_cashier) {
+                if (currentSession?.is_controlling_cashier) {
                     for (const input of el('form').elements) input.disabled = false;
                 }
                 updateSave();
                 updatePreview();
             }
+            loadHistory();
+            loadSessionStatus();
         });
     }
 
@@ -592,7 +591,6 @@
                 el('amount').focus();
                 return;
             }
-            updatePreview();
             const type = el('type')?.value || 'Cash-In';
             const isCashOut = type === 'Cash-Out';
             const feeMethod = isCashOut ? (el('fee-method')?.value || 'Fee via GCash') : 'Fee in cash';
@@ -621,6 +619,9 @@
             }
 
             el('nc-reference').value = reference.value.trim();
+            el('nc-number-label').textContent = isCashOut ? 'Sender GCash number (optional)' : 'Recipient GCash number (optional)';
+            el('nc-customer').value = '';
+            el('nc-number').value = '';
             el('nc-cash-collected').checked = Boolean(el('confirm-cash')?.checked);
             el('nc-wallet-sent').checked = Boolean(el('confirm-wallet')?.checked);
             el('nc-notes').value = '';
@@ -657,6 +658,8 @@
                     reference: refVal || null,
                     confirmed_cash: el('nc-cash-collected').checked,
                     confirmed_wallet: el('nc-wallet-sent').checked,
+                    customer_name: el('nc-customer').value.trim(),
+                    customer_gcash_number: el('nc-number').value.trim(),
                     notes: notes,
                     preview_fee: preview.fee,
                     preview_counter_collect: preview.counterCollect,
@@ -732,15 +735,17 @@
     const tabs = [
         { id: 'new-transaction', btn: tabNewTx, panel: panelNewTx },
         { id: 'history', btn: tabHistory, panel: panelHistory },
-        { id: 'funds', btn: document.getElementById('tab-funds'), panel: document.getElementById('panel-funds') }
+        { id: 'funds', btn: document.getElementById('tab-funds'), panel: document.getElementById('panel-funds') },
+        { id: 'sessions', btn: document.getElementById('tab-sessions'), panel: document.getElementById('panel-sessions') }
     ];
     const alignSelectedTab = () => {
         const button = tabs.find(tab => tab.btn?.getAttribute('aria-selected') === 'true')?.btn;
         if (button) button.parentElement.scrollLeft += button.getBoundingClientRect().left - button.parentElement.getBoundingClientRect().left;
     };
     window.addEventListener('resize', alignSelectedTab);
+    window.addEventListener('pageshow', alignSelectedTab);
 
-    function switchTab(targetId, focusTarget = false) {
+    function switchTab(targetId, focusTarget = false, resetSessionPage = false) {
         tabs.forEach(t => {
             if (!t.btn || !t.panel) return;
             const isTarget = t.id === targetId;
@@ -753,6 +758,34 @@
         alignSelectedTab();
         if (targetId === 'history') loadHistory();
         if (targetId === 'funds') loadFundMovements();
+        if (targetId === 'sessions') loadSessionHistory(resetSessionPage);
+    }
+
+    let sessionHistoryRequest = 0;
+    async function loadSessionHistory(resetPage = false) {
+        const panel = document.getElementById('panel-sessions');
+        const requestId = ++sessionHistoryRequest;
+        const url = new URL(location.href);
+        if (resetPage && url.searchParams.has('session_page')) {
+            url.searchParams.delete('session_page');
+            history.replaceState(null, '', url);
+        }
+        url.searchParams.set('tab', 'sessions');
+        url.searchParams.set('session_fragment', '1');
+
+        const status = document.createElement('p');
+        status.className = 'gcash-history-status';
+        status.setAttribute('role', 'status');
+        status.textContent = 'Loading GCash sessions…';
+        panel.replaceChildren(status);
+        try {
+            const response = await fetch(url, {cache: 'no-store'});
+            if (!response.ok || response.redirected) throw new Error();
+            const markup = await response.text();
+            if (requestId === sessionHistoryRequest) panel.innerHTML = markup;
+        } catch {
+            if (requestId === sessionHistoryRequest) status.textContent = 'GCash sessions are unavailable. Select the tab to try again.';
+        }
     }
 
     let fundHistoryRequest = 0;
@@ -772,7 +805,7 @@
                 cell(row, movement.movement_type.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase()));
                 cell(row, (movement.fund_type === 'cash' ? 'Service Cash' : 'Service Wallet') + ' ' + (movement.direction === 'in' ? '+' : '−') + phpFormatter.format(movement.amount));
                 cell(row, '#' + movement.session_id);
-                cell(row, movement.recorder_name + ' / Approved: ' + (movement.authorizer_name || 'Not recorded'));
+                cell(row, movement.recorder_name + (movement.authorizer_name ? ' / Approved: ' + movement.authorizer_name : ' / Direct recording'));
                 cell(row, [movement.evidence, movement.reason].filter(Boolean).join(' · ') || '—');
             }
             status.textContent = data.movements.length ? '' : 'No service fund movements recorded yet.';
@@ -1161,10 +1194,11 @@
     });
     // Session dialogs
     el('open-session-btn').addEventListener('click', () => {
+        el('open-number').value = '';
         el('open-cash').value = '';
         el('open-wallet').value = '';
         el('open-dialog').showModal();
-        el('open-cash').focus();
+        el('open-number').focus();
     });
     el('open-cancel').addEventListener('click', () => el('open-dialog').close());
     el('open-form').addEventListener('submit', async event => {
@@ -1177,9 +1211,10 @@
         }
         el('open-submit').disabled = true;
         try {
-            await request(null, {action: 'open_session', opening_cash: cash, opening_wallet: wallet});
+            await request(null, {action: 'open_session', opening_cash: cash, opening_wallet: wallet, wallet_number: el('open-number').value.trim()});
             el('open-dialog').close();
             notify('GCash responsibility opened.', 'success');
+            if (document.getElementById('tab-sessions')?.getAttribute('aria-selected') === 'true') loadSessionHistory(true);
             await loadSessionStatus();
         } catch (error) {
             notify(error.message, 'error');
@@ -1255,6 +1290,7 @@
             });
             el('close-dialog').close();
             notify('GCash responsibility closed.', 'success');
+            switchTab('sessions', true, true);
             await loadSessionStatus();
         } catch (error) {
             notify(error.message, 'error');
@@ -1295,6 +1331,7 @@
                 });
                 el('handover-dialog').close();
                 notify('GCash responsibility handed over.', 'success');
+                switchTab('sessions', true, true);
                 await loadSessionStatus();
             } catch (error) {
                 notify(error.message, 'error');
@@ -1342,8 +1379,6 @@
                     amount: form.amount.value,
                     evidence_reference: form.evidence_reference.value,
                     reason: form.reason.value,
-                    approver_username: form.approver_username.value,
-                    approver_password: form.approver_password.value,
                 };
                 const res = await request(null, body);
                 el('funding-dialog').close();
@@ -1363,6 +1398,14 @@
         returnToken = Array.from(crypto.getRandomValues(new Uint8Array(24)), byte => byte.toString(16).padStart(2, '0')).join('');
         el('resolve-form').reset();
         el('resolve-summary').textContent = `#${tx.transaction_id} · ${tx.transaction_type} · PHP ${tx.amount} (Cash delta: ${tx.service_cash_delta}, Wallet delta: ${tx.wallet_delta})`;
+        el('resolve-customer').textContent = tx.customer_name || 'Not recorded';
+        el('resolve-number-label').textContent = tx.transaction_type === 'Cash-Out' ? 'Sender GCash number' : 'Recipient GCash number';
+        el('resolve-number').textContent = tx.customer_gcash_number || 'Not recorded';
+        el('resolve-hold-reason').textContent = tx.notes || 'Not recorded';
+        el('resolve-movements').textContent = [
+            Number(tx.confirmed_cash) ? 'Cash confirmed' : 'Cash unconfirmed',
+            Number(tx.confirmed_wallet) ? 'Wallet transfer confirmed' : 'Wallet transfer unconfirmed'
+        ].join(' · ');
         el('resolve-ref-group').hidden = false;
         el('resolve-auth-group').hidden = true;
         const hasReturns = Boolean(tx.has_returns || tx.adjustments?.some(adjustment => Number(adjustment.service_cash_delta) !== 0 || Number(adjustment.wallet_delta) !== 0));

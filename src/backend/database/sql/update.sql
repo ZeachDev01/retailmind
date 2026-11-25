@@ -2077,6 +2077,13 @@ EXECUTE rm_product_image_source;
 DEALLOCATE PREPARE rm_product_image_source;
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180005_product_image_source','Keep attribution for saved Open Food Facts Product photos') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
+-- 202611250001_notification_dismissal: preserve notification history when staff dismiss it.
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='notifications' AND column_name='dismissed_at'), 'ALTER TABLE `notifications` ADD COLUMN `dismissed_at` DATETIME(6) NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql;
+EXECUTE rm_stmt;
+DEALLOCATE PREPARE rm_stmt;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611250001_notification_dismissal','Track dismissal of read notifications') ON DUPLICATE KEY UPDATE description=VALUES(description);
+
 CREATE TABLE IF NOT EXISTS `refund_return_condition_corrections` (
   `correction_id` INT AUTO_INCREMENT PRIMARY KEY,
   `refund_item_id` INT NOT NULL,
@@ -2093,3 +2100,13 @@ CREATE TABLE IF NOT EXISTS `refund_return_condition_corrections` (
   `version` INT NOT NULL,
   UNIQUE (`refund_item_id`, `version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 202611250002_gcash_cashier_recording: preserve existing records and their historical approvals.
+ALTER TABLE gcash_funding_movements MODIFY authorized_by INT NULL;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_transactions' AND column_name='customer_name'), 'ALTER TABLE `gcash_transactions` ADD COLUMN `customer_name` VARCHAR(100) NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_transactions' AND column_name='customer_gcash_number'), 'ALTER TABLE `gcash_transactions` ADD COLUMN `customer_gcash_number` VARCHAR(11) NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+SET @rm_sql = IF(NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='gcash_service_sessions' AND column_name='wallet_number'), 'ALTER TABLE `gcash_service_sessions` ADD COLUMN `wallet_number` VARCHAR(11) NULL', 'DO 0');
+PREPARE rm_stmt FROM @rm_sql; EXECUTE rm_stmt; DEALLOCATE PREPARE rm_stmt;
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611250002_gcash_cashier_recording','Retain GCash customer and wallet details and allow direct service funding records') ON DUPLICATE KEY UPDATE description=VALUES(description);

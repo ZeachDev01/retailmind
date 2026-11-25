@@ -107,3 +107,8 @@ Published as [GitHub issue #276](https://github.com/ZeachDev01/retailmind/issues
 The user confirmed the complete design on 2026-10-23 and subsequently confirmed the proposed existing test boundaries. This specification refines Administrator overview behavior within the previously agreed GCash Service rules; it does not replace the wider service specification or authorize application implementation in this session.
 
 Existing issues [#236](https://github.com/ZeachDev01/retailmind/issues/236) and [#237](https://github.com/ZeachDev01/retailmind/issues/237) provide earlier service requirements and operational policies. Older reference-capture documentation contains historical behavior and must not override the confirmed overview design or current movement-preserving service behavior.
+## GCash session history
+
+The Cashier's **Recent GCash Sessions** tab lists their own sessions and opens on the latest records after they close GCash. The Administrator's **GCash Sessions** tab lists Store-wide open and closed sessions, including balanced closings and the outgoing and incoming records from handovers.
+
+Both tables show opening and closing times and recorded service cash and wallet counts. The Administrator can filter by Cashier, status, and Philippine calendar dates. A session matches the date filter when either its opening or its closing falls within the selected dates. Results are newest first and use the standard table footer.

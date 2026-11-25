@@ -45,6 +45,29 @@ if ($service->modules('admin') !== ['Inventory', 'Sales']) {
 if ($service->modules('super_admin') !== ['Authentication', 'Inventory', 'Recovery Account', 'Recovery actor', 'Sales']) {
     throw new RuntimeException('Super Administrator modules must include all nonempty modules.');
 }
+$pdo->exec("INSERT INTO activity_log VALUES
+    (1, 'store_operation', 'Inventory', 'Received shopping entry: Rice: 10 accepted units'),
+    (1, 'store_operation', 'Inventory', 'Received shopping entry: Beans: 20 accepted units'),
+    (1, 'store_operation', NULL, 'Added category Rice'),
+    (1, 'store_operation', NULL, 'Added category Beans'),
+    (1, 'store_operation', 'Sales', 'Cash refund issued'),
+    (1, 'store_operation', 'Sales', 'Cash refund issued for review'),
+    (2, 'store_operation', 'Inventory', 'Received shopping entry: Recovery stock'),
+    (1, 'security', 'Inventory', 'Received shopping entry: Restricted stock')");
+if ($service->actions('admin') !== ['Cash refund issued', 'Cash refund issued for review', 'Category added', 'Record changed', 'Stock count corrected', 'Stock received']) {
+    throw new RuntimeException('Administrator options must group known variants and retain every other visible action.');
+}
+$inventory = ['module' => 'Inventory'];
+if ($service->actions('admin', $inventory) !== ['Stock count corrected', 'Stock received']
+    || $service->count('admin', $inventory + ['action_type' => 'Stock received']) !== 2
+    || $service->count('admin', $inventory + ['action' => 'Received shopping entry: Rice']) !== 1
+    || $service->count('admin', $inventory + ['action_type' => '']) !== 4
+    || $service->count('admin', ['action_type' => 'Cash refund issued']) !== 1) {
+    throw new RuntimeException('Action type filtering must match the available choices and preserve raw action links and All actions.');
+}
+if (!in_array('Received shopping entry: Rice: 10 accepted units', $service->actions('super_admin', $inventory), true)) {
+    throw new RuntimeException('Protected Audit Records must retain their existing raw action options.');
+}
 try {
     $service->modules('cashier');
     throw new RuntimeException('Cashiers must not access audit modules.');

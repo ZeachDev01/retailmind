@@ -141,8 +141,12 @@ final class GCashLiveCustodySession
         ];
     }
 
-    public function openSession(int $cashierId, float $openingServiceCash, float $openingWalletBalance): int
+    public function openSession(int $cashierId, float $openingServiceCash, float $openingWalletBalance, mixed $walletNumber = null): int
     {
+        $walletNumber = GCashPhoneNumber::normalize($walletNumber);
+        if ($walletNumber === null) {
+            throw new DomainException('Enter the Store GCash number before opening a session.');
+        }
         if (!is_finite($openingServiceCash) || $openingServiceCash < 0 || !is_finite($openingWalletBalance) || $openingWalletBalance < 0) {
             throw new DomainException('Opening balances must be 0 or greater.');
         }
@@ -164,14 +168,14 @@ final class GCashLiveCustodySession
             }
 
             $stmt = $this->pdo->prepare(
-                "INSERT INTO gcash_service_sessions (shift_id, cashier_id, opening_service_cash, opening_wallet_balance, status)
-                 VALUES (?, ?, ?, ?, 'open')"
+                "INSERT INTO gcash_service_sessions (shift_id, cashier_id, opening_service_cash, opening_wallet_balance, wallet_number, status)
+                 VALUES (?, ?, ?, ?, ?, 'open')"
             );
-            $stmt->execute([$shiftId, $cashierId, $openingServiceCash, $openingWalletBalance]);
+            $stmt->execute([$shiftId, $cashierId, $openingServiceCash, $openingWalletBalance, $walletNumber]);
             $sessionId = (int)$this->pdo->lastInsertId();
 
             \log_activity($this->pdo, $cashierId, 'GCash session opened', 'GCash', $sessionId, null,
-                ['shift_id' => $shiftId, 'opening_service_cash' => $openingServiceCash, 'opening_wallet_balance' => $openingWalletBalance],
+                ['shift_id' => $shiftId, 'opening_service_cash' => $openingServiceCash, 'opening_wallet_balance' => $openingWalletBalance, 'wallet_number' => $walletNumber],
                 null, AuditRecordCategory::STORE_OPERATION);
 
             $this->pdo->commit();
@@ -490,14 +494,14 @@ final class GCashLiveCustodySession
                 null, AuditRecordCategory::STORE_OPERATION);
 
             $openStmt = $this->pdo->prepare(
-                "INSERT INTO gcash_service_sessions (shift_id, cashier_id, opening_service_cash, opening_wallet_balance, status)
-                 VALUES (?, ?, ?, ?, 'open')"
+                "INSERT INTO gcash_service_sessions (shift_id, cashier_id, opening_service_cash, opening_wallet_balance, wallet_number, status)
+                 VALUES (?, ?, ?, ?, ?, 'open')"
             );
-            $openStmt->execute([$incomingShiftId, $incomingCashierId, $countedCash, $checkedWallet]);
+            $openStmt->execute([$incomingShiftId, $incomingCashierId, $countedCash, $checkedWallet, $session['wallet_number'] ?? null]);
             $newSessionId = (int)$this->pdo->lastInsertId();
 
             \log_activity($this->pdo, $incomingCashierId, $emergency ? 'GCash session opened via emergency handover' : 'GCash session opened via handover', 'GCash', $newSessionId, null,
-                ['shift_id' => $incomingShiftId, 'opening_service_cash' => $countedCash, 'opening_wallet_balance' => $checkedWallet, 'predecessor_session_id' => $sessionId, ($emergency ? 'authorized_by' : 'handed_over_by') => $actorId],
+                ['shift_id' => $incomingShiftId, 'opening_service_cash' => $countedCash, 'opening_wallet_balance' => $checkedWallet, 'wallet_number' => $session['wallet_number'] ?? null, 'predecessor_session_id' => $sessionId, ($emergency ? 'authorized_by' : 'handed_over_by') => $actorId],
                 null, AuditRecordCategory::STORE_OPERATION);
         } else {
             $newSessionId = null;

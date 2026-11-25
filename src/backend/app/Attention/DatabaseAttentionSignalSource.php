@@ -100,11 +100,11 @@ final class DatabaseAttentionSignalSource
                     COUNT(*) AS item_count,
                     COALESCE(MAX(ABS(ia.adjustment_qty) * p.cost_price), 0) AS risk_value
              FROM inventory_adjustments ia JOIN products p ON p.product_id = ia.product_id
-             WHERE ia.status = 'pending'"
+             WHERE ia.status IN ('pending', 'returned')"
         );
         $stockIssues = $this->rows("SELECT ia.adjustment_id, ia.reported_at,
             ABS(ia.adjustment_qty) * p.cost_price AS risk_value
-            FROM inventory_adjustments ia JOIN products p ON p.product_id = ia.product_id WHERE ia.status = 'pending'");
+            FROM inventory_adjustments ia JOIN products p ON p.product_id = ia.product_id WHERE ia.status IN ('pending', 'returned')");
         foreach ($stockIssues as &$issue) $issue['age_hours'] = $this->ageHours($issue['reported_at']);
         unset($issue);
         $fiscal = $this->row(

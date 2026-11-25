@@ -186,10 +186,7 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
     <?php include __DIR__ . '/../sidebar.php'; ?>
     <main class="main-content" id="receipts-main">
             <header class="receipt-page-heading">
-                <div>
-                    <h1>Receipt history</h1>
-                    <p class="receipt-page-description">Find and reopen completed sales</p>
-                </div>
+                <h1>Receipt history</h1>
             </header>
             <?php if ($selected_error): ?>
                 <div class="alert tag-warning" role="alert"><?= htmlspecialchars($selected_error) ?></div>
@@ -197,9 +194,9 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
 
             <section class="receipt-history-panel" aria-label="Search receipt history">
             <div class="receipt-filter-heading">
-                <h2>Filter receipts</h2>
+                <h2>Filters</h2>
                 <div class="receipt-filter-meta">
-                    <span>Dates in Philippine time &middot; Asia/Manila</span>
+                    <span>Philippine time</span>
                     <details class="receipt-policy-help">
                         <summary class="receipt-policy-help-button" aria-label="Receipt policy" aria-describedby="receiptPolicyTooltip"><i class="bi bi-shield-check" aria-hidden="true"></i></summary>
                         <span id="receiptPolicyTooltip" class="receipt-policy-tooltip" role="tooltip">Completed receipts are saved permanently. Use the authorized Cash Refund workflow to make corrections.</span>
@@ -207,15 +204,16 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
                 </div>
             </div>
             <div class="receipt-filters" role="group" aria-label="Receipt filters">
-                <label>
+                <div id="receiptSearchSlot" class="receipt-search-slot"></div>
+                <label class="receipt-date-filter">
                     <span>From date</span>
                     <input type="date" id="receiptDateFrom" autocomplete="off" aria-describedby="receiptTableStatusMessage">
                 </label>
-                <label>
+                <label class="receipt-date-filter">
                     <span>To date</span>
                     <input type="date" id="receiptDateTo" autocomplete="off" aria-describedby="receiptTableStatusMessage">
                 </label>
-                <label><span>Cash Refund status</span><select id="receiptRefundStatus"><option value="">All Cash Refunds</option><option value="none">No Cash Refund</option><option value="partial">Partially refunded</option><option value="full">Fully refunded</option></select></label>
+                <label class="receipt-refund-filter"><span>Cash Refund status</span><select id="receiptRefundStatus"><option value="">All Cash Refunds</option><option value="none">No Cash Refund</option><option value="partial">Partially refunded</option><option value="full">Fully refunded</option></select></label>
                 <?php if ($canViewAllReceipts): ?>
                     <label>
                         <span>Cashier</span>
@@ -245,24 +243,24 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
                 <?php endif; ?>
             </div>
             <noscript><p class="receipt-table-status">Enable JavaScript to search receipt history and open saved receipts.</p></noscript>
-            <div id="receipt-table-title" class="table-wrap receipt-table-wrap" tabindex="0" role="region" aria-label="Receipt history table and pagination">
-                <table id="receiptsTable" class="receipts-table display" aria-label="Receipt History" data-no-smart-table>
+            <div id="receipt-table-title" class="table-wrap receipt-table-wrap" tabindex="0" role="region" aria-label="Receipt history table">
+                <table id="receiptsTable" class="receipts-table" aria-label="Receipt History" data-no-smart-table>
                     <thead>
                         <tr>
-                            <th>Receipt #</th>
-                            <th>Date</th>
-                            <th>Cashier</th>
-                            <th>Items</th>
-                            <th>Original paid</th>
-                            <th>Payment</th>
-                            <th>Cashier Shift</th>
-                            <th>Cash Refunds</th><th>Refunded</th><th>Remaining net</th><th>Actions</th>
+                            <th scope="col">Receipt #</th>
+                            <th scope="col">Date</th>
+                            <th scope="col">Cashier</th>
+                            <th scope="col" class="u-num-col">Items</th>
+                            <th scope="col" class="u-num-col">Original paid</th>
+                            <th scope="col">Payment</th>
+                            <th scope="col">Cashier Shift</th>
+                            <th scope="col">Cash Refunds</th><th scope="col">Refunded</th><th scope="col">Remaining net</th><th scope="col" class="receipt-actions-column">Actions</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
                 </table>
             </div>
-            <footer class="rm-table-footer" id="receipt-table-footer">
+            <footer class="rm-table-footer" id="receipt-table-footer" hidden>
                 <span id="receipt-page-summary" role="status"></span>
                 <nav id="receiptPagination" class="receipt-pagination" aria-label="Receipt history pages"></nav>
             </footer>
@@ -289,6 +287,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const retryButton = document.getElementById('retryReceiptTable');
     const emptyState = document.getElementById('receiptEmptyState');
     const tableWrap = document.querySelector('.receipt-table-wrap');
+    const footer = document.getElementById('receipt-table-footer');
     const stateKey = 'retailmind.receipts.' + <?= json_encode((int)$_SESSION['user_id']) ?> + '.' + window.location.pathname;
     let appliedFilters = {date_from: '', date_to: '', refund_status: '', cashier_id: ''};
     let loadFailed = false;
@@ -385,15 +384,17 @@ document.addEventListener('DOMContentLoaded', function() {
         columns: [
             {
                 data: 'sale_id',
+                className: 'dt-left',
                 render: function(value, type) {
                     return type === 'display' ? '<strong class="receipt-id">#' + Number(value) + '</strong>' : Number(value);
                 }
             },
-            { data: 'sale_date', render: function(value, type, row) { return type === 'display' ? textRenderer.display(row.sale_date_display) : value; } },
+            { data: 'sale_date', className: 'dt-left', render: function(value, type, row) { return type === 'display' ? textRenderer.display(row.sale_date_display) : value; } },
             { data: 'cashier_name', render: textRenderer },
-            { data: 'item_count' },
+            { data: 'item_count', className: 'u-num-col' },
             {
                 data: 'total_amount',
+                className: 'u-num-col',
                 render: function(value, type) {
                     const amount = Number(value);
                     return type === 'display' ? '<strong>₱' + amount.toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</strong>' : amount;
@@ -420,13 +421,13 @@ document.addEventListener('DOMContentLoaded', function() {
             { data: 'remaining_net_amount', render: function(value, type) { return type === 'display' ? '₱' + Number(value).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : value; } },
             {
                 data: 'sale_id',
+                className: 'receipt-actions-column',
                 orderable: false,
                 searchable: false,
                 render: function(value, type) {
                     if (type !== 'display') return value;
                     const saleId = Number(value);
-                    return '<div class="actions-cell">' +
-                        '<button type="button" class="btn-small btn-view" data-receipt-details="' + saleId + '"><i class="bi bi-eye" aria-hidden="true"></i> Full details</button></div>';
+                    return '<button type="button" class="btn-small btn-view" data-receipt-details="' + saleId + '"><i class="bi bi-eye" aria-hidden="true"></i> Full details</button>';
                 }
             }
         ],
@@ -434,7 +435,7 @@ document.addEventListener('DOMContentLoaded', function() {
             topStart: null,
             topEnd: [{
                 search: {
-                    placeholder: 'Receipt number or payment method'
+                    placeholder: 'Receipt # or payment'
                 }
             }],
             bottomStart: null,
@@ -444,9 +445,14 @@ document.addEventListener('DOMContentLoaded', function() {
             processing: 'Loading receipts…',
             emptyTable: 'No receipts have been created yet.',
             zeroRecords: 'No receipts match the current search and filters.',
-            search: 'Search:'
+            search: 'Search receipts'
         }
     });
+    const searchControl = table.table().container().querySelector('.dt-search');
+    const searchRow = searchControl.closest('.dt-layout-row');
+    const searchInput = searchControl.querySelector('input');
+    document.getElementById('receiptSearchSlot').append(searchControl);
+    searchRow.remove();
 
     const drawer = document.getElementById('receiptModal');
     const receiptPanel = drawer.querySelector('#receiptContent');
@@ -596,19 +602,19 @@ document.addEventListener('DOMContentLoaded', function() {
         const info = table.page.info();
         emptyState.hidden = info.recordsTotal !== 0;
         tableWrap.hidden = info.recordsTotal === 0;
-        if (info.recordsTotal === 0) {
-            updateStatus('No receipt history is available yet.', false, false);
-        } else if (info.recordsDisplay === 0) {
-            updateStatus('No receipts match the current search and filters.', false, false);
-        } else {
+        if (info.recordsDisplay > 0) {
+            RetailMindUI.fillTableGhostRows(tableWrap);
             updateStatus(info.recordsDisplay + ' permitted receipt' + (info.recordsDisplay === 1 ? '' : 's') + ' found.', false, false);
+        } else {
+            updateStatus('', false, false);
         }
     });
 
-    RetailMindUI.tablePageSize(document.getElementById('receipt-table-footer'), 15, size => table.page.len(size).draw());
+    RetailMindUI.tablePageSize(footer, 15, size => table.page.len(size).draw());
     let restorePageFocus = false;
     function renderPagination() {
         const info = table.page.info();
+        footer.hidden = info.recordsDisplay === 0;
         const totalPages = Math.max(info.pages, 1);
         document.getElementById('receipt-page-summary').textContent = `Showing ${info.recordsDisplay ? info.start + 1 : 0} to ${info.end} of ${info.recordsDisplay} entries`;
         RetailMindUI.renderPageButtons(pagination, info.page + 1, totalPages, page => {
@@ -637,9 +643,9 @@ document.addEventListener('DOMContentLoaded', function() {
         refundStatus.value = '';
         if (cashier) cashier.value = '';
         validDates();
+        searchInput.value = '';
         table.search('');
         table.order([[1, 'desc'], [0, 'desc']]);
-        table.page.len(10);
         table.ajax.reload(null, true);
     });
 });

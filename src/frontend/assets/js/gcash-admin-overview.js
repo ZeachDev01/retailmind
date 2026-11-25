@@ -28,7 +28,7 @@
             tab.focus({preventScroll: true});
             tab.scrollIntoView({block: 'nearest', inline: 'nearest'});
         }
-        if (target === 'tab-money' && focus) window.location.assign(url);
+        if ((target === 'tab-money' || target === 'tab-sessions') && focus) window.location.assign(url);
     }
     tabs.forEach((tab, index) => {
         tab.addEventListener('click', () => {

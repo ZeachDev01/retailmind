@@ -56,8 +56,6 @@ const {chromium} = require('playwright');
         await page.locator('#gcash-funding-type').selectOption('replenishment');
         await page.getByLabel('Cash source', {exact: true}).fill('Store safe');
         await page.locator('#gcash-funding-amount').fill('100');
-        await page.locator('#gcash-funding-approver').fill('admin');
-        await page.locator('#gcash-funding-password').fill('test-password');
         await page.locator('#gcash-funding-receipt').check();
         await page.locator('#gcash-funding-submit').click();
         await page.locator('#gcash-funding-dialog').waitFor({state: 'hidden'});

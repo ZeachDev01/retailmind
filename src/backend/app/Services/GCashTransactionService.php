@@ -125,7 +125,7 @@ final class GCashTransactionService
     public function getSession(int $sessionId): array { return $this->custody()->getSession($sessionId); }
     public function lastClosedSession(): ?array { return $this->custody()->lastClosedSession(); }
     public function calculateSessionExpected(int $sessionId): array { return $this->custody()->calculateSessionExpected($sessionId); }
-    public function openSession(int $cashierId, float $openingServiceCash, float $openingWalletBalance): int { return $this->custody()->openSession($cashierId, $openingServiceCash, $openingWalletBalance); }
+    public function openSession(int $cashierId, float $openingServiceCash, float $openingWalletBalance, mixed $walletNumber = null): int { return $this->custody()->openSession($cashierId, $openingServiceCash, $openingWalletBalance, $walletNumber); }
     public function closeSession(int $cashierId, float $actualServiceCash, float $actualWalletBalance, string $notes, int $unresolvedCarryover = 0, ?int $responsibleUserId = null, ?string $transferReason = null): array { return $this->custody()->closeSession($cashierId, $actualServiceCash, $actualWalletBalance, $notes, $unresolvedCarryover, $responsibleUserId, $transferReason); }
     public function eligibleHandoverRecipients(): array { return $this->custody()->eligibleHandoverRecipients(); }
     public function handoverSession(int $outgoingCashierId, int $incomingCashierId, float $countedCash, float $checkedWallet, string $notes, ?array $acceptedTransactionIds = null, ?int $differenceResponsibleUserId = null): array { return $this->custody()->handoverSession($outgoingCashierId, $incomingCashierId, $countedCash, $checkedWallet, $notes, $acceptedTransactionIds, $differenceResponsibleUserId); }

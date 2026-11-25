@@ -357,17 +357,13 @@ $assert(count($rowsFor($adminId, 'oversight.expiry.1')) === $adminBefore + 1, 'A
 // --- 4. Required work per Workspace ---
 echo "\n--- 4. Required work ---\n";
 $managerWork = $notifications->requiredWork($managerId, 'inventory_manager');
-$assert(count($managerWork) === 1, 'Pending Stock Issues are the Inventory Manager required work');
-$assert($managerWork[0]['title'] === 'Pending Stock Issue #1', 'Pending required work names the Stock Issue');
-$assert($managerWork[0]['destination'] === 'components/inventory_management/stock_issues.php', 'Inventory Manager required work points at the Inventory Workspace');
-$assert($notifications->requiredWork($cashierId, 'inventory_manager') === [], 'A Cashier is not assigned the Inventory Manager Workspace');
-
-$cashierWork = $notifications->requiredWork($cashierId, 'cashier');
-$assert(count($cashierWork) === 1, 'A returned report is the reporting Cashier required work');
-$assert($cashierWork[0]['title'] === 'Returned Stock Issue #2', 'Returned required work names the reporting Cashier report');
-$assert($cashierWork[0]['destination'] === 'components/cashier/stock_issues.php', 'Cashier required work points at the Cashier Workspace');
-$assert($notifications->requiredWork($cashierTwoId, 'cashier')[0]['title'] === 'Returned Stock Issue #3', 'Another Cashier sees only their own returned report');
-$assert($notifications->requiredWork($managerId, 'cashier') === [], 'An Inventory Manager is not assigned the Cashier Workspace');
+$assert(count($managerWork) === 3, 'Pending and legacy waiting Stock Issues are Manager required work');
+$assert($managerWork[0]['title'] === 'Pending Stock Issue #1', 'Required work names the Stock Issue');
+$assert($managerWork[0]['destination'] === 'components/inventory_management/stock_issues.php?detail=1#report-1', 'Manager required work opens the exact report');
+$assert($notifications->requiredWork($cashierId, 'inventory_manager') === [], 'A Cashier cannot inherit Manager work');
+$assert($notifications->requiredWork($cashierId, 'cashier') === [], 'Cashier has no reply-dependent required work');
+$assert($notifications->requiredWork($cashierTwoId, 'cashier') === [], 'Legacy waiting reports no longer require Cashier replies');
+$assert($notifications->requiredWork($managerId, 'cashier') === [], 'An Inventory Manager cannot inherit Cashier work');
 
 // --- 5. Optional-delivery preference handling ---
 echo "\n--- 5. Optional-delivery preferences ---\n";

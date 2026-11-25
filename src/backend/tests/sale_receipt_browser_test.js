@@ -235,20 +235,20 @@ if (!fs.existsSync(chromium.executablePath())) {
             const paper = page.locator('.gcash-service-receipt');
             assert.equal(await paper.getAttribute('data-paper-width-mm'), String(paperWidthMm));
             assert.equal(await page.locator('.gcash-receipt-digits').textContent(), '00000000000000000000000000123456');
-            assert.equal(await page.locator('.barcode-svg').getAttribute('viewBox'), '0 0 814 58', 'All 32 digits and both quiet zones fit complete Code128 symbol');
+            assert.equal(await paper.locator('svg').count(), 0, 'GCash preview shows the reference as text without a barcode');
             const fit = await paper.evaluate(el => {
                 const bounds = el.getBoundingClientRect();
-                const barcode = el.querySelector('svg').getBoundingClientRect();
+                const reference = el.querySelector('.gcash-receipt-digits').getBoundingClientRect();
                 const actions = el.parentElement.querySelector('.receipt-actions').getBoundingClientRect();
-                return {overflow: [...el.querySelectorAll('*')].filter(child => child.scrollWidth > child.clientWidth + 1).map(child => child.className.baseVal || child.className), center: Math.abs((bounds.left + bounds.right) / 2 - (barcode.left + barcode.right) / 2), actions: Math.abs((actions.left + actions.right) / 2 - (bounds.left + bounds.right) / 2)};
+                return {overflow: [...el.querySelectorAll('*')].filter(child => child.scrollWidth > child.clientWidth + 1).map(child => child.className.baseVal || child.className), center: Math.abs((bounds.left + bounds.right) / 2 - (reference.left + reference.right) / 2), actions: Math.abs((actions.left + actions.right) / 2 - (bounds.left + bounds.right) / 2)};
             });
             assert.deepEqual(fit.overflow, [], 'Long labels, amounts and digits fit narrow paper');
-            assert.ok(fit.center < 1 && fit.actions < 1, 'Barcode, actions and thermal preview centered');
+            assert.ok(fit.center < 1 && fit.actions < 1, 'Reference, actions and thermal preview centered');
             await page.getByRole('button', {name: 'Print Receipt', exact: true}).click();
             assert.equal(await page.evaluate(() => window.printCalls), 1);
             assert.match(await page.locator('.receipt-print-root').innerText(), /00000000000000000000000000123456/);
             await page.emulateMedia({media: 'print'});
-            assert.equal(await page.locator('.receipt-print-root svg').evaluate(el => el.getBoundingClientRect().width <= el.closest('.sale-receipt').getBoundingClientRect().width), true, 'Print barcode retains full quiet zones within paper');
+            assert.equal(await page.locator('.receipt-print-root svg').count(), 0, 'Printed GCash receipt keeps the reference text without a barcode');
             await page.pdf({path: path.join(output, `gcash-${paperWidthMm}mm.pdf`), printBackground: true, preferCSSPageSize: true});
             await page.emulateMedia({media: 'screen'});
             await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));

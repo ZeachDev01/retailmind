@@ -87,6 +87,7 @@ if (!fs.existsSync(chromium.executablePath())) {
             const confirmCheckoutButton = document.getElementById('confirm-checkout-button');
             const checkoutModal = document.getElementById('checkout-modal');
             const checkoutSummary = document.getElementById('checkout-summary');
+            const posActions = null;
             function getNetTotal() { return 100 - getDiscountAmount(); }
             function getCartTotal() { return 100; }
             function getCartItemCount() { return Object.values(cart).reduce((count, item) => count + item.qty, 0); }
@@ -143,7 +144,7 @@ if (!fs.existsSync(chromium.executablePath())) {
         assert.match(await page.locator('#promotion-status').textContent(), /Selection cleared.*review the updated total/i);
         assert.equal(await page.locator('#quote-token-input').inputValue(), '', 'Refresh cannot authorize payment');
         await page.evaluate(() => checkoutQuote.refreshPromotions());
-        assert.match(await page.locator('#promotion-status').textContent(), /No eligible promotions/);
+        assert.equal(await page.locator('#promotion-status').textContent(), '', 'No promotions leaves the optional status empty');
         unavailable = true;
         await page.evaluate(() => checkoutQuote.refreshPromotions().catch(() => {}));
         assert.match(await page.locator('#promotion-status').textContent(), /Promotions unavailable/, 'Failure is distinguished from empty eligibility');

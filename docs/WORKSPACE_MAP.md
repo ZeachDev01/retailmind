@@ -25,6 +25,8 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Backing JS: `cart-workspace.js`, `checkout-attempt.js`, `checkout-quote.js`, `cash-drawer-counter.js`, `sale-receipt.js`, `sale-receipt-dialog.js`, `page-navigation.js`
   - Backend Services: `SalesWorkflowService`, `CashierShiftService`, `HeldSaleService`
 - **GCash Portal**: `components/cashier/gcash.php` (API: `gcash_api.php`, Receipt: `gcash_receipt.php`)
+  - Hold for checking carries checked movements into the hold record. Optional customer name and recipient/sender GCash number are shown with the holding reason in Resolve; resolution notes are optional. Returns retain evidence and approval. New sessions require the Store GCash number, retained in Recent GCash Sessions and handover. Service funds recording is direct, including Product Drawer Transfer; historical approvals remain readable. See `docs/discussions/gcash-held-exchange-clarification.md` and ADR-0035.
+  - Verification: `gcash_held_exchange_browser_test.js`, `gcash_session_history_browser_test.js`, `gcash_fund_movements_integration_browser_test.js` (includes the disposable-database upgrade check), `gcash_funding_receipt_contract.php`, `emergency_gcash_handover_contract.php`.
   - **Service Fund Movements** tab: own recorded movements across sessions (`gcash_api.php?action=fund_movements`); Administrator GCash Overview uses the same label for all recorders, with All money history available for exchanges/corrections.
   - Verification: `gcash_funding_receipt_contract.php`, `gcash_money_history_contract.php`, `gcash_fund_movements_browser_test.js`, `gcash_fund_movements_integration_browser_test.js`.
   - Partials: `src/backend/app/Views/gcash_receipt_dialog.php`, `gcash_receipt.php`
@@ -46,6 +48,7 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Receipt History (`components/invoice/sales.php`) is a separate store-wide lookup/reprint workspace for authorized staff, including Cashiers. Viewing another Cashier's receipt does not bypass Supervisor override for refunds. See `docs/specs/cashier-history-consolidation.md`.
   - Receipt History Other Details loads Cash Refund return conditions through `sales.php?action=refund_conditions`. Inventory Managers correct Store returns using `RefundReturnConditionService`; Administrators see read-only history. Cashier requests retain issuing ownership, including dual-role accounts. Verified by `refund_return_condition_manager_browser_test.js` and the disposable Cash Refund persisted/HTTP fixture.
 - **Stock Issue Reporting**: `components/cashier/stock_issues.php`
+  - Historical clarification messages shared with Inventory Manager: `backend/app/Views/stock_issue_conversation.php`, `backend/includes/stock_issue_conversation_actions.php`, `assets/css/stock-issue-conversation.css`, `assets/js/stock-issue-conversation.js`. Submitted details are locked; legacy messages are read-only and legacy waiting reports join Manager Pending review. The shared entry form is `backend/app/Views/stock_issue_form.php` with `assets/js/stock-issue-form.js`. See `docs/specs/simplified-stock-issues.md`; checks: `stock_issue_correction_contract.php`, `stock_issue_batch_deduction_test.php`, `stock_issue_review_layout_browser_test.js`.
   - Backend Services: `App\Services\StockIssueService`
 
 ### Inventory Manager (`inventory_manager`)
@@ -71,7 +74,7 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Verification: `inline_receiving_browser_test.js`, `stock_receiving_ui_browser_test.js`, `stock_receiving_landscape_browser_test.js`, `stock_receiving_scan_browser_test.js`, `known_receiving_cost_mysql_test.php`, `supplier_replacement_receiving_test.php`.
 - **Inventory Control**:
   - Physical Counts: `components/inventory_management/inventory_counts.php` (`App\Services\InventoryCountService`)
-  - Stock Issue Reviews: `components/inventory_management/stock_issues.php` (`App\Services\StockIssueService`)
+  - Stock Issues: `components/inventory_management/stock_issues.php` (`StockIssueService`): direct record-and-deduct, Pending review with editable verified quantity, and Recent decisions.
   - Supplier Pullouts: `components/inventory_management/supplier_pullouts.php` (`App\Services\SupplierPulloutService`)
 - **Investigation & Predictions**: `components/inventory_management/product_investigation.php`, `components/report/predictions.php`
   - Backing JS: `forecast-notices.js`

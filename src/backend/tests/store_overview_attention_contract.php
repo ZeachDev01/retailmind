@@ -113,12 +113,12 @@ try {
     $pdo->exec("INSERT INTO inventory_adjustments (adjustment_id, product_id, adjustment_qty, adjustment_type, reported_at, status)
         VALUES (1, 10, -2, 'damaged', '2026-10-28 09:30:00', 'pending')"); // 30 mins old, value 40.00 (normal)
     $pdo->exec("INSERT INTO inventory_adjustments (adjustment_id, product_id, adjustment_qty, adjustment_type, reported_at, status)
-        VALUES (2, 10, -300, 'theft', '2026-10-28 09:00:00', 'pending')"); // value 6000.00 (high value >= 5000)
+        VALUES (2, 10, -300, 'theft', '2026-10-28 09:00:00', 'returned')"); // value 6000.00 (high value >= 5000)
 
     StoreOperationsDashboardWorkspace::invalidateCache();
     $stockView = $workspace->load('admin', 30);
     // Store status headline
-    $assert(($stockView['headline']['inventory_risks']['value'] ?? 0) === 2, 'Pending Stock Issues count must show total pending');
+    $assert(($stockView['headline']['inventory_risks']['value'] ?? 0) === 2, 'Stock Issue count includes pending and legacy waiting reports');
     $assert(str_contains($stockView['headline']['inventory_risks']['detail'], 'Waiting for Inventory Manager'), 'Normal Stock Issue oversight must state Waiting for Inventory Manager');
     $assert(str_contains($stockView['headline']['inventory_risks']['detail'], 'read-only'), 'Must state oversight is read-only');
 

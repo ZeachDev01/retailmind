@@ -46,6 +46,15 @@ final class GCashExchangeWorkflow
         return (bool)$stmt->fetchColumn();
     }
 
+    private function customerDetails(array $data): array
+    {
+        $name = $data['customer_name'] ?? '';
+        if (!is_string($name) || mb_strlen(trim($name)) > 100) {
+            throw new DomainException('Customer name must be 100 characters or fewer.');
+        }
+        return [trim($name) !== '' ? trim($name) : null, GCashPhoneNumber::normalize($data['customer_gcash_number'] ?? null)];
+    }
+
     public function save(int $cashierId, string $reference, string $amount, string $type): int
     {
         $reference = GCashReference::normalize($reference, (int)($this->rules['min_length'] ?? 13), (int)($this->rules['max_length'] ?? 13));
@@ -155,6 +164,7 @@ final class GCashExchangeWorkflow
 
         $confirmedWallet = !empty($data['confirmed_wallet']) || !empty($data['wallet_sent']);
         $confirmedCash = !empty($data['confirmed_cash']) || !empty($data['cash_collected']);
+        [$customerName, $customerGCashNumber] = $this->customerDetails($data);
         $notes = isset($data['notes']) ? trim((string)$data['notes']) : (isset($data['note']) ? trim((string)$data['note']) : null);
 
         if ($outcome === 'Completed') {
@@ -219,12 +229,12 @@ final class GCashExchangeWorkflow
                     session_id, shift_id, transaction_type, reference_number, amount,
                     principal_amount, fee_amount, fee_method, service_cash_delta, wallet_delta,
                     gross_fee, cashier_id, responsible_user_id, responsible_role, responsibility_assigned_at, confirmed_wallet, confirmed_cash, notes,
-                    verification_status, completed_at
+                    verification_status, completed_at, customer_name, customer_gcash_number
                 ) VALUES (
                     ?, ?, 'Cash-In', ?, ?,
                     ?, ?, 'cash', ?, ?,
                     ?, ?, ?, 'cashier', CURRENT_TIMESTAMP, ?, ?, ?,
-                    ?, ?
+                    ?, ?, ?, ?
                 )"
             );
             $stmt->execute([
@@ -244,6 +254,8 @@ final class GCashExchangeWorkflow
                 $notes,
                 $outcome,
                 $completedAt,
+                $customerName,
+                $customerGCashNumber,
             ]);
             $id = (int)$this->pdo->lastInsertId();
 
@@ -268,6 +280,8 @@ final class GCashExchangeWorkflow
                     'confirmed_wallet' => $confirmedWallet ? 1 : 0,
                     'confirmed_cash' => $confirmedCash ? 1 : 0,
                     'notes' => $notes,
+                    'customer_name' => $customerName,
+                    'customer_gcash_number' => $customerGCashNumber,
                 ],
                 null,
                 AuditRecordCategory::STORE_OPERATION
@@ -335,6 +349,7 @@ final class GCashExchangeWorkflow
 
         $confirmedWallet = !empty($data['confirmed_wallet']) || !empty($data['wallet_received']) || !empty($data['wallet_sent']) || !empty($data['wallet_transferred']);
         $confirmedCash = !empty($data['confirmed_cash']) || !empty($data['cash_handed']) || !empty($data['cash_payout_done']) || !empty($data['cash_collected']);
+        [$customerName, $customerGCashNumber] = $this->customerDetails($data);
         $notes = isset($data['notes']) ? trim((string)$data['notes']) : (isset($data['note']) ? trim((string)$data['note']) : null);
 
         if ($outcome === 'Completed') {
@@ -409,12 +424,12 @@ final class GCashExchangeWorkflow
                     session_id, shift_id, transaction_type, reference_number, amount,
                     principal_amount, fee_amount, fee_method, service_cash_delta, wallet_delta,
                     gross_fee, cashier_id, responsible_user_id, responsible_role, responsibility_assigned_at, confirmed_wallet, confirmed_cash, notes,
-                    verification_status, completed_at
+                    verification_status, completed_at, customer_name, customer_gcash_number
                 ) VALUES (
                     ?, ?, 'Cash-Out', ?, ?,
                     ?, ?, ?, ?, ?,
                     ?, ?, ?, 'cashier', CURRENT_TIMESTAMP, ?, ?, ?,
-                    ?, ?
+                    ?, ?, ?, ?
                 )"
             );
             $stmt->execute([
@@ -435,6 +450,8 @@ final class GCashExchangeWorkflow
                 $notes,
                 $outcome,
                 $completedAt,
+                $customerName,
+                $customerGCashNumber,
             ]);
             $id = (int)$this->pdo->lastInsertId();
 
@@ -459,6 +476,8 @@ final class GCashExchangeWorkflow
                     'confirmed_wallet' => $confirmedWallet ? 1 : 0,
                     'confirmed_cash' => $confirmedCash ? 1 : 0,
                     'notes' => $notes,
+                    'customer_name' => $customerName,
+                    'customer_gcash_number' => $customerGCashNumber,
                 ],
                 null,
                 AuditRecordCategory::STORE_OPERATION
@@ -806,7 +825,7 @@ final class GCashExchangeWorkflow
                 if ((int)$session['cashier_id'] !== $actorId) {
                     throw new DomainException('Another Cashier currently has responsibility for GCash services.', 409);
                 }
-                $authorizedBy = $this->authorizeAdmin((string)($data['approver_username'] ?? ''), (string)($data['approver_password'] ?? ''));
+                $authorizedBy = null;
             } else {
                 throw new DomainException('Unauthorized role for funding movement.', 403);
             }

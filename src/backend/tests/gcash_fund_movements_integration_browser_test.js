@@ -22,6 +22,7 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
     let server, browser;
     try {
         const data = JSON.parse(fixture('create'));
+        run('src/backend/tests/gcash_cashier_recording_upgrade_integration.php', [database]);
 
         const listener = net.createServer();
         await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
@@ -80,15 +81,21 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
             });
             await cashierPage.screenshot({path: path.join(output, 'cashier-funds-' + width + '.png'), fullPage: true});
         }
+        await cashierPage.locator('#gcash-funding-btn').click();
+        assert.equal(await cashierPage.locator('#gcash-funding-dialog input[type="password"]').count(), 0,
+            'Service funds recording does not ask for Administrator credentials');
+        await cashierPage.locator('#gcash-funding-cancel').click();
         const posted = await cashierContext.request.post(origin + '/components/cashier/gcash_api.php', {
             headers: {'X-CSRF-Token': await cashierPage.locator('#gcash-workspace').getAttribute('data-csrf')},
             data: {action: 'funding_movement', movement_type: 'replenishment', fund_type: 'cash', direction: 'in', amount: 25,
-                source_destination: 'Store counter', reason: '', receipt_confirmed: true,
-                approver_username: 'theme_admin', approver_password: data.password}
+                source_destination: 'Store counter', reason: '', receipt_confirmed: true}
         });
-        assert.equal(posted.status(), 200, 'Cashier can record routine cash funding without a reason or invented evidence');
+        assert.equal(posted.status(), 200, 'Responsible Cashier can record routine funding without Administrator credentials');
         const savedMovement = await posted.json();
         assert.equal(savedMovement.success, true);
+        const directHistory = await (await cashierContext.request.get(origin + '/components/cashier/gcash_api.php?action=fund_movements')).json();
+        assert.equal(directHistory.movements.find(movement => movement.id === savedMovement.movement_id).authorizer_name, null,
+            'Direct recording does not invent an Administrator approval');
         await cashierPage.getByRole('tab', {name: 'History', exact: true}).click();
         await cashierPage.getByRole('tab', {name: 'Service Fund Movements', exact: true}).click();
         await cashierPage.waitForFunction(() => document.querySelectorAll('#gcash-funds-body tr').length === 2);

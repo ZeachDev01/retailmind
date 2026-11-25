@@ -1,6 +1,6 @@
             <div class="history-pagination rm-table-footer">
                 <span class="history-page-number" role="status">Showing <?= $rows ? ($page - 1) * $pageSize + 1 : 0 ?> to <?= $rows ? ($page - 1) * $pageSize + count($rows) : 0 ?> of <?= (int)$totalRows ?> entries</span>
-                <form method="GET" class="history-page-length rm-page-size">
+                <form method="GET" class="history-page-length rm-page-size"<?= isset($paginationAction) ? ' action="' . htmlspecialchars($paginationAction) . '"' : '' ?>>
                     <?php foreach ($paginationFilters as $name => $value): ?><input type="hidden" name="<?= htmlspecialchars($name) ?>" value="<?= htmlspecialchars((string)$value) ?>"><?php endforeach; ?>
                     <label><select name="<?= htmlspecialchars($paginationLengthKey ?? 'length') ?>" aria-label="Entries per page" onchange="this.form.requestSubmit()">
                         <?php foreach ([10, 15, 25, 50, 100] as $size): ?><option value="<?= $size ?>" <?= $size === $pageSize ? 'selected' : '' ?>><?= $size ?></option><?php endforeach; ?>

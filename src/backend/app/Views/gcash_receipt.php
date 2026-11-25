@@ -32,7 +32,6 @@ $v = $view ?? \App\Receipts\ReceiptEngine::prepareGCashViewData($receipt ?? [], 
         </div>
         <div class="gcash-receipt-reference">
             <div>GCash reference</div>
-            <?= $v['barcode_svg'] ?>
             <div class="gcash-receipt-digits"><?= $v['reference_number'] ?></div>
         </div>
         <div class="sale-receipt-footer"><?= $v['store']['footer'] ?></div>

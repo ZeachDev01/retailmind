@@ -1115,6 +1115,15 @@ html[data-theme="dark"] .gcash-records-empty p {
     outline-offset: -2px;
 }
 
+#panel-sessions .gcash-session-history { min-height: 0; }
+#panel-sessions .gcash-table-wrap, #tab-sessions .gcash-table-wrap { min-height: 0; }
+
+html .gcash-session-history .gcash-table-wrap :is(th, td).gcash-session-amount {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
 #gcash-workspace .gcash-table-wrap table {
     display: table;
     width: 100%;
@@ -1130,7 +1139,7 @@ html[data-theme="dark"] .gcash-records-empty p {
     vertical-align: middle;
 }
 
-#gcash-workspace .gcash-table-wrap th {
+#gcash-workspace .gcash-table-wrap thead th {
     background: var(--surface-soft);
     font-size: 0.72rem;
     font-weight: 700;
@@ -1141,10 +1150,9 @@ html[data-theme="dark"] .gcash-records-empty p {
     white-space: nowrap;
 }
 
-#gcash-workspace .gcash-table-wrap th:nth-child(4),
-#gcash-workspace .gcash-table-wrap th:nth-child(5),
-#gcash-workspace .gcash-history td:nth-child(4),
-#gcash-workspace .gcash-history td:nth-child(5) {
+#gcash-workspace .gcash-history:not(.gcash-session-history) thead th:is(:nth-child(4), :nth-child(5)),
+#gcash-workspace .gcash-history:not(.gcash-session-history) td:nth-child(4),
+#gcash-workspace .gcash-history:not(.gcash-session-history) td:nth-child(5) {
     text-align: right;
 }
 
@@ -1154,18 +1162,18 @@ html[data-theme="dark"] .gcash-records-empty p {
     font-variant-numeric: tabular-nums;
 }
 
-#gcash-workspace .gcash-history td:nth-child(2) {
+#gcash-workspace .gcash-history:not(.gcash-session-history) td:nth-child(2) {
     font-weight: 600;
     letter-spacing: 0.01em;
 }
 
-#gcash-workspace .gcash-history td:nth-child(4) {
+#gcash-workspace .gcash-history:not(.gcash-session-history) td:nth-child(4) {
     font-weight: 700;
     color: var(--text);
     white-space: nowrap;
 }
 
-#gcash-workspace .gcash-history td:nth-child(5) {
+#gcash-workspace .gcash-history:not(.gcash-session-history) td:nth-child(5) {
     font-weight: 500;
     color: var(--muted);
     white-space: nowrap;

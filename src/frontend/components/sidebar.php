@@ -299,7 +299,7 @@ $roleSections = [
                 ['path' => 'components/report/receiving_history.php', 'icon' => 'filing_cabinet', 'label' => 'Receiving History'],
                 ['icon' => 'settings', 'label' => 'Inventory Control', 'items' => [
                     ['path' => 'components/inventory_management/inventory_counts.php', 'icon' => 'survey', 'label' => 'Inventory Counts'],
-                    ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'high_priority', 'label' => 'Stock Issue Reviews'],
+                    ['path' => 'components/inventory_management/stock_issues.php', 'icon' => 'high_priority', 'label' => 'Stock Issues'],
                     ['path' => 'components/inventory_management/supplier_pullouts.php', 'icon' => 'export', 'label' => 'Supplier Pullouts'],
                 ]],
             ],

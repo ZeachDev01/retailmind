@@ -62,6 +62,7 @@ class CheckoutQuote {
         const inputs = this.inputSnapshot(false);
         const data = new FormData(this.form);
         data.set('promotion_id', '');
+        data.set('promotion_preview', '1');
         const status = this.form.querySelector('#promotion-status');
         status.textContent = 'Loading eligible promotions…';
         try {

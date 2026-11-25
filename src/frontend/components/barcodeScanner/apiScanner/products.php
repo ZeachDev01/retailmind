@@ -11,6 +11,8 @@ $code = trim((string)($_GET['code'] ?? ''));
 $id = (int)($_GET['id'] ?? 0);
 $category = (int)($_GET['category'] ?? 0);
 $limit = max(1, min(30, (int)($_GET['limit'] ?? 12)));
+$stockIssueSearch = (($_GET['scope'] ?? '') === 'stock_issues') && in_array(current_role(), ['cashier', 'inventory_manager'], true);
+$stockQuantity = $stockIssueSearch ? 'i.quantity_on_hand' : 'LEAST(i.quantity_on_hand,COALESCE(b.sellable_quantity,i.quantity_on_hand))';
 $managementSearch = (($_GET['scope'] ?? '') === 'all') && in_array(current_role(), ['admin', 'super_admin', 'inventory_manager'], true);
 
 $todayManila = PhilippineTime::today();
@@ -18,7 +20,7 @@ $todayManila = PhilippineTime::today();
 $select = "SELECT p.product_id,p.sku,p.barcode,p.case_barcode,p.parent_product_id,p.variant_label,p.product_name,p.unit_price,
                   p.pack_size, p.pack_barcode, p.pack_price,
                   COALESCE(p.reorder_level,0) reorder_level,COALESCE(p.safety_stock,0) safety_stock,
-                  LEAST(i.quantity_on_hand,COALESCE(b.sellable_quantity,i.quantity_on_hand)) quantity_on_hand,
+                  {$stockQuantity} quantity_on_hand,
                   CASE WHEN i.quantity_on_hand > 0 THEN b.next_expiration_date ELSE NULL END AS next_expiration_date
            FROM products p JOIN inventory i ON i.product_id=p.product_id
            LEFT JOIN (
@@ -29,8 +31,8 @@ $select = "SELECT p.product_id,p.sku,p.barcode,p.case_barcode,p.parent_product_i
            ) b ON b.product_id=p.product_id
            WHERE 1=1";
 if (!$managementSearch) {
-    $select .= " AND p.status='active' AND i.quantity_on_hand>0
-                  AND COALESCE(b.sellable_quantity,i.quantity_on_hand)>0";
+    $select .= " AND p.status='active' AND i.quantity_on_hand>0";
+    if (!$stockIssueSearch) $select .= ' AND COALESCE(b.sellable_quantity,i.quantity_on_hand)>0';
 }
 $params = [$todayManila, $todayManila];
 if ($id > 0) {

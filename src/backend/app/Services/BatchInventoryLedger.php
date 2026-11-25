@@ -1024,7 +1024,7 @@ class BatchInventoryLedger
     {
         $columns = ['sale_item_id', 'batch_id', 'quantity'];
         $placeholders = ['?', '?', '?'];
-        $values = [$saleItemId, (int)$batchAllocation['batch_id'], (int)$batchAllocation['quantity']];
+        $values = [$saleItemId, isset($batchAllocation['batch_id']) ? (int)$batchAllocation['batch_id'] : null, (int)$batchAllocation['quantity']];
 
         $unitCost = $batchAllocation['unit_cost'] ?? null;
         $costStatus = $batchAllocation['cost_status'] ?? 'missing';

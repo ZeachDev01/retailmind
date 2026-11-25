@@ -56,6 +56,8 @@ $pdo->exec("
     );
 
     CREATE TABLE gcash_transactions (
+        customer_name TEXT,
+        customer_gcash_number TEXT,
         transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id INTEGER,
         shift_id INTEGER,

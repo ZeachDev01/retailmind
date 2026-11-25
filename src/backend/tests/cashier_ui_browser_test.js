@@ -209,9 +209,10 @@ const fixture = action => {
                     checks.push({screen, state: 'search results', issues: await inspect()});
                 }
                 if (screen === 'cashier/stock_issues') {
-                    await page.getByRole('button', {name: 'Approved', exact: true}).tap();
+                    const statusFilters = page.getByRole('navigation', {name: 'Filter report status'});
+                    await Promise.all([page.waitForNavigation(), statusFilters.getByRole('link', {name: /^Approved/}).tap()]);
                     assert.equal(await page.locator('#report-filter-status').isVisible(), true, 'Empty status explains recovery');
-                    await page.getByRole('button', {name: 'All', exact: true}).tap();
+                    await Promise.all([page.waitForNavigation(), statusFilters.getByRole('link', {name: /^All \d+$/}).tap()]);
                     assert.equal(await page.locator('#report-filter-status').isVisible(), false);
                     await page.locator('#product-search').fill('THEME');
                     await page.locator('#product-results button').first().tap();

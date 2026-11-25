@@ -10,6 +10,16 @@ use PDO;
 
 final class ProtectedAuditRecordService
 {
+    // Older and current records include some action details in the message itself.
+    private const ACTION_TYPE = "CASE
+        WHEN al.action LIKE 'Received shopping entry:%' THEN 'Stock received'
+        WHEN al.action LIKE 'Added category %' THEN 'Category added'
+        WHEN al.action LIKE 'Voided sale before final checkout:%' THEN 'Sale voided before checkout'
+        WHEN al.action LIKE 'Bulk product status updated to %' THEN 'Bulk product status updated'
+        WHEN al.action LIKE 'Bulk product category updated for %' THEN 'Bulk product category updated'
+        WHEN al.action LIKE 'Deleted user ID %' THEN 'User deleted'
+        ELSE al.action END";
+
     public function __construct(
         private PDO $pdo,
         private RoleCapabilityPolicy $policy
@@ -146,8 +156,9 @@ final class ProtectedAuditRecordService
     {
         [$whereSql, $params] = $this->where($actorRole, $filters);
         $actionCondition = $whereSql === '' ? 'WHERE' : $whereSql . ' AND';
+        $action = $actorRole === 'admin' ? self::ACTION_TYPE : 'al.action';
         $statement = $this->pdo->prepare(
-            "SELECT DISTINCT al.action FROM activity_log al LEFT JOIN users u ON al.user_id = u.user_id {$actionCondition} al.action IS NOT NULL AND al.action <> '' ORDER BY al.action"
+            "SELECT DISTINCT {$action} AS action_label FROM activity_log al LEFT JOIN users u ON al.user_id = u.user_id {$actionCondition} al.action IS NOT NULL AND al.action <> '' ORDER BY action_label"
         );
         $statement->execute($params);
         return $statement->fetchAll(PDO::FETCH_COLUMN);
@@ -171,6 +182,7 @@ final class ProtectedAuditRecordService
 
         $this->exactFilter($clauses, $params, 'al.user_id', $filters['user_id'] ?? null, true);
         $this->likeFilter($clauses, $params, 'al.action', $filters['action'] ?? null);
+        $this->exactFilter($clauses, $params, self::ACTION_TYPE, $filters['action_type'] ?? null);
         $this->exactFilter($clauses, $params, 'al.module', $filters['module'] ?? null);
         if (($filters['category'] ?? '') !== '') {
             $clauses[] = 'al.category = ?';

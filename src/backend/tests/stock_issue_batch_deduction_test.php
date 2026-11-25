@@ -131,6 +131,9 @@ $pdo->exec("CREATE TABLE inventory_adjustments (
     adjustment_id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER NOT NULL,
     adjustment_qty INTEGER NOT NULL,
+    form TEXT NOT NULL DEFAULT 'piece',
+    reported_qty INTEGER NULL,
+    pack_size INTEGER NULL,
     adjustment_type TEXT NOT NULL,
     reported_by INTEGER NOT NULL,
     shift_id INTEGER NULL,
@@ -213,6 +216,9 @@ $pdo->exec("CREATE TABLE notifications (
     is_read INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )");
+
+require_once __DIR__ . '/support/notification_schema.php';
+notification_test_schema($pdo);
 
 $quietNotifications = new class($pdo) extends NotificationService {
     public function checkAndNotifyLowStock(): void {}
@@ -473,38 +479,11 @@ $assert($getBatchRemaining($breadBatch2Id) === 3, 'Batch remaining preserved at 
 // -------------------------------------------------------------------------
 echo "\n--- Test 7: Lifecycle preservation (return, edit, resubmit, reject, cancel) ---\n";
 
-// Return for correction
-$service->returnReport($adjIdB, $managerId, 'Please check physical count; only 3 units present.');
-$stmt = $pdo->prepare('SELECT status, review_notes FROM inventory_adjustments WHERE adjustment_id = ?');
-$stmt->execute([$adjIdB]);
-$retReport = $stmt->fetch(PDO::FETCH_ASSOC);
-$assert($retReport['status'] === 'returned', 'Status changed to returned');
-$assert(str_contains($retReport['review_notes'], 'only 3 units present'), 'Return reason saved');
-$assert($getInventory($breadId) === 3, 'Inventory untouched by return');
-$assert($getBatchRemaining($breadBatch2Id) === 3, 'Batches untouched by return');
-
-// Edit report by cashier to 3 units
-$service->editReport($adjIdB, $cashierId, [
-    'quantity' => 3,
-    'explanation' => 'Recounted: exactly 3 loaves damaged.',
-]);
-$stmt = $pdo->prepare('SELECT status, adjustment_qty, reason FROM inventory_adjustments WHERE adjustment_id = ?');
-$stmt->execute([$adjIdB]);
-$editedReport = $stmt->fetch(PDO::FETCH_ASSOC);
-$assert($editedReport['status'] === 'returned', 'Status remains returned while editing');
-$assert((int)$editedReport['adjustment_qty'] === -3, 'Quantity updated to -3');
-$assert(str_contains($editedReport['reason'], 'Recounted: exactly 3'), 'Explanation updated');
-
-// Resubmit report
-$service->resubmitReport($adjIdB, $cashierId);
-$stmt = $pdo->prepare('SELECT status FROM inventory_adjustments WHERE adjustment_id = ?');
-$stmt->execute([$adjIdB]);
-$assert($stmt->fetchColumn() === 'pending', 'Status changed back to pending on resubmit');
-
-// Approve edited report: 3 from batch 2
-$service->approveReport($adjIdB, $managerId, 'Approved revised 3 units', [
-    $breadBatch2Id => 3, // test associative [batch_id => qty] format
-]);
+// Legacy waiting reports can be decided without another reply.
+$pdo->prepare("UPDATE inventory_adjustments SET status='returned', review_notes='Please check physical count; only 3 units present.', approved_by=? WHERE adjustment_id=?")->execute([$managerId, $adjIdB]);
+$throws(static fn() => $service->sendMessage($adjIdB, $cashierId, 'cashier', 'Reply'), 'Legacy chat is read-only');
+$throws(static fn() => $service->editReport($adjIdB, $cashierId, ['quantity' => 3]), 'Reported details remain locked');
+$service->approveReport($adjIdB, $managerId, 'Verified 3 units after recount', [$breadBatch2Id => 3], '', 3);
 $assert($getInventory($breadId) === 0, 'Inventory is 0');
 $assert($getBatchRemaining($breadBatch2Id) === 0, 'Batch 2 is depleted (0)');
 
@@ -567,6 +546,8 @@ $assert($detail !== null, 'Administrator can view report detail');
 $assert(!empty($detail['batches']), 'Report detail includes deducted batches attribution');
 $assert((int)$detail['batches'][0]['quantity'] === 3, 'Batch attribution details match');
 
+$pdo->exec('CREATE TABLE inventory_submissions (user_id INTEGER, operation_kind TEXT, operation_token TEXT, payload_hash TEXT, result_json TEXT, PRIMARY KEY(user_id, operation_kind, operation_token))');
+
 // Closed fiscal period blocks approval
 $pdo->exec("UPDATE fiscal_periods SET status = 'closed'");
 $periodId = (int)$pdo->lastInsertId();
@@ -576,6 +557,8 @@ $throws(
     static fn() => $service->approveReport($adjIdPerms, $managerId),
     'Approval blocked when fiscal period is closed'
 );
+
+$throws(static fn() => $service->recordConfirmedIssue(['product_id'=>$milkId,'category'=>'damaged','quantity'=>1,'explanation'=>'One leaking carton.','operation_token'=>str_repeat('e',48)],$managerId), 'Direct recording is blocked by a closed Fiscal Period');
 
 // -------------------------------------------------------------------------
 // Test 9: Legacy unbatched product fallback.
@@ -606,6 +589,67 @@ $assert(empty($unbatchedReportBatches), 'No batch attribution rows created for u
 // -------------------------------------------------------------------------
 // Summary
 // -------------------------------------------------------------------------
+echo "\n--- Verified quantities: smaller, larger, invalid, and zero ---\n";
+$pdo->exec("INSERT INTO products (branch_id, sku, barcode, product_name, status) VALUES ({$storeId}, 'VERIFIED', 'VERIFIED', 'Verified stock fixture', 'active')");
+$verifiedProduct = (int)$pdo->lastInsertId();
+$pdo->exec("INSERT INTO inventory (product_id, quantity_on_hand) VALUES ({$verifiedProduct}, 12)");
+$pdo->exec("INSERT INTO product_batches (product_id, batch_number, quantity, remaining_quantity) VALUES ({$verifiedProduct}, 'VERIFIED', 12, 12)");
+$verifiedBatch = (int)$pdo->lastInsertId();
+$newReport = static fn() => $service->submitReport(['product_id' => $verifiedProduct, 'category' => 'damaged', 'quantity' => 5, 'explanation' => 'Five containers reported punctured.'], $cashierId);
+$smaller = $newReport();
+foreach ([0, -1, '2.5', 2.5, '', [], '2147483648'] as $invalid) {
+    $throws(static fn() => $service->approveReport($smaller, $managerId, 'Inspection', null, '', $invalid), 'Invalid verified quantity refused: ' . json_encode($invalid));
+}
+$throws(static fn() => $service->approveReport($smaller, $managerId, ' ', null, '', 2), 'Changed quantity requires a reason');
+$throws(static fn() => $service->approveReport($smaller, $managerId, 'Two damaged', [$verifiedBatch => 5], '', 2), 'Allocation must match verified quantity');
+$throws(static fn() => $service->approveReport($smaller, $managerId, 'More damaged', null, '', 13), 'Verified quantity cannot exceed stock');
+$assert($getInventory($verifiedProduct) === 12 && $getBatchRemaining($verifiedBatch) === 12, 'All refused approvals leave stock and batches unchanged');
+$approvalToken = str_repeat('a', 48);
+$service->approveReport($smaller, $managerId, 'Only two are punctured after inspection.', [$verifiedBatch => 2], $approvalToken, '2');
+$service->approveReport($smaller, $managerId, 'Only two are punctured after inspection.', [$verifiedBatch => 2], $approvalToken, '2');
+$assert((int)$pdo->query("SELECT COUNT(*) FROM stock_movements WHERE adjustment_id={$smaller}")->fetchColumn() === 1, 'Retrying the same verified approval deducts only once');
+$throws(static fn() => $service->approveReport($smaller, $managerId, 'Only two are punctured after inspection.', [$verifiedBatch => 2], $approvalToken, 3), 'Retry token cannot authorize a different verified quantity');
+$saved = $pdo->query("SELECT * FROM inventory_adjustments WHERE adjustment_id = {$smaller}")->fetch(PDO::FETCH_ASSOC);
+$assert($saved['status'] === 'approved' && (int)$saved['reported_qty'] === 5 && (int)$saved['adjustment_qty'] === -2, 'Approval closes report while retaining original 5 and actual deduction 2');
+$assert($getInventory($verifiedProduct) === 10 && $getBatchRemaining($verifiedBatch) === 10, 'Exactly two deducted from inventory and batch');
+$assert((int)$pdo->query("SELECT change_qty FROM stock_movements WHERE adjustment_id = {$smaller}")->fetchColumn() === -2, 'Linked movement uses verified quantity');
+$revisions = $service->getRevisions($smaller);
+$lastRevision = end($revisions);
+$values = json_decode($lastRevision['new_values'], true);
+$assert((int)$lastRevision['actor_id'] === $managerId && $values['reported_qty'] === 5 && $values['verified_qty'] === 2 && $values['review_notes'] !== '', 'History records manager, reported and verified quantities, and reason');
+$throws(static fn() => $service->approveReport($smaller, $managerId, 'Retry', null, '', 2), 'Verified approval cannot deduct twice');
+$larger = $newReport();
+$pdo->exec("UPDATE inventory_adjustments SET reported_qty=NULL WHERE adjustment_id={$larger}");
+$service->approveReport($larger, $managerId, 'Seven are punctured after recount.', null, '', 7);
+$assert((int)$pdo->query("SELECT reported_qty FROM inventory_adjustments WHERE adjustment_id={$larger}")->fetchColumn() === 5, 'Legacy report without quantity snapshot retains original quantity on approval');
+$assert($getInventory($verifiedProduct) === 3 && $getBatchRemaining($verifiedBatch) === 3, 'Verified quantity may exceed reported quantity with available stock');
+$zero = $newReport();
+$beforeMovements = (int)$pdo->query('SELECT COUNT(*) FROM stock_movements')->fetchColumn();
+$service->rejectReport($zero, $managerId, 'No damage found after inspection.');
+$assert($getInventory($verifiedProduct) === 3 && $getBatchRemaining($verifiedBatch) === 3 && (int)$pdo->query('SELECT COUNT(*) FROM stock_movements')->fetchColumn() === $beforeMovements, 'Rejecting zero affected units leaves stock, batches and movements unchanged');
+$assert(StockIssueService::formatIssueQuantity(['status' => 'approved', 'form' => 'pack', 'reported_qty' => 5, 'adjustment_qty' => -12, 'pack_size' => 6]) === '-2 packs (12 pcs)', 'Approved pack display shows actual deduction rather than original report');
+
+echo "\n--- Direct Manager recording ---\n";
+$directData = ['product_id' => $milkId, 'category' => 'damaged', 'quantity' => 2, 'form' => 'piece', 'explanation' => 'Confirmed two leaking cartons.', 'operation_token' => str_repeat('b',48)];
+$before = $getInventory($milkId);
+$direct = $service->recordConfirmedIssue($directData, $managerId);
+$retry = $service->recordConfirmedIssue($directData, $managerId);
+$row = $service->getReport($direct);
+$assert($retry === $direct && $getInventory($milkId) === $before - 2, 'Direct recording and retry deduct exactly once');
+$assert($row['status'] === 'approved' && (int)$row['reported_by'] === $managerId && (int)$row['approved_by'] === $managerId && $row['shift_id'] === null, 'Direct record is final with Manager attribution and no Cashier Shift');
+$assert((int)$pdo->query("SELECT COUNT(*) FROM stock_movements WHERE adjustment_id={$direct}")->fetchColumn() === 1, 'Direct issue has one linked movement');
+$throws(static fn() => $service->recordConfirmedIssue(array_replace($directData,['quantity'=>3]), $managerId), 'A completed token cannot record different quantity');
+foreach ([$cashierId, $adminId] as $actor) $throws(static fn() => $service->recordConfirmedIssue($directData,$actor), 'Only Managers can directly record');
+$throws(static fn() => (new StockIssueService($pdo,null,'cashier'))->recordConfirmedIssue($directData,$managerId), 'Cashier Workspace cannot inherit direct Manager authority');
+foreach ([0,-1,'2.5',[]] as $invalid) $throws(static fn() => $service->recordConfirmedIssue(array_replace($directData,['quantity'=>$invalid,'operation_token'=>'']),$managerId), 'Invalid direct quantity refused');
+$recordsBefore = (int)$pdo->query('SELECT COUNT(*) FROM inventory_adjustments')->fetchColumn();
+$pdo->exec("CREATE TRIGGER fail_direct_batch BEFORE INSERT ON stock_issue_batches BEGIN SELECT RAISE(ABORT, 'Direct write failure'); END");
+$throws(static fn() => $service->recordConfirmedIssue(array_replace($directData,['operation_token'=>str_repeat('c',48)]),$managerId), 'Direct deduction failure rolls back record');
+$pdo->exec('DROP TRIGGER fail_direct_batch');
+$assert((int)$pdo->query('SELECT COUNT(*) FROM inventory_adjustments')->fetchColumn() === $recordsBefore && $getInventory($milkId) === $before-2, 'Failed direct issue leaves no report and no deduction');
+$throws(static fn() => $service->recordConfirmedIssue(array_replace($directData,['quantity'=>999,'operation_token'=>str_repeat('d',48)]),$managerId), 'Direct recording refuses insufficient stock');
+$assert((int)$pdo->query('SELECT COUNT(*) FROM inventory_adjustments')->fetchColumn() === $recordsBefore, 'Insufficient stock leaves no unfinished direct issue');
+
 if ($failures) {
     fwrite(STDERR, "\nStock issue batch deduction tests FAILED:\n- " . implode("\n- ", $failures) . "\n");
     exit(1);

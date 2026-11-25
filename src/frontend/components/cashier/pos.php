@@ -147,8 +147,16 @@ $posRegisterLocked = $shiftService->isRegisterLocked($cashierId);
 $loadCatalogProducts = static function () use ($pdo, $catalogScope, $catalogParams): array {
     static $products = null;
     if ($products !== null) return $products;
+    $costKnown = isset(SalesWorkflowService::getTableColumns($pdo, 'products')['cost_known']) ? 'p.cost_known' : '0 AS cost_known';
     $catalogStmt = $pdo->prepare(
         "SELECT p.product_id, p.sku, p.barcode, p.case_barcode, p.product_name, p.unit_price,
+                p.cost_price, {$costKnown},
+                EXISTS(SELECT 1 FROM product_batches cb
+                       LEFT JOIN stock_receiving cr ON cr.receiving_id = cb.receiving_id
+                       WHERE cb.product_id = p.product_id AND cb.remaining_quantity > 0
+                         AND (cb.expiration_date IS NULL OR cb.expiration_date >= ?)
+                         AND (cb.cost_price IS NOT NULL OR cr.cost_price IS NOT NULL
+                              OR (cr.total_cost > 0 AND COALESCE(NULLIF(cr.accepted_qty, 0), cr.received_qty) > 0))) AS has_batch_cost,
                 p.pack_barcode, p.pack_size, p.pack_price, p.variant_label, p.category_id, c.category_name,
                 p.product_image, COALESCE(p.quantity_sold, 0) AS quantity_sold,
                 COALESCE((SELECT SUM(pb.sealed_quantity) FROM product_batches pb
@@ -163,7 +171,7 @@ $loadCatalogProducts = static function () use ($pdo, $catalogScope, $catalogPara
          WHERE p.status = 'active'{$catalogScope}
          ORDER BY p.product_id ASC"
     );
-    $catalogStmt->execute(array_merge([\App\Services\PhilippineTime::today()], $catalogParams));
+    $catalogStmt->execute(array_merge([\App\Services\PhilippineTime::today(), \App\Services\PhilippineTime::today()], $catalogParams));
     return $products = array_map(static function (array $row): array {
         $image = product_image_url($row['product_image'] ?? null);
         return [
@@ -173,6 +181,8 @@ $loadCatalogProducts = static function () use ($pdo, $catalogScope, $catalogPara
             'case_barcode' => (string)($row['case_barcode'] ?? ''),
             'product_name' => (string)$row['product_name'],
             'unit_price' => (float)$row['unit_price'],
+            'pricing_ready' => (float)$row['unit_price'] > 0
+                && (\App\Inventory\ProductCost::known($row) || !empty($row['has_batch_cost'])),
             'product_image' => $image,
             'quantity_sold' => (int)$row['quantity_sold'],
             'pack_barcode' => (string)($row['pack_barcode'] ?? ''),
@@ -249,8 +259,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'scan_
             throw new InvalidArgumentException('Case barcodes are for receiving only. Scan the piece or pack barcode.');
         }
 
-        $isPackScan = ($match['matched_code_kind'] === ProductCodeLookupService::KIND_PACK_BARCODE);
-        $sellingForm = $isPackScan ? 'pack' : 'piece';
+        $sellingForm = $_POST['selling_form'] ?? ($match['matched_code_kind'] === ProductCodeLookupService::KIND_PACK_BARCODE ? 'pack' : 'piece');
+        if (!in_array($sellingForm, ['piece', 'pack'], true)) throw new InvalidArgumentException('Choose a piece or Sales Pack.');
+        $isPackScan = $sellingForm === 'pack';
 
         $todayManila = App\Services\PhilippineTime::today();
         $statement = $pdo->prepare(
@@ -325,6 +336,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'scan_
                 : 'Insufficient stock. Only ' . $onHandBaseUnits . ' available.');
         }
 
+        $pricingCart = [];
+        if ($existingPacks + ($isPackScan ? 1 : 0) > 0) {
+            $pricingCart[] = ['product_id' => (int)$product['product_id'], 'selling_form' => 'pack', 'qty' => $existingPacks + ($isPackScan ? 1 : 0)];
+        }
+        if ($existingPieces + ($isPackScan ? 0 : 1) > 0) {
+            $pricingCart[] = ['product_id' => (int)$product['product_id'], 'selling_form' => 'piece', 'qty' => $existingPieces + ($isPackScan ? 0 : 1)];
+        }
+        // Reuse sale-time cost validation without requiring a Promotion before adding stock.
+        $salesWorkflowService->reviewQuote($pricingCart, $cashierId, $actorRole, [], true);
+
         $product['selling_form'] = $sellingForm;
         $product['price'] = $formPrice;
         $product['pack_size'] = $packSize;
@@ -332,7 +353,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'scan_
         $product['product_image'] = product_image_url($product['product_image'] ?? null);
 
         echo json_encode(['success' => true, 'product' => $product], JSON_THROW_ON_ERROR);
-    } catch (InvalidArgumentException $e) {
+    } catch (InvalidArgumentException | DomainException $e) {
         http_response_code(409);
         echo json_encode(['success' => false, 'message' => $e->getMessage()]);
     } catch (Throwable $e) {
@@ -413,7 +434,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
         if (($_POST['action'] ?? '') === 'review_quote') {
             header('Content-Type: application/json');
             header('Cache-Control: no-store');
-            $quote = $salesWorkflowService->reviewQuote($cart, $cashierId, $actorRole, $paymentDetails);
+            $promotionsOnly = ($_POST['promotion_preview'] ?? '') === '1';
+            $quote = $salesWorkflowService->reviewQuote($cart, $cashierId, $actorRole, $paymentDetails, $promotionsOnly);
+            if ($promotionsOnly) {
+                echo json_encode(['quote' => $quote], JSON_THROW_ON_ERROR);
+                exit;
+            }
             $token = bin2hex(random_bytes(24));
             $_SESSION['checkout_quotes'] = array_slice($_SESSION['checkout_quotes'] ?? [], -19, null, true);
             $_SESSION['checkout_quotes'][$token] = ['state_hash' => $quote['state_hash']];
@@ -488,6 +514,7 @@ $quickProducts = array_map(static function (array $product): array {
         'pack_size' => isset($product['pack_size']) && $product['pack_size'] !== null ? (int)$product['pack_size'] : null,
         'pack_price' => isset($product['pack_price']) && $product['pack_price'] !== null ? (float)$product['pack_price'] : null,
         'price' => (float)$product['unit_price'],
+        'pricing_ready' => $product['pricing_ready'],
         'quantity_on_hand' => (int)$product['quantity_on_hand'],
         'sealed_packs' => (int)($product['sealed_packs'] ?? 0),
         'reorder_level' => (int)$product['reorder_level'],
@@ -965,15 +992,22 @@ function addQuickProduct(productId, sellingForm = 'piece') {
     if (!product || Number(product.quantity_on_hand) <= 0) {
         return;
     }
+    if (product.pricing_ready === false || Number(product.price) <= 0) {
+        showCartMessage(`${product.name}: pricing incomplete. Ask the Inventory Manager to complete pricing.`, 'warning');
+        return;
+    }
     const isPack = sellingForm === 'pack';
     if (isPack && Number(product.sealed_packs || 0) <= 0) {
         showCartMessage('Insufficient sealed pack stock.', 'warning');
         return;
     }
-    const price = isPack && product.pack_price ? product.pack_price : product.price;
-    const packSize = isPack ? product.pack_size : null;
-    const availableStock = isPack ? Number(product.sealed_packs || 0) : Number(product.quantity_on_hand);
-    addToCart(product.product_id, product.name, price, availableStock, product.reorder_level, product.safety_stock, product.sku, product.barcode, sellingForm, packSize, product.product_image);
+    scanQueue = scanQueue.then(async () => {
+        if (!cartChangesAllowed()) return;
+        const code = isPack && product.pack_barcode ? product.pack_barcode : (product.barcode || product.sku);
+        const current = await fetchProductByCode(code, sellingForm, navigator.onLine !== false);
+        if (current) addToCart(current.product_id, current.name, current.price, current.quantity_on_hand, current.reorder_level, current.safety_stock, current.sku, current.barcode, current.selling_form, current.pack_size, current.product_image);
+    }).catch(() => showCartMessage('Product lookup failed. Please try again.', 'error'));
+    return scanQueue;
 }
 
 function updateQuickProductAvailability() {
@@ -987,6 +1021,11 @@ function updateQuickProductAvailability() {
         if (stock <= 0) {
             card.classList.remove('selected');
             action.innerHTML = '<button type="button" class="quick-product-add" disabled>Out of stock</button>';
+            return;
+        }
+        if (product.pricing_ready === false || Number(product.price) <= 0) {
+            card.classList.remove('selected');
+            action.innerHTML = '<button type="button" class="quick-product-add pricing-incomplete" disabled>Pricing incomplete</button>';
             return;
         }
 
@@ -1060,7 +1099,7 @@ function renderQuickProducts() {
         const stockLabel = stockState === 'out' ? 'Out of stock' : `${stock} in stock`;
         const warning = stockState === 'low' ? '<span class="quick-stock-warning"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>Low stock</span>' : '';
         const hasPack = Number(product.pack_size) > 1 && Number(product.pack_price) > 0;
-        const priceLabel = hasPack
+        const priceLabel = Number(product.price) <= 0 ? '<strong>Price not set</strong>' : hasPack
             ? `<span><strong>&#8369;${money(product.price)}</strong> / pc &middot; <strong>&#8369;${money(product.pack_price)}</strong> / pk</span>`
             : `<strong>&#8369;${money(product.price)}</strong>`;
         return `<article class="quick-product-card ${stockState === 'out' ? 'out-of-stock' : ''}" data-product-id="${Number(product.product_id)}">
@@ -1415,7 +1454,7 @@ window.syncCatalog = syncCatalog;
 window.startCatalogSyncLoop = startCatalogSyncLoop;
 window.CATALOG_SYNC_INTERVAL_MS = CATALOG_SYNC_INTERVAL_MS;
 
-async function fetchProductByCode(code) {
+async function fetchProductByCode(code, sellingForm = null, forceServer = false) {
     const normalized = String(code || '').trim();
     if (normalized === '') {
         showCartMessage('Enter a SKU or barcode to add.', 'error');
@@ -1424,10 +1463,14 @@ async function fetchProductByCode(code) {
 
     const db = (typeof posDb !== 'undefined' ? posDb : (window.posDb || null));
     const lookupFn = (typeof lookupProductInIndexedDB === 'function' ? lookupProductInIndexedDB : window.lookupProductInIndexedDB);
-    if (db && lookupFn) {
+    if (db && lookupFn && !forceServer) {
         try {
             const localProduct = await lookupFn(normalized);
-            if (localProduct) {
+            if (localProduct && typeof localProduct.pricing_ready === 'boolean') {
+                if (!localProduct.pricing_ready || Number(localProduct.unit_price) <= 0) {
+                    showCartMessage(`${localProduct.product_name}: pricing incomplete. Ask the Inventory Manager to complete pricing.`, 'warning');
+                    return null;
+                }
                 const productId = Number(localProduct.product_id);
                 const catalogMap = (typeof catalogProductMap !== 'undefined' ? catalogProductMap : window.catalogProductMap);
                 const inMem = catalogMap?.get(productId);
@@ -1436,8 +1479,9 @@ async function fetchProductByCode(code) {
                 const pieceQty = Number(cart[`${productId}:piece`]?.qty || cart[productId]?.qty || 0);
                 const packSize = Number(localProduct.pack_size || 1);
                 const currentQty = (packQty * packSize) + pieceQty;
+                const isPack = sellingForm === 'pack';
 
-                if (currentQty >= initialStock) {
+                if (currentQty + (isPack ? packSize : 1) > initialStock || (isPack && packQty >= Number(localProduct.sealed_packs || 0))) {
                     showRecentScan(null, normalized, 'warning');
                     showCartMessage(`Insufficient stock. Only ${initialStock} available.`, 'warning');
                     return null;
@@ -1450,8 +1494,10 @@ async function fetchProductByCode(code) {
                     case_barcode: localProduct.case_barcode,
                     name: localProduct.product_name,
                     product_image: localProduct.product_image || '',
-                    price: Number(localProduct.unit_price),
-                    quantity_on_hand: initialStock,
+                    price: Number(isPack ? localProduct.pack_price : localProduct.unit_price),
+                    selling_form: isPack ? 'pack' : 'piece',
+                    pack_size: isPack ? packSize : null,
+                    quantity_on_hand: isPack ? Number(localProduct.sealed_packs || 0) : initialStock,
                     reorder_level: Number(localProduct.reorder_level || 0),
                     safety_stock: Number(localProduct.safety_stock || 0)
                 };
@@ -1465,6 +1511,7 @@ async function fetchProductByCode(code) {
         const response = await fetch(barcodeApiUrl, {
             method: 'POST',
             body: new URLSearchParams({ action: 'scan_lookup', csrf_token: csrfToken, code: normalized,
+                ...(sellingForm ? {selling_form: sellingForm} : {}),
                 quantities: JSON.stringify(Object.fromEntries(Object.entries(cart).map(([id, item]) => [id, item.qty]))) })
         });
         const data = await response.json();
@@ -1516,7 +1563,7 @@ function queueBarcode(code) {
 
 async function addScannedCode(code) {
     if (!cartChangesAllowed()) return;
-    const product = await fetchProductByCode(code);
+    const product = await fetchProductByCode(code, null, navigator.onLine !== false);
     if (!product) return;
 
     if (!addToCart(product.product_id, product.name, product.price, product.quantity_on_hand, product.reorder_level, product.safety_stock, product.sku, product.barcode, product.selling_form, product.pack_size, product.product_image)) return;
@@ -1572,6 +1619,12 @@ function cartItemProductId(key, item = null) {
 function addToCart(id, name, price, stock = Infinity, reorderLevel = 0, safetyStock = 0, sku = '', barcode = '', sellingForm = 'piece', packSize = null, productImage = '') {
     if (!cartChangesAllowed()) return false;
     const productId = Number(id);
+    const catalogProduct = (typeof catalogProductMap !== 'undefined' ? catalogProductMap.get(productId) : null)
+        || (typeof quickProductById !== 'undefined' ? quickProductById.get(productId) : null);
+    if (!Number.isFinite(Number(price)) || Number(price) <= 0 || catalogProduct?.pricing_ready === false) {
+        showCartMessage(`${name}: pricing incomplete. Ask the Inventory Manager to complete pricing.`, 'warning');
+        return false;
+    }
     const form = sellingForm === 'pack' ? 'pack' : 'piece';
     const lineKey = cartLineKey(productId, form);
     const currentKey = resolveCartKey(lineKey, form);

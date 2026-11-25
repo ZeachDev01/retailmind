@@ -117,6 +117,7 @@ function between(start, end) {
                 case_barcode: 'CASE-123456',
                 product_name: 'Fresh Milk 1L',
                 unit_price: 12.00,
+                pricing_ready: true,
                 quantity_on_hand: 3
             },
             {
@@ -126,6 +127,7 @@ function between(start, end) {
                 case_barcode: 'CASE-654321',
                 product_name: 'Whole Wheat Bread',
                 unit_price: 8.50,
+                pricing_ready: true,
                 quantity_on_hand: 5
             }
         ];
@@ -232,6 +234,7 @@ function between(start, end) {
         assert.equal(await page.evaluate(() => window.getLocalStock(1)), 3, 'Removing item from cart restores local stock to 3');
 
         await context.setOffline(false);
+        await page.evaluate(() => window.syncCatalog()); // Settle the online event's refresh before replacing its response.
         let catalog = [{ ...testCatalog[0], unit_price: 15, quantity_on_hand: 9 }];
         let syncRequests = 0;
         await page.route('**/pos-api?**', async route => {

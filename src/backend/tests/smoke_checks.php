@@ -307,7 +307,7 @@ $checks = [
     ],
     'Live Store attention includes explicit inventory escalations' => [
         'file' => 'src/backend/app/Attention/DatabaseAttentionSignalSource.php',
-        'needles' => ["'inventory_escalated_count'", "ia.status = 'pending'", 'item_count'],
+        'needles' => ["'inventory_escalated_count'", "ia.status IN ('pending', 'returned')", 'item_count'],
     ],
     'Platform Settings govern attention safety limits' => [
         'file' => 'src/backend/legacy/routes/admin/system_settings.php',
@@ -344,7 +344,7 @@ $checks = [
     ],
     'Manager review queue guards approvals and requires rejection reasons' => [
         'file' => 'src/frontend/components/inventory_management/stock_issues.php',
-        'needles' => ["require_role(['inventory_manager'])", 'MUTATE_INVENTORY', 'approveReport', 'rejectReport', 'getPendingReports', 'Required to reject or return.'],
+        'needles' => ["require_role(['inventory_manager'])", 'MUTATE_INVENTORY', 'approveReport', 'rejectReport', 'getPendingReports', 'Required to reject or change quantity.'],
     ],
     'Stock-issue approvals deduct atomically with linked movements' => [
         'file' => 'src/backend/app/Services/StockIssueService.php',

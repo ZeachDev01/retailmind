@@ -67,8 +67,7 @@ if (str_starts_with($argv[1] ?? '', 'bread_') || str_starts_with($argv[1] ?? '',
         $pdo->exec("INSERT INTO product_batches (batch_id,product_id,batch_number,quantity,remaining_quantity,expiration_date) VALUES (902,902,'ORDINARY-5',5,5,'2000-10-25')");
         (new NotificationService($pdo))->checkAndNotifyExpiringStock();
     } elseif (str_starts_with($argv[1], 'workspace_')) {
-        // #262 Workspace-scoped coverage. User 2 holds super_admin plus the admin,
-        // inventory_manager, and cashier secondary roles (see theme_fixture.php).
+        // Store Workspace coverage uses an Administrator with two assigned Store roles.
         if ($argv[1] === 'workspace_check_stock') {
             (new NotificationService($pdo))->checkAndNotifyLowStock();
         } elseif ($argv[1] === 'workspace_admin_review') {
@@ -85,24 +84,25 @@ if (str_starts_with($argv[1] ?? '', 'bread_') || str_starts_with($argv[1] ?? '',
                 'expiration_date' => '2027-12-31',
             ], 3);
         } elseif ($argv[1] === 'workspace_seed') {
-            $pdo->exec('DELETE FROM notifications WHERE user_id = 2');
-            $insert = $pdo->prepare("INSERT INTO notifications (notification_id,user_id,type,title,message,workspace,is_read,created_at) VALUES (?,2,?,?,'Disposable Workspace fixture.',?,?,?)");
+            $pdo->exec("INSERT IGNORE INTO user_roles (user_id, role_id, is_primary) VALUES (1, 3, 0), (1, 4, 0)");
+            $pdo->exec('DELETE FROM notifications WHERE user_id = 1');
+            $insert = $pdo->prepare("INSERT INTO notifications (notification_id,user_id,type,title,message,workspace,is_read,created_at) VALUES (?,1,?,?,'Disposable Workspace fixture.',?,?,?)");
             foreach ([
-                [9300, 'system', 'Super admin notice', 'super_admin', 0, '2026-09-01 09:00:00'],
                 [9310, 'adjustment', 'Admin adjustment notice', 'admin', 0, '2026-09-02 09:00:00'],
                 [9311, 'system', 'Admin system notice', 'admin', 1, '2026-09-03 09:00:00'],
                 [9320, 'system', 'Inventory notice one', 'inventory_manager', 0, '2026-09-04 09:00:00'],
                 [9321, 'system', 'Inventory notice two', 'inventory_manager', 0, '2026-09-05 09:00:00'],
                 [9330, 'adjustment', 'Cashier notice', 'cashier', 0, '2026-09-06 09:00:00'],
             ] as $row) $insert->execute($row);
+            $pdo->exec("UPDATE notifications SET attention_destination='components/administrator/stock_issues.php?detail=1' WHERE notification_id=9310");
         } elseif ($argv[1] === 'workspace_revoke_role') {
-            $pdo->exec('DELETE FROM user_roles WHERE user_id = 2 AND role_id = 3');
+            $pdo->exec('DELETE FROM user_roles WHERE user_id = 1 AND role_id = 3');
         } elseif ($argv[1] === 'workspace_restore_role') {
-            $pdo->exec('INSERT IGNORE INTO user_roles (user_id, role_id, is_primary) VALUES (2, 3, 0)');
+            $pdo->exec('INSERT IGNORE INTO user_roles (user_id, role_id, is_primary) VALUES (1, 3, 0)');
         } elseif ($argv[1] === 'workspace_disable') {
-            $pdo->exec("UPDATE users SET status = 'disabled' WHERE user_id = 2");
+            $pdo->exec("UPDATE users SET status = 'disabled' WHERE user_id = 1");
         } elseif ($argv[1] === 'workspace_enable') {
-            $pdo->exec("UPDATE users SET status = 'active' WHERE user_id = 2");
+            $pdo->exec("UPDATE users SET status = 'active' WHERE user_id = 1");
         } else {
             throw new RuntimeException('Unknown workspace fixture action: ' . $argv[1]);
         }
@@ -116,6 +116,11 @@ if (str_starts_with($argv[1] ?? '', 'bread_') || str_starts_with($argv[1] ?? '',
 require __DIR__ . '/theme_fixture.php';
 if ($argv[1] !== 'create') exit;
 $pdo->exec('DELETE FROM notifications');
+if (($argv[3] ?? '') === 'fixed_list') {
+    // Keep on-visit stock checks from adding in-app notices to the seeded list.
+    $pdo->exec("INSERT INTO notification_preferences (user_id, notify_low_stock) VALUES (3, 0)
+        ON DUPLICATE KEY UPDATE notify_low_stock = 0");
+}
 $pdo->exec("INSERT INTO fiscal_periods (period_name,start_date,end_date,status,created_by) VALUES ('Notification workflow period','2026-01-01','2027-12-31','open',1)");
 $product = $pdo->prepare('INSERT INTO products (product_id,sku,barcode,product_name,unit_price,cost_price) VALUES (?,?,?,?,1,1)');
 $insert = $pdo->prepare("INSERT INTO notifications (notification_id,user_id,type,title,message,reference_type,reference_id,workspace,is_read,created_at) VALUES (?,?,?,?,?,?,?,'inventory_manager',FALSE,'2026-10-01 12:00:00')");
@@ -127,7 +132,7 @@ for ($id = 1; $id <= 27; $id++) {
     $insert->execute([$id, 3, $id <= 13 ? 'low_stock' : 'system', $id <= 13 ? 'Low Stock Alert: Outdated name' : 'Notice ' . $id, 'Review this Store update.', $id <= 13 ? 'product' : null, $id <= 13 ? 1000 + $id : null]);
 }
 $insert->execute([9000, 2, 'adjustment', 'Private notice', 'Another user only.', null, null]);
-$pdo->exec("UPDATE notifications SET workspace='super_admin' WHERE notification_id=9000");
+$pdo->exec("UPDATE notifications SET workspace='super_admin', attention_destination='components/system_administrator/system_settings.php' WHERE notification_id=9000");
 
 // Exercise retained surfaces with no purchasing schema, after upgrading old notices.
 $insert->execute([9001, 1, 'replenishment', 'Retired purchasing approval', 'Obsolete request.', null, null]);

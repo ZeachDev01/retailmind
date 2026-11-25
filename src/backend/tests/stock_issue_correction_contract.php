@@ -1,7 +1,7 @@
 <?php
 // Contract for the stock-issue correction lifecycle (ticket #30):
-// pending -> approved | rejected | returned | cancelled, cashier edit/cancel/
-// resubmit ownership, manager return with reason (+ Other recategorization only),
+// pending/legacy returned -> approved | rejected, immutable reports,
+// read-only clarification history and direct review of legacy waiting reports,
 // locked terminal states, append-only revisions, role-aware notifications,
 // pending-review badge counts, and idempotent/concurrent-safe approvals.
 require_once __DIR__ . '/../bootstrap/app.php';
@@ -152,6 +152,13 @@ $quietNotifications = new class($pdo) extends NotificationService {
     {
     }
 };
+$pdo->exec("ALTER TABLE users ADD COLUMN display_name TEXT NOT NULL DEFAULT 'Test staff'");
+$pdo->exec("INSERT INTO fiscal_periods (period_name,start_date,end_date,status) VALUES ('Fixture','2000-01-01','2099-12-31','open')");
+$pdo->exec("CREATE TABLE product_batches (batch_id INTEGER PRIMARY KEY,product_id INTEGER,batch_number TEXT,quantity INTEGER,remaining_quantity INTEGER,expiration_date TEXT,date_received TEXT)");
+$pdo->exec("INSERT INTO product_batches VALUES (1,{$activeProductId},'FIXTURE',50,50,NULL,'2026-01-01')");
+$migration = require __DIR__ . '/../database/migrations/202610180002_stock_issue_batches.php';
+$migration['up']($pdo);
+$pdo->exec('CREATE TABLE inventory_submissions (user_id INTEGER, operation_kind TEXT, operation_token TEXT, payload_hash TEXT, result_json TEXT, PRIMARY KEY(user_id,operation_kind,operation_token))');
 $service = new StockIssueService($pdo, $quietNotifications);
 
 $reportOf = static function (int $adjustmentId) use ($pdo): array {
@@ -204,14 +211,10 @@ $assert($notificationsFor($adminId, $firstId)[0]['email_pending'] == 1, 'Immedia
 $assert($notificationsFor($cashierId, $firstId) === [], 'Reporting cashier must not be notified about their own submission');
 $assert($service->getPendingCount() === 1, 'Pending-review badge must count the new pending report');
 
-// --- Cashier edit: own pending only ---
-$service->editReport($firstId, $cashierId, ['quantity' => 3, 'explanation' => 'Three units crushed; recount confirmed.']);
-$edited = $reportOf($firstId);
-$assert((int)$edited['adjustment_qty'] === -3, 'Cashier edit must update the reported quantity');
-$assert($edited['status'] === 'pending', 'Edit must keep the report pending (no silent decision)');
-$editRevisions = $revisionsFor($firstId);
-$assert(count($editRevisions) === 2 && $editRevisions[1]['action'] === 'edited', 'Edit must append an edited revision');
-$assert(str_contains((string)$editRevisions[1]['old_values'], '-2') && str_contains((string)$editRevisions[1]['new_values'], '-3'), 'Edit revision must carry previous and new values');
+// --- Submitted details are locked, including pending reports. ---
+$original = $reportOf($firstId);
+$throws(static fn() => $service->editReport($firstId, $cashierId, ['quantity' => 3]), 'Cashier cannot rewrite submitted details');
+$assert($reportOf($firstId) === $original, 'Refused edit preserves the entire original report');
 $throws(
     static fn() => $service->editReport($firstId, $cashierTwoId, ['quantity' => 1, 'explanation' => 'Hijack attempt with a long explanation.']),
     'Cashiers must not edit another cashier\u2019s report'
@@ -252,56 +255,19 @@ $throws(
     'Cancelled reports must not be approvable'
 );
 
-// --- Manager return: pending only, reason required, editable by cashier ---
+// Messages are retired; unresolved reports stay directly actionable.
 $returnId = $submit($cashierId);
-$throws(
-    static fn() => $service->returnReport($returnId, $managerId, '   '),
-    'Return without a reason must be refused'
-);
-$throws(
-    static fn() => $service->returnReport($returnId, $cashierId, 'Cashiers cannot return.'),
-    'Cashiers must not return reports'
-);
-$throws(
-    static fn() => $service->returnReport($returnId, $adminId, 'Admins cannot return.'),
-    'Administrators must not return reports'
-);
-$service->returnReport($returnId, $managerId, 'Photo is blurry; clarify the damage.');
-$assert($reportOf($returnId)['status'] === 'returned', 'Return must move a pending report to returned');
-$returnRevisions = $revisionsFor($returnId);
-$assert($returnRevisions[count($returnRevisions) - 1]['action'] === 'returned', 'Return must append a returned revision');
-$assert((int)$returnRevisions[count($returnRevisions) - 1]['actor_id'] === $managerId, 'Return revision must record the manager actor');
-$cashierNotes = $notificationsFor($cashierId, $returnId);
-$assert($cashierNotes !== [] && str_contains(strtolower($cashierNotes[0]['title'] . ' ' . $cashierNotes[0]['message']), 'return'), 'Reporting cashier must be notified when a report is returned');
-
-// Returned reports: cashier can edit, then resubmit to pending (notifies managers).
-$service->editReport($returnId, $cashierId, ['quantity' => 2, 'explanation' => 'Two units crushed; added a clearer photo note.']);
-$assert($reportOf($returnId)['status'] === 'returned', 'Editing a returned report must keep it returned until resubmission');
-$throws(
-    static fn() => $service->approveReport($returnId, $managerId),
-    'Returned reports must not be approvable before resubmission'
-);
-$managerNoticeCount = count($notificationsFor($managerId, $returnId));
-$service->resubmitReport($returnId, $cashierId);
-$assert($reportOf($returnId)['status'] === 'pending', 'Resubmit must move an own returned report back to pending');
-$assert(count($notificationsFor($managerId, $returnId)) === $managerNoticeCount + 1, 'Inventory Managers must be notified about resubmitted reports');
-$resubmitRevisions = $revisionsFor($returnId);
-$assert($resubmitRevisions[count($resubmitRevisions) - 1]['action'] === 'resubmitted', 'Resubmit must append a resubmitted revision');
-$throws(
-    static fn() => $service->resubmitReport($returnId, $cashierTwoId),
-    'Cashiers must not resubmit another cashier\u2019s returned report'
-);
+$beforeReturn = $reportOf($returnId);
+$throws(static fn() => $service->returnReport($returnId,$managerId,'Please clarify'), 'Manager cannot return reports to chat');
+$throws(static fn() => $service->sendMessage($returnId,$cashierId,'cashier','Reply'), 'Cashier cannot start a chat');
+$throws(static fn() => $service->getConversation($returnId,$cashierTwoId,'cashier'), 'Another cashier cannot read history');
+$assert($reportOf($returnId) === $beforeReturn, 'Retired message actions leave the report unchanged');
 
 // --- Manager recategorization: Other only, never quantity/explanation ---
 $otherId = $submit($cashierId, ['category' => 'other', 'explanation' => 'Found soggy cartons near the chiller drain.']);
 $beforeOther = $reportOf($otherId);
-$service->returnReport($otherId, $managerId, 'Recategorized after photo review.', 'damaged');
-$afterRecat = $reportOf($otherId);
-$assert($afterRecat['adjustment_type'] === 'damaged', 'Manager may recategorize Other while returning');
-$assert((int)$afterRecat['adjustment_qty'] === (int)$beforeOther['adjustment_qty'], 'Recategorization must not alter the reported quantity');
-$assert($afterRecat['reason'] === $beforeOther['reason'], 'Recategorization must not rewrite the cashier explanation');
-$recatRevisions = $revisionsFor($otherId);
-$assert(str_contains((string)end($recatRevisions)['old_values'], 'other') && str_contains((string)end($recatRevisions)['new_values'], 'damaged'), 'Category change must be captured with old and new values');
+$throws(static fn() => $service->returnReport($otherId, $managerId, 'Change type.', 'damaged'), 'Manager cannot rewrite the original issue type');
+$assert($reportOf($otherId) === $beforeOther, 'Refused recategorization preserves the report');
 $concreteId = $submit($cashierId, ['category' => 'damaged']);
 $throws(
     static fn() => $service->returnReport($concreteId, $managerId, 'Trying to rewrite.', 'missing'),
@@ -378,9 +344,20 @@ $throws(
 );
 $assert(count($revisionsFor($raceId)) === $revisionCountBefore + 1, 'Failed stale actions must not append revisions');
 
+// Legacy return notes retain author/time after a final decision without another reply.
+$legacyId = $submit($cashierId);
+$pdo->prepare("UPDATE inventory_adjustments SET status='returned',review_notes='Legacy question',approved_by=?,approved_at='2026-10-01 09:00:00' WHERE adjustment_id=?")->execute([$managerId,$legacyId]);
+$assert($service->getPendingCount() > 0, 'Legacy waiting reports are counted for review');
+$service->rejectReport($legacyId,$managerId,'No affected units');
+$legacyMessages = $service->getConversation($legacyId,$cashierId,'cashier');
+$assert(count($legacyMessages) === 1 && $legacyMessages[0]['body'] === 'Legacy question' && $legacyMessages[0]['created_at'] === '2026-10-01 09:00:00', 'Legacy question retains original timestamp after rejection');
+$throws(static fn() => $service->sendMessage($legacyId,$cashierId,'cashier','Late reply'), 'Rejection closes chat');
+$throws(static fn() => $service->sendMessage($approveId,$cashierId,'cashier','Late reply'), 'Approval closes chat');
+$assert((int)$pdo->query('SELECT COUNT(*) FROM stock_movements')->fetchColumn() === 2, 'Only approvals create stock movements');
+
 // --- Badge accuracy after mixed lifecycle ---
 $badge = $service->getPendingCount();
-$pendingRows = $pdo->query("SELECT COUNT(*) FROM inventory_adjustments WHERE status = 'pending'")->fetchColumn();
+$pendingRows = $pdo->query("SELECT COUNT(*) FROM inventory_adjustments WHERE status IN ('pending', 'returned')")->fetchColumn();
 $assert($badge === (int)$pendingRows, 'Pending-review badge must match the pending report count');
 
 if ($failures) {

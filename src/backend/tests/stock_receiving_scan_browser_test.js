@@ -190,7 +190,7 @@ async function main() {
             await page.keyboard.press('Enter');
             check(await control.getAttribute('aria-expanded') === 'true', 'keyboard opens Inventory Control');
             check(await primaryNavigation.getByRole('link', {name: 'Inventory Counts', exact: true}).isVisible()
-                && await primaryNavigation.getByRole('link', {name: 'Stock Issue Reviews', exact: true}).isVisible(),
+                && await primaryNavigation.getByRole('link', {name: 'Stock Issues', exact: true}).isVisible(),
                 'Inventory Control exposes existing counts and Stock Issue review');
         }
         if (failures.length) throw new Error(failures.join('\n'));
@@ -199,9 +199,9 @@ async function main() {
         check(await page.locator('.sidebar .dropdown').filter({hasText: 'Inventory Control'}).getByRole('button').getAttribute('aria-expanded') === 'true'
             && await page.locator('.sidebar a[aria-current="page"]').innerText() === 'Inventory Counts',
             'count destination keeps Inventory Control open and marks the current page');
-        await page.locator('.sidebar').getByRole('link', {name: 'Stock Issue Reviews', exact: true}).click();
+        await page.locator('.sidebar').getByRole('link', {name: 'Stock Issues', exact: true}).click();
         await page.waitForURL('**/inventory_management/stock_issues.php');
-        check(await page.locator('.sidebar a[aria-current="page"]').innerText() === 'Stock Issue Reviews',
+        check(await page.locator('.sidebar a[aria-current="page"]').innerText() === 'Stock Issues',
             'Stock Issue review is reached through Inventory Control');
         await page.locator('.sidebar').getByRole('link', {name: 'Stock Overview', exact: true}).click();
         await page.waitForURL('**/inventory_management/inventory_overview.php');
@@ -215,7 +215,7 @@ async function main() {
             if (await inventoryControl.getAttribute('aria-expanded') !== 'true') await inventoryControl.click();
             await page.waitForFunction(() => Math.abs(document.querySelector('.sidebar').getBoundingClientRect().left) < 1);
             check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), name + ' Stock Overview and navigation have no page overflow');
-            check(await page.locator('.sidebar').getByRole('link', {name: 'Stock Issue Reviews', exact: true}).isVisible(), name + ' Inventory Control links remain reachable');
+            check(await page.locator('.sidebar').getByRole('link', {name: 'Stock Issues', exact: true}).isVisible(), name + ' Inventory Control links remain reachable');
             await page.screenshot({animations: 'disabled', path: path.join(repoRoot, '.scratch', 'inventory187-' + name + '.png')});
         }
         await page.setViewportSize({width: 1280, height: 720});

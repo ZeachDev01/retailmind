@@ -33,7 +33,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             null,
             ['workspace' => $requestedWorkspace]
         );
-        header('Location: ' . app_url(RoleWorkspaceRouter::pathFor($requestedWorkspace)));
+        $destination = $requestedWorkspace === 'inventory_manager' && ($_POST['destination'] ?? '') === 'record_stock_issue'
+            ? 'components/inventory_management/stock_issues.php?issue_view=record'
+            : RoleWorkspaceRouter::pathFor($requestedWorkspace);
+        header('Location: ' . app_url($destination));
         exit;
     }
 }

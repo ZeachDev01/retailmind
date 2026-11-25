@@ -19,7 +19,14 @@
 .stock-issues-page .issue-stock { margin-top:.75rem; }
 .stock-issues-page .issue-warning { color:var(--theme-danger-text, #dc2626); }
 .stock-issues-page .adjustment-reason { padding:.75rem 0; border-radius:0; background:transparent; overflow-wrap:anywhere; }
-.stock-issues-page .review-form { display:grid; grid-template-columns:minmax(0, 1fr); gap:1rem; margin-top:.75rem; padding-top:1rem; border-top:1px solid var(--border); }
+.stock-issues-page .review-form { display:grid; grid-template-columns:minmax(0, 1fr); gap:1rem; padding:1rem; border-top:1px solid var(--border); border-radius:0 0 14px 14px; background:var(--surface-soft); }
+.stock-issues-page .review-form .issue-review-title { margin:0; }
+.stock-issues-page .review-quantity-field { justify-self:start; }
+.stock-issues-page .review-quantity-field input { max-width:8rem; }
+.stock-issues-page .review-form .table-wrap { background:var(--card-bg); }
+.stock-issues-page .review-footer { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.75rem 1rem; padding-top:.75rem; border-top:1px solid var(--border); }
+.stock-issues-page .review-footer .review-actions { margin-inline-start:auto; }
+.stock-issues-page .review-actions button:disabled { opacity:.6; cursor:not-allowed; }
 .stock-issues-page .form-group { display:grid; gap:.375rem; margin:0; }
 .stock-issues-page .form-group label { margin:0; color:var(--text); font-weight:600; }
 .stock-issues-page .form-group small,
@@ -32,6 +39,7 @@
 .stock-issues-page .report-filter-grid .form-group select { max-width:none; }
 .stock-issues-page summary { cursor:pointer; min-height:44px; padding-block:.625rem; color:var(--text); }
 .stock-issues-page .issue-batches p { margin:.375rem 0 .75rem; }
+.stock-issues-page .issue-batches h4 { margin:0; color:var(--text); font-size:.95rem; }
 .stock-issues-page .table-wrap { max-width:100%; border-color:var(--border); }
 .stock-issues-page .table-wrap table { min-width:420px; }
 .stock-issues-page .table-wrap input { width:5rem; min-height:44px; border:1px solid var(--border); border-radius:8px; background:var(--card-bg); color:var(--text); font:inherit; padding:.5rem; }
@@ -41,13 +49,10 @@
 .stock-issues-page .btn-secondary:hover { border-color:var(--muted); background:var(--surface-soft); color:var(--text); }
 .stock-issues-page .btn-submit:disabled { opacity:.6; cursor:not-allowed; }
 .stock-issues-page .btn-submit:disabled:hover { background:var(--theme-action, #2563eb); }
-.stock-issues-page .issue-history { border-top:1px solid var(--border); padding-top:.5rem; }
-.stock-issues-page .issue-history > summary h2 { margin:0; }
-.stock-issues-page .issue-history[open] > summary { margin-bottom:.75rem; }
-.stock-issues-page .issue-empty { display:grid; justify-items:center; gap:1rem; padding:3rem 1rem; border-radius:14px; background:color-mix(in srgb, var(--primary) 4%, var(--card-bg)); text-align:center; }
-.stock-issues-page .issue-empty-icon { color:var(--primary); }
-.stock-issues-page .issue-empty h3 { color:var(--text); font-size:1rem; font-weight:600; margin:0; }
-.stock-issues-page .issue-empty p { color:var(--muted); font-size:.875rem; margin:0; }
+.stock-issues-page .issue-empty { display:grid; justify-items:center; align-content:center; gap:.75rem; min-height:18rem; padding:2.5rem 1.25rem; border:1px solid var(--border); border-radius:14px; background:var(--card-bg); text-align:center; }
+.stock-issues-page .issue-empty-icon { width:3rem; height:3rem; margin-bottom:.25rem; color:var(--primary); }
+.stock-issues-page .issue-empty h3 { color:var(--text); font-size:1.05rem; font-weight:600; margin:0; line-height:1.4; }
+.stock-issues-page .issue-empty p { max-width:34ch; color:var(--muted); font-size:.875rem; line-height:1.5; margin:0; }
 .stock-issues-page :is(summary, textarea, select, input, button, a):focus-visible { outline:2px solid var(--primary); outline-offset:3px; }
 
 /* Stock Issue KPI Overview Strip */
@@ -66,12 +71,57 @@
     border: 1px solid var(--border);
     border-radius: 12px;
 }
-.stock-issues-page .stock-kpi-card--warning {
-    border-color: var(--theme-warning-text, #b45309);
-    background: var(--theme-warning-surface, #fffbeb);
+.stock-issues-page a.stock-kpi-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .75rem;
+    color: var(--text);
+    text-decoration: none;
 }
-.stock-issues-page .stock-kpi-card--warning :is(.stock-kpi-label, .stock-kpi-meta, .stock-kpi-value) {
-    color: var(--theme-warning-text, #92400e);
+.stock-issues-page a.stock-kpi-card:hover { border-color: var(--primary); }
+.stock-issues-page a.stock-kpi-card[aria-current="page"] { border-color:var(--primary); background:var(--theme-action-soft, color-mix(in srgb, var(--primary) 8%, var(--card-bg))); color:var(--primary); }
+.stock-issues-page a.stock-kpi-card[aria-current="page"] :is(.stock-kpi-value, .stock-kpi-icon, .stock-kpi-label) { color:var(--primary); }
+.stock-issues-page a.stock-kpi-card .stock-kpi-label { text-transform: none; letter-spacing: normal; font-size: .875rem; }
+.stock-issues-page .stock-kpi-icon { flex-shrink: 0; color: var(--muted); }
+
+/* Keep the review queue scannable; forms open only for the selected report. */
+.stock-issues-page details.issue-review { padding: 0; margin-bottom: .5rem; overflow: clip; }
+.stock-issues-page .issue-review-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 6rem minmax(6rem, .4fr) auto auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    list-style: none;
+}
+.stock-issues-page .issue-review-summary::-webkit-details-marker { display: none; }
+.stock-issues-page .issue-review-summary .category-tag { justify-self: start; }
+.stock-issues-page .issue-review-summary:hover { background: var(--surface-soft); }
+.stock-issues-page .issue-review-summary:focus-visible { outline-offset: -3px; }
+.stock-issues-page .issue-review-product { display: grid; gap: .25rem; min-width: 0; overflow-wrap: anywhere; }
+.stock-issues-page .issue-review-product strong { font-size: .95rem; }
+.stock-issues-page .issue-review-meta { color: var(--muted); font-size: .8125rem; }
+.stock-issues-page .issue-review-quantity { display: grid; gap: .25rem; font-size: .875rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.stock-issues-page .issue-review-quantity .issue-warning { font-size: .8125rem; }
+.stock-issues-page .issue-review-toggle { display: inline-flex; align-items: center; gap: .5rem; color: var(--primary); font-size: .875rem; font-weight: 600; }
+.stock-issues-page .issue-review[open] > summary .issue-review-toggle svg { transform: rotate(90deg); }
+.stock-issues-page .issue-review-body { padding: 0 1rem 1rem; border-top: 1px solid var(--border); }
+.stock-issues-page .issue-review-title { margin: 1rem 0 0; color: var(--text); font-size: 1.05rem; line-height: 1.4; overflow-wrap: anywhere; }
+.stock-issues-page .issue-review-body .detail-hero-grid { border:0; margin:0; grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr)); }
+.stock-issues-page .review-consequence { margin: 0; color: var(--muted); font-size: .8125rem; }
+.stock-issues-page :is(#pending-section, #returned-section, #reviews-section) { scroll-margin-top: 6rem; }
+@media (max-width: 1180px) {
+    .stock-issues-page .issue-review-summary { grid-template-columns: minmax(0, 1fr) auto auto; gap: .5rem 1rem; }
+    .stock-issues-page .issue-review-summary .adjustment-time { grid-column: 1 / 3; }
+    .stock-issues-page .issue-review-toggle { grid-column: 3; grid-row: 2; }
+}
+@media (max-width: 480px) {
+    .stock-issues-page .issue-review-summary { grid-template-columns: minmax(0, 1fr) auto; }
+    .stock-issues-page .issue-review-product { grid-column: 1 / -1; }
+    .stock-issues-page .issue-review-quantity { grid-column: 2; text-align: right; }
+    .stock-issues-page .issue-review-summary .adjustment-time { grid-column: 1; grid-row: 3; white-space: normal; }
+    .stock-issues-page .issue-review-toggle { grid-column: 2; grid-row: 3; justify-self: end; }
 }
 .stock-issues-page .stock-kpi-card--success {
     border-color: rgba(22, 163, 74, 0.3);
@@ -259,13 +309,11 @@
     padding: .875rem 1rem;
     border-radius: 8px;
     background: var(--surface-soft);
-    border-left: 4px solid var(--primary);
     margin: .75rem 0;
     font-size: .9rem;
     line-height: 1.5;
 }
 .stock-issues-page .detail-reason-box--decision {
-    border-left-color: var(--theme-action, #2563eb);
     background: color-mix(in srgb, var(--primary) 5%, var(--card-bg));
 }
 
@@ -343,13 +391,13 @@
     font-size: .8125rem;
 }
 .stock-issues-page .btn-action-approve {
-    background: #16a34a;
+    background: #15803d;
     color: #ffffff;
     border: 1px solid #15803d;
     font-weight: 600;
 }
 .stock-issues-page .btn-action-approve:hover:not(:disabled) {
-    background: #15803d;
+    background: #166534;
     color: #ffffff;
 }
 .stock-issues-page .btn-action-return {
@@ -387,57 +435,6 @@
 .stock-issues-page .action-hints strong {
     color: var(--text);
 }
-.stock-issues-page .revision-history-accordion {
-    margin-top: 1rem;
-    border-top: 1px dashed var(--border);
-    padding-top: .5rem;
-}
-.stock-issues-page .revision-timeline {
-    margin-top: .75rem;
-    margin-left: .5rem;
-    padding-left: 1rem;
-    border-left: 2px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    gap: .75rem;
-}
-.stock-issues-page .timeline-entry {
-    position: relative;
-}
-.stock-issues-page .timeline-dot {
-    position: absolute;
-    left: -1.35rem;
-    top: .3rem;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--primary);
-}
-.stock-issues-page .timeline-content {
-    display: flex;
-    flex-direction: column;
-    gap: .2rem;
-}
-.stock-issues-page .timeline-title {
-    display: flex;
-    gap: .5rem;
-    align-items: center;
-    font-size: .875rem;
-}
-.stock-issues-page .timeline-meta {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .5rem;
-    font-size: .8125rem;
-    color: var(--muted);
-}
-.stock-issues-page .timeline-transition {
-    display: inline-flex;
-    align-items: center;
-    gap: .375rem;
-}
-
 @media(max-width:900px) {
     .stock-issues-page .stock-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -446,8 +443,8 @@
     .stock-issues-page .stock-status-pills { overflow-x: auto; flex-wrap: nowrap; padding-bottom: .25rem; }
     .stock-issues-page .adjustment-card { padding:1rem; }
     .stock-issues-page .review-actions { display:grid; grid-template-columns:1fr; }
+    .stock-issues-page .review-footer .review-actions { width:100%; }
     .stock-issues-page .review-actions :is(button, .btn) { width:100%; }
-    .stock-issues-page .issue-history > summary h2 { font-size:1rem; }
     .stock-issues-page .history-pagination { flex-direction:column; }
     .stock-issues-page .history-page-buttons { margin-left:0; }
 }
@@ -458,4 +455,56 @@
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
     }
+}
+
+/* Direct recording uses the same stock-issue form and product lookup as Cashier reports. */
+.stock-issues-page .report-form { padding:1.25rem; border:1px solid var(--border); border-radius:14px; background:var(--card-bg); }
+.stock-issues-page #stock-issue-form :is(input:not([type="hidden"]), select, textarea) { width:100%; min-width:0; font:inherit; }
+.stock-issues-page #stock-issue-form .form-section + .form-section { margin-top:1.5rem; }
+.stock-issues-page #stock-issue-form h3 { margin:0 0 .75rem; font-size:1rem; }
+.stock-issues-page #stock-issue-form .form-grid { display:grid; gap:1rem; grid-template-columns:repeat(2,minmax(0,1fr)); }
+.stock-issues-page #stock-issue-form .stock-details-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.stock-issues-page #stock-issue-form .form-group { min-width:0; margin-bottom:1rem; }
+.stock-issues-page #stock-issue-form label { display:block; margin-bottom:.375rem; }
+.stock-issues-page #stock-issue-form .input-with-icon { display:flex; align-items:center; gap:.5rem; }
+.stock-issues-page #stock-issue-form .input-icon { display:none; }
+.stock-issues-page #stock-issue-form .selected-product-main { display:flex; align-items:center; flex-wrap:wrap; gap:1rem; }
+.stock-issues-page #stock-issue-form .selected-product-meta { flex:1; min-width:0; overflow-wrap:anywhere; }
+.stock-issues-page #stock-issue-form .selected-product-actions { display:flex; align-items:center; flex-wrap:wrap; gap:.75rem; }
+.stock-issues-page #stock-issue-form .selected-product-avatar { display:none; }
+@media(max-width:640px) {
+    .stock-issues-page #stock-issue-form .form-grid,
+    .stock-issues-page #stock-issue-form .stock-details-grid { grid-template-columns:minmax(0,1fr); }
+    .stock-issues-page #stock-issue-form .stock-submit-btn { width:100%; }
+}
+
+.stock-issues-page #stock-issue-form .btn-secondary { color:var(--text); background:var(--surface-soft); }
+
+/* Review lists share the standard table and footer; forms live on report details. */
+:is(.stock-issues-page, .cashier-stock-issues-page) .issue-list-table { min-width:900px; }
+:is(.stock-issues-page, .cashier-stock-issues-page) .issue-list-table td { padding:.625rem .875rem; vertical-align:middle; }
+:is(.stock-issues-page, .cashier-stock-issues-page) .issue-list-table td:nth-child(2) { min-width:12rem; max-width:22rem; white-space:normal; overflow-wrap:anywhere; }
+:is(.stock-issues-page, .cashier-stock-issues-page) .issue-list-sku { display:block; margin-top:.125rem; }
+.stock-issues-page .issue-list-table :is(.category-tag, .adjustment-status) { margin:0; white-space:nowrap; }
+:is(.stock-issues-page, .cashier-stock-issues-page) .issue-list-table thead th { color:var(--text); }
+.stock-issues-page .issue-list-table .issue-sort-link:any-link { display:inline-flex; align-items:center; gap:.375rem; min-height:44px; margin-block:-.5rem; color:inherit; text-decoration:none; white-space:nowrap; text-underline-offset:.2em; }
+.stock-issues-page th:not([aria-sort]) .issue-sort-link i { color:var(--muted); }
+.stock-issues-page .issue-list-table .issue-sort-link:hover { text-decoration:underline; }
+:is(.stock-issues-page, .cashier-stock-issues-page) .issue-list-table .btn { min-height:44px; white-space:nowrap; }
+.stock-issues-page .issue-detail-topbar { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; }
+.stock-issues-page .issue-detail-topbar > .btn { margin-inline-start:auto; min-height:44px; }
+.stock-issues-page article.issue-review { padding:0; }
+.stock-issues-page article.issue-review .issue-review-summary { grid-template-columns:minmax(0,1fr) auto auto; }
+.stock-issues-page article.issue-review .issue-review-title { margin-top:0; }
+.stock-issues-page article.issue-review .detail-reason-box { margin-top:0; }
+.stock-issues-page article.issue-review .adjustment-time { grid-column:auto; grid-row:auto; }
+.stock-issues-page article.issue-review .issue-review-summary:hover { background:transparent; }
+.stock-issues-page .reason-box-text { white-space:pre-wrap; overflow-wrap:anywhere; }
+@media(max-width:640px) {
+    .stock-issues-page article.issue-review .issue-review-summary { grid-template-columns:minmax(0,1fr) auto; }
+    .stock-issues-page article.issue-review .issue-review-product { grid-column:auto; }
+    .stock-issues-page article.issue-review .adjustment-time { grid-column:1 / -1; white-space:normal; }
+    .stock-issues-page .issue-batches table { min-width:0; table-layout:fixed; }
+    .stock-issues-page .issue-batches :is(th, td) { padding:.5rem; white-space:normal; overflow-wrap:anywhere; }
+    .stock-issues-page .issue-batches input { width:100%; max-width:5rem; }
 }

@@ -272,14 +272,15 @@ class NotificationService
     public function requiredWork(int $userId, string $workspace): array
     {
         if (!$this->inWorkspace($userId, $workspace)) return [];
-        if (in_array($workspace, ['cashier', 'inventory_manager'], true)) {
+        if ($workspace === 'cashier') return [];
+        if ($workspace === 'inventory_manager') {
             $stmt = $this->pdo->prepare("SELECT adjustment_id, reason FROM inventory_adjustments
-                WHERE status = ?" . ($workspace === 'cashier' ? ' AND reported_by = ?' : '') . ' ORDER BY reported_at');
-            $stmt->execute($workspace === 'cashier' ? ['returned', $userId] : ['pending']);
+                WHERE status IN ('pending', 'returned') ORDER BY reported_at");
+            $stmt->execute();
             return array_map(static fn(array $row): array => [
-                'title' => ($workspace === 'cashier' ? 'Returned Stock Issue #' : 'Pending Stock Issue #') . $row['adjustment_id'],
+                'title' => 'Pending Stock Issue #' . $row['adjustment_id'],
                 'message' => $row['reason'],
-                'destination' => 'components/' . ($workspace === 'cashier' ? 'cashier' : 'inventory_management') . '/stock_issues.php',
+                'destination' => 'components/inventory_management/stock_issues.php?detail=' . (int)$row['adjustment_id'] . '#report-' . (int)$row['adjustment_id'],
             ], $stmt->fetchAll(PDO::FETCH_ASSOC));
         }
         $stmt = $this->pdo->prepare("SELECT n.type, n.title, n.message, n.attention_destination AS destination

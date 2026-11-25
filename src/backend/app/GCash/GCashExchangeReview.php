@@ -553,12 +553,12 @@ final class GCashExchangeReview
                 }
 
                 $reason = trim((string)($data['reason'] ?? $data['notes'] ?? $data['note'] ?? ''));
-                if (mb_strlen($reason) < 5) {
-                    throw new DomainException('Enter a cancellation reason of at least 5 characters.');
+                if (mb_strlen($reason) > 255) {
+                    throw new DomainException('Resolution notes must be 255 characters or fewer.');
                 }
 
                 $existingNotes = (string)($tx['notes'] ?? '');
-                $resolvedNotes = $existingNotes . ' [Cancelled: ' . $reason . ']';
+                $resolvedNotes = $existingNotes . ($reason !== '' ? ' [Cancelled: ' . $reason . ']' : ' [Cancelled]');
 
                 $updateStmt = $this->pdo->prepare(
                     "UPDATE gcash_transactions
@@ -1053,8 +1053,8 @@ final class GCashExchangeReview
         if ($evidence === '') {
             throw new DomainException('Return evidence is required.');
         }
-        if (mb_strlen($reason) < 5) {
-            throw new DomainException('Enter a cancellation reason of at least 5 characters.');
+        if (mb_strlen($reason) > 255) {
+            throw new DomainException('Resolution notes must be 255 characters or fewer.');
         }
 
         $authorizedBy = $this->authorizeAdmin(

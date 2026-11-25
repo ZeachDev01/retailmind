@@ -193,7 +193,7 @@ $imReplenishment = $imXpath->query('//nav[@aria-label="Main navigation"]//a[@tit
 $imStockReceiving = $imXpath->query('//nav[@aria-label="Main navigation"]//a[@title="Stock Receiving"]');
 $imReceivingHistory = $imXpath->query('//nav[@aria-label="Main navigation"]//a[@title="Receiving History"]');
 $imCounts = $imXpath->query('//nav[@aria-label="Main navigation"]//a[@title="Inventory Counts"]');
-$imIssues = $imXpath->query('//nav[@aria-label="Main navigation"]//a[@title="Stock Issue Reviews"]');
+$imIssues = $imXpath->query('//nav[@aria-label="Main navigation"]//a[@title="Stock Issues"]');
 $imPullouts = $imXpath->query('//nav[@aria-label="Main navigation"]//a[@title="Supplier Pullouts"]');
 
 $assert($imInventoryOverview->length === 1, 'Inventory Manager retains Stock Overview');
@@ -202,7 +202,7 @@ $assert($imReplenishment->length === 1, 'Inventory Manager retains Replenishment
 $assert($imStockReceiving->length === 1, 'Inventory Manager retains Stock Receiving');
 $assert($imReceivingHistory->length === 1, 'Inventory Manager retains Receiving History');
 $assert($imCounts->length === 1, 'Inventory Manager retains Inventory Counts');
-$assert($imIssues->length === 1, 'Inventory Manager retains Stock Issue Reviews');
+$assert($imIssues->length === 1, 'Inventory Manager retains Stock Issues');
 $assert($imPullouts->length === 1, 'Inventory Manager retains Supplier Pullouts');
 
 // Inventory Manager retains authorized Demand Forecast link under Reports

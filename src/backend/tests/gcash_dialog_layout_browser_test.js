@@ -21,7 +21,7 @@ const dialog = source.match(/<dialog id="gcash-open-dialog"[\s\S]*?<\/dialog>/)[
             assert.ok(Math.abs(box.x + box.width / 2 - availableWidth / 2) <= 2, 'GCash dialog is horizontally centered');
             assert.ok(Math.abs(box.y + box.height / 2 - viewport.height / 2) <= 2, 'GCash dialog is vertically centered');
             assert.ok(box.x >= 15 && box.y >= 15 && box.x + box.width <= viewport.width - 15 && box.y + box.height <= viewport.height - 15, 'Dialog stays inside viewport gutters');
-            assert.equal(await page.locator('#gcash-open-cash').evaluate(node => node === document.activeElement), true, 'Opening focuses first amount field');
+            assert.equal(await page.locator('#gcash-open-number').evaluate(node => node === document.activeElement), true, 'Opening focuses the Store GCash number');
             await page.keyboard.press('Escape');
             assert.equal(await page.locator('dialog').isVisible(), false, 'Escape closes dialog');
         }

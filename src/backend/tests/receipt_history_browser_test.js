@@ -35,9 +35,10 @@ const {chromium} = require('playwright');
                 const url = new URL(route.request().url());
                 if (url.searchParams.get('action') === 'data') {
                     requests.push(url);
+                    const matches = !empty && url.searchParams.get('search[value]') !== 'missing';
                     return route.fulfill({status: failure ? 500 : 200, contentType: 'application/json', body: JSON.stringify({
-                        draw: Number(url.searchParams.get('draw')), recordsTotal: empty ? 0 : 1, recordsFiltered: empty ? 0 : 1,
-                        data: empty || failure ? [] : rows, ...(failure ? {error: 'Unable to load receipts.'} : {})
+                        draw: Number(url.searchParams.get('draw')), recordsTotal: empty ? 0 : 1, recordsFiltered: matches ? 1 : 0,
+                        data: matches && !failure ? rows : [], ...(failure ? {error: 'Unable to load receipts.'} : {})
                     })});
                 }
                 const asset = url.pathname.match(/\/assets\/(.*)/);
@@ -78,11 +79,35 @@ const {chromium} = require('playwright');
         failure = false;
         await page.getByRole('button', {name: 'Retry', exact: true}).click();
         await page.getByText('1 permitted receipt found.', {exact: true}).waitFor();
+        const search = page.getByRole('searchbox', {name: 'Search receipts'});
+        const pageSize = page.getByLabel('Entries per page');
+        await pageSize.selectOption('25');
+        await page.getByText('1 permitted receipt found.', {exact: true}).waitFor();
+        await search.fill('missing');
+        await page.getByText('No receipts match the current search and filters.', {exact: true}).waitFor();
+        assert(await search.isVisible());
+        assert.equal(await pageSize.isVisible(), false);
+        const ghosts = page.locator('#receiptsTable tbody .table-ghost-row');
+        assert.equal(await ghosts.count(), 0);
+        await page.getByRole('button', {name: 'Clear filters'}).click();
+        await page.getByText('1 permitted receipt found.', {exact: true}).waitFor();
+        assert.equal(await ghosts.count(), 5, 'One receipt is padded to six visible rows on desktop');
+        assert.equal(await ghosts.first().getAttribute('aria-hidden'), 'true');
+        assert.equal(await ghosts.first().locator('td').count(), 7, 'Ghost cells match visible receipt columns');
+        assert.equal(await page.locator('#receipt-page-summary').innerText(), 'Showing 1 to 1 of 1 entries');
+        assert.equal(await search.inputValue(), '');
+        assert.equal(await pageSize.inputValue(), '25');
+        assert.equal(requests.at(-1).searchParams.get('length'), '25');
+        assert.equal(requests.at(-1).searchParams.get('start'), '0');
         for (const theme of ['light', 'dark']) {
             await page.evaluate(theme => {document.documentElement.dataset.theme = theme; document.documentElement.style.colorScheme = theme;}, theme);
             for (const width of [320, 768, 1024, 1440]) {
                 await page.setViewportSize({width, height: 900});
                 assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${theme}/${width}: no page overflow`);
+                const row = page.locator('#receiptsTable tbody tr').first();
+                assert.equal(await row.evaluate(el => getComputedStyle(el).display), width < 1440 ? 'grid' : 'table-row');
+                assert.equal(await ghosts.first().isVisible(), width === 1440, 'Ghost rows only appear in the wide table layout');
+                assert(await row.locator('td').nth(4).locator('strong').evaluate(el => el.getClientRects().length === 1), 'Peso amount stays on one line');
                 if (process.env.RECEIPT_AXE_PATH) {
                     await page.addScriptTag({path: process.env.RECEIPT_AXE_PATH});
                     const violations = await page.evaluate(async () => (await axe.run(document, {
@@ -106,6 +131,8 @@ const {chromium} = require('playwright');
         await page.getByRole('button', {name: 'Clear filters'}).click();
         await page.locator('#receiptEmptyState').waitFor();
         assert.equal(await page.locator('.receipt-table-wrap').isVisible(), false);
+        assert(await search.isVisible());
+        assert.equal(await ghosts.count(), 0);
         assert.deepEqual(errors, [], 'Receipt filters work with storage blocked');
         await page.close();
         const missing = await open({missingLibrary: true});

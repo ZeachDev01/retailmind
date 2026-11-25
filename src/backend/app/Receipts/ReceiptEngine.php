@@ -416,7 +416,6 @@ final class ReceiptEngine
             'fee_amount_formatted' => $money($receipt['fee_amount'] ?? 0),
             'fee_method' => $escape($receipt['fee_method'] ?? ''),
             'amounts' => $amounts,
-            'barcode_svg' => code128_svg($receipt['reference_number'] ?? ''),
             'reference_number' => $escape($receipt['reference_number'] ?? ''),
         ];
     }

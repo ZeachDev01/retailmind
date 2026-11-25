@@ -57,6 +57,7 @@ $pdo->exec("
     );
 
     CREATE TABLE gcash_service_sessions (
+        wallet_number TEXT,
         session_id INTEGER PRIMARY KEY AUTOINCREMENT,
         shift_id INTEGER,
         cashier_id INTEGER,
@@ -178,7 +179,7 @@ $pdo->exec("
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     INSERT INTO fiscal_periods (period_code, period_name, start_date, end_date, status)
-    VALUES ('FP-2026-10', 'October 2026', '2026-10-01', '2026-10-31', 'open');
+    VALUES ('FIXTURE', 'Fixture period', '2020-01-01', '2099-12-31', 'open');
 
     CREATE TABLE fiscal_period_locks (
         period_id INTEGER,
@@ -260,7 +261,10 @@ $pdo->exec("UPDATE gcash_transactions SET verification_status = 'Needs checking'
 $shiftIdAlice = $shiftService->openShift(2, 'cashier', 11, 1000.00);
 
 // Emergency handover to Alice, accepting txId2
+$pdo->exec("UPDATE gcash_service_sessions SET wallet_number = '09171234567' WHERE session_id = {$sessId2}");
 $handoverResult = $gcashService->emergencyHandover(1, 2, 2500.00, 4800.00, 'Dave fell ill, Alice takes over', [$txId2]);
+$assert($gcashService->getSession((int)$handoverResult['incoming_session_id'])['wallet_number'] === '09171234567',
+    'Handover preserves the Store wallet number in the incoming session');
 $assert($handoverResult['service_stopped'] === false, 'Service not stopped');
 $assert($handoverResult['incoming_session_id'] !== null, 'New session opened for Alice');
 

@@ -27,6 +27,7 @@ use App\Services\HeldSaleService;
 use App\Services\BatchAllocationEngine;
 use App\Services\BatchInventoryLedger;
 use App\Receipts\ReceiptEngine;
+use App\Inventory\ProductCost;
 
 /**
  * Sale creation, and the Cashier Shift attribution every sale carries (#89).
@@ -226,7 +227,7 @@ class SalesWorkflowService
     }
 
     /** The quote is read under the same locks as checkout and makes no sale. */
-    public function reviewQuote(array $cart, int $userId, string $actorRole, array $details = []): array
+    public function reviewQuote(array $cart, int $userId, string $actorRole, array $details = [], bool $promotionsOnly = false): array
     {
         $this->requireCashierWorkspace($actorRole);
         $cart = $this->sanitizeCart($cart);
@@ -236,7 +237,7 @@ class SalesWorkflowService
             $this->assertCheckoutFiscalPeriodsOpen();
             $shiftId = $this->resolveSaleAttribution($userId);
             $this->resolveResumedHeldSale($userId, $shiftId, $details);
-            return $this->buildQuote($cart, $userId, $shiftId, $details);
+            return $this->buildQuote($cart, $userId, $shiftId, $details, $promotionsOnly);
         } finally {
             if ($this->pdo->inTransaction()) $this->pdo->rollBack();
         }
@@ -254,12 +255,25 @@ class SalesWorkflowService
         return (int)$selected;
     }
 
-    private function buildQuote(array $cart, int $userId, int $shiftId, array $details): array
+    private function buildQuote(array $cart, int $userId, int $shiftId, array $details, bool $promotionsOnly = false): array
     {
         $sale = $this->buildSalePayload($cart);
         $selected = $this->selectedPromotionId($details);
         $discount = $this->resolvePromotion($sale['items'], $sale['total'], $selected);
         $total = round(max(0, $sale['total'] - $discount['discount_amount']), 2);
+        // Listing promotions must work for below-cost carts, but never authorizes payment.
+        if ($promotionsOnly) return ['eligible_promotions' => $discount['eligible_promotions']];
+        foreach ($sale['items'] as $index => $item) {
+            $itemDiscount = $discount['item_discounts'][$index] ?? 0.0;
+            $payableCents = (int)round(($item['subtotal'] - $itemDiscount) * 100);
+            if ($payableCents < $item['quantity']) {
+                throw new DomainException('The promotion makes ' . $item['product_name'] . ' free. Choose another promotion or No promotion.');
+            }
+            if ($itemDiscount <= 0 && (int)round($item['unit_price'] * 100) < (int)round($item['cost_floor'] * 100)) {
+                throw new DomainException($item['product_name'] . ' is priced below purchase cost. Ask the Inventory Manager to correct pricing or select an eligible Administrator promotion.');
+            }
+        }
+        if ($total <= 0) throw new DomainException('The sale total must be greater than zero. Choose another promotion or No promotion.');
         $inputs = [
             'payment_method' => (string)($details['payment_method'] ?? ''),
             'promotion_id' => $details['promotion_id'] ?? '',
@@ -419,9 +433,10 @@ class SalesWorkflowService
                 }
             }
 
-            $productCost = isset($product['cost_price']) && $product['cost_price'] !== null && $product['cost_price'] !== ''
-                ? (float)$product['cost_price']
-                : null;
+            if ((float)$product['unit_price'] < 0.01 || ($packDemand > 0 && ($packPrice ?? 0) < 0.01)) {
+                throw new DomainException($product['product_name'] . ' needs a positive selling price. Ask the Inventory Manager to complete pricing.');
+            }
+            $productCost = ProductCost::known($product) ? (float)$product['cost_price'] : null;
 
             $productDemands[$productId] = [
                 'product_id' => $productId,
@@ -475,6 +490,25 @@ class SalesWorkflowService
                 $total += $subtotal;
 
                 $batchPlan = $isPack ? $packBatchPlan : $pieceBatchPlan;
+                $productCost = ProductCost::known($product) ? (float)$product['cost_price'] : null;
+                $costs = [];
+                foreach ($batchPlan as &$allocation) {
+                    // Sale-time estimates must not rewrite the batch's historical purchase cost.
+                    if ($allocation['unit_cost'] === null && $productCost !== null) {
+                        $allocation = array_replace($allocation, [
+                            'unit_cost' => $productCost, 'cost_price' => $productCost,
+                            'cost_status' => 'estimated', 'cost_source' => 'product', 'cost_provenance' => 'product',
+                        ]);
+                    }
+                    $costs[] = $allocation['unit_cost'];
+                }
+                unset($allocation);
+                if (!$batchPlan) $costs[] = $productCost;
+                foreach ($costs as $cost) {
+                    if ($cost === null || !is_finite((float)$cost) || $cost < 0) {
+                        throw new DomainException($product['product_name'] . ' has no confirmed purchase cost. Ask the Inventory Manager to complete pricing.');
+                    }
+                }
 
                 $items[] = [
                     'product_id' => $productId,
@@ -485,6 +519,7 @@ class SalesWorkflowService
                     'base_unit_quantity' => $baseUnitQty,
                     'pack_size' => $isPack ? $packSize : ($hasPackConfig ? $packSize : null),
                     'batch_plan' => $batchPlan,
+                    'cost_floor' => round(max($costs) * ($isPack ? $packSize : 1), 2),
                     'product_plan' => $productPlans[$productId] ?? null,
                     'category_id' => (int)($product['category_id'] ?? 0),
                     'product_name' => (string)($product['product_name'] ?? ''),
@@ -529,6 +564,7 @@ class SalesWorkflowService
     {
         $prodCols = self::getTableColumns($this->pdo, 'products');
         $costSelect = isset($prodCols['cost_price']) ? ', p.cost_price' : '';
+        $costSelect .= isset($prodCols['cost_known']) ? ', p.cost_known' : '';
         $packSelect = isset($prodCols['pack_size']) ? ', p.pack_size, p.pack_barcode, p.pack_price' : '';
         $stmt = $this->pdo->prepare(
             "SELECT p.unit_price, p.category_id, p.status, p.product_name, i.quantity_on_hand{$costSelect}{$packSelect}
@@ -640,6 +676,7 @@ class SalesWorkflowService
             'discount_reason' => null, 'discount_authorized_by' => null,
             'promotion_id' => null, 'promotion_name' => null,
             'eligible_promotions' => [],
+            'item_discounts' => [],
         ];
         try {
             $promotions = $this->pdo->query(
@@ -657,13 +694,15 @@ class SalesWorkflowService
         foreach ($promotions as $promotion) {
             $eligibleSubtotal = 0.0;
             $eligibleQuantity = 0;
-            foreach ($items as $item) {
+            $eligibleItems = [];
+            foreach ($items as $index => $item) {
                 $eligible = $promotion['scope'] === 'all'
                     || ($promotion['scope'] === 'product' && (int)$promotion['product_id'] === (int)$item['product_id'])
                     || ($promotion['scope'] === 'category' && (int)$promotion['category_id'] === (int)$item['category_id']);
                 if ($eligible) {
                     $eligibleSubtotal += (float)$item['subtotal'];
                     $eligibleQuantity += (int)$item['quantity'];
+                    $eligibleItems[$index] = $item;
                 }
             }
             if ($eligibleSubtotal <= 0 || $eligibleQuantity < max(1, (int)$promotion['minimum_quantity'])) {
@@ -676,6 +715,18 @@ class SalesWorkflowService
             $amount = min($amount, $grossTotal);
             $eligiblePromotions[] = $promotion + ['applied_amount' => $amount];
             if ((int)$promotion['promotion_id'] === $selected) {
+                $itemDiscounts = [];
+                $allocatedCents = 0;
+                $matchedCents = 0;
+                $discountCents = (int)round($amount * 100);
+                $eligibleCents = (int)round($eligibleSubtotal * 100);
+                foreach ($eligibleItems as $index => $item) {
+                    $matchedCents += (int)round($item['subtotal'] * 100);
+                    // Cumulative rounding assigns every discount cent exactly once.
+                    $cumulativeCents = (int)round($discountCents * $matchedCents / $eligibleCents);
+                    $itemDiscounts[$index] = ($cumulativeCents - $allocatedCents) / 100;
+                    $allocatedCents = $cumulativeCents;
+                }
                 $selection = [
                     'discount_type' => (string)$promotion['discount_type'],
                     'discount_value' => $value,
@@ -684,6 +735,7 @@ class SalesWorkflowService
                     'discount_authorized_by' => null,
                     'promotion_id' => (int)$promotion['promotion_id'],
                     'promotion_name' => (string)$promotion['promotion_name'],
+                    'item_discounts' => $itemDiscounts,
                 ];
             }
         }
@@ -832,6 +884,13 @@ class SalesWorkflowService
         $saleItemId = (int)$this->pdo->lastInsertId();
 
         $this->ledger->depleteSaleItem($saleId, $saleItemId, $item, $userId);
+        if (empty($item['batch_plan'])) {
+            $this->ledger->recordSaleItemBatch($saleItemId, [
+                'batch_id' => null, 'quantity' => $item['base_unit_quantity'],
+                'unit_cost' => $item['cost_floor'], 'cost_status' => 'estimated',
+                'cost_source' => 'product', 'cost_provenance' => 'product',
+            ]);
+        }
     }
 
     public static function getTableColumns(PDO $pdo, string $table): array

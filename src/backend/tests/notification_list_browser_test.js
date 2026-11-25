@@ -16,7 +16,7 @@ const output = fs.mkdtempSync(path.join(os.tmpdir(), 'rm-notifications-'));
 const php = process.env.PHP_BINARY || 'php';
 const env = {...process.env, BACKUP_STORAGE_PATH: path.join(output, 'recovery')};
 const fixture = action => {
-    const result = spawnSync(php, ['src/backend/tests/support/notification_fixture.php', action, database], {encoding: 'utf8', env});
+    const result = spawnSync(php, ['src/backend/tests/support/notification_fixture.php', action, database, 'fixed_list'], {encoding: 'utf8', env});
     assert.equal(result.status, 0, result.stderr || result.stdout);
     return result.stdout;
 };
@@ -77,8 +77,12 @@ const query = sql => {
             await Promise.all([page.waitForURL(u => !u.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         };
         const switchWorkspace = async role => {
-            await page.goto(origin + '/components/auth/workspace.php');
-            await Promise.all([page.waitForNavigation(), page.locator(`.workspace-option:has(input[value="${role}"])`).getByRole('button', {name: 'Open'}).click()]);
+            const csrfToken = await page.locator('input[name="csrf_token"]').first().inputValue();
+            const response = await page.request.post(origin + '/components/auth/workspace.php', {
+                form: {workspace: role, csrf_token: csrfToken},
+                maxRedirects: 0
+            });
+            assert.equal(response.status(), 302, 'Switches to the assigned Workspace');
         };
         await page.goto(origin + '/components/administrator/dashboard.php');
         assert.equal(await page.getByText('Pending approvals', {exact: true}).count(), 0);
@@ -125,6 +129,38 @@ const query = sql => {
         assert.equal(await page.locator('.notification-item').count(), 20);
         assert.equal(await page.locator('.notification-item').first().getAttribute('class'), 'notification-item ');
         await assertBells(26);
+        const dismissibleNotice = page.locator('.notification-item').filter({has: page.getByRole('heading', {name: 'Notice 27', exact: true})});
+        const dismiss = dismissibleNotice.getByRole('button', {name: 'Dismiss', exact: true});
+        assert.equal(await page.locator('.notification-item.unread .notification-dismiss').count(), 0);
+        await submit(dismiss);
+        assert.equal(await dismissibleNotice.count(), 0, 'Dismissed updates disappear from All');
+        assert.equal((await query('SELECT dismissed_at IS NOT NULL AS dismissed FROM notifications WHERE notification_id = 27'))[0].dismissed, 1);
+        await assertBells(26);
+        await submit(page.getByRole('button', {name: 'Undo', exact: true}));
+        assert.equal(await dismissibleNotice.count(), 1, 'Undo restores the same update');
+
+        const desktopViewport = page.viewportSize();
+        const device = await page.context().newCDPSession(page);
+        await page.setViewportSize({width: 390, height: 844});
+        await device.send('Emulation.setTouchEmulationEnabled', {enabled: true});
+        await dismissibleNotice.scrollIntoViewIfNeeded();
+        const bounds = await dismissibleNotice.boundingBox();
+        assert((await dismiss.boundingBox()).height >= 44, 'Dismiss has a 44px mobile touch target');
+        const touch = {x: Math.round(bounds.x + bounds.width - 30), y: Math.round(bounds.y + 30)};
+        assert(await page.evaluate(({x, y}) => document.elementFromPoint(x, y)?.closest('[data-notification-dismissible]') !== null, touch), 'Swipe starts on the notification');
+        await device.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [touch]});
+        await device.send('Input.dispatchTouchEvent', {type: 'touchMove', touchPoints: [{...touch, x: touch.x - 110}]});
+        await Promise.all([
+            page.waitForNavigation(),
+            device.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []})
+        ]);
+        assert.equal(await dismissibleNotice.count(), 0, 'A left swipe dismisses a read notification');
+        await submit(page.getByRole('button', {name: 'Undo', exact: true}));
+        assert.equal(await dismissibleNotice.count(), 1);
+        await device.send('Emulation.setTouchEmulationEnabled', {enabled: false});
+        await device.detach();
+        await page.setViewportSize(desktopViewport);
+
         await submit(page.locator('.notification-views a').filter({hasText: 'Unread'}));
         assert.equal(await page.locator('.notification-item').count(), 10, 'Changing view resets expansion');
         assert.equal(await page.locator('.notification-content h2').first().textContent(), 'Notice 26', 'Unread excludes read items');
@@ -153,28 +189,39 @@ const query = sql => {
         await submit(page.getByRole('button', {name: 'Apply Filter', exact: true}));
         assert.equal(await page.locator('.notification-item').count(), 10);
         assert.equal(await page.locator('.notification-content h2').first().textContent(), 'Notice 13');
-        const productNotice = page.locator('.notification-item').first();
-        assert.equal(new URL(await productNotice.locator('.notification-product-link').getAttribute('href'), origin).searchParams.get('q'), 'NOTICE-13');
-        await submit(productNotice.locator('.notification-product-link'));
+        const productNotice = page.getByRole('button', {name: 'Notice 12', exact: true});
+        await Promise.all([page.waitForNavigation(), productNotice.press('Enter')]);
         assert.equal(new URL(page.url()).pathname, '/components/inventory_management/products.php');
-        await page.waitForFunction(() => document.getElementById('product-search')?.value === 'NOTICE-13');
-        assert.equal(await page.locator('#product-search').inputValue(), 'NOTICE-13', 'Notification automatically searches the product SKU');
-        assert.equal(await page.locator('tr[data-product-id="1013"]').isVisible(), true);
-        assert.equal(await page.locator('tr[data-product-id="1012"]').isVisible(), false);
+        await page.waitForFunction(() => document.getElementById('product-search')?.value === 'NOTICE-12');
+        assert.equal(await page.locator('#product-search').inputValue(), 'NOTICE-12', 'Notification automatically searches the product SKU');
+        assert.equal(await page.locator('tr[data-product-id="1012"]').isVisible(), true);
+        assert.equal(await page.locator('tr[data-product-id="1013"]').isVisible(), false);
+        await assertBells(24);
+        await page.goto(url + '?category=low_stock&view=unread');
+        assert.equal(await productNotice.count(), 0, 'Opening a notification removes it from Unread');
+        await page.goto(url + '?category=low_stock');
+        await submit(productNotice);
+        await assertBells(24);
         await page.goto(url + '?category=low_stock');
         await submit(page.locator('.notification-views a').filter({hasText: 'Unread'}));
         await submit(page.getByRole('button', {name: 'Mark category as read', exact: true}));
         assert.equal(await page.locator('#notification-category').inputValue(), 'low_stock');
         assert.equal(new URL(page.url()).searchParams.get('view'), 'unread');
         assert.equal(await page.locator('.notification-item').count(), 0);
-        assert.equal(await page.getByRole('heading', {name: "You're all caught up"}).count(), 1);
+        assert.equal(await page.getByRole('heading', {name: 'You’re all caught up'}).count(), 1);
         await assertBells(13);
         assert.deepEqual(await page.locator('#notification-category option').allTextContents(), ['All', 'Low stock', 'System'], 'Read categories remain selectable');
-        await submit(page.getByRole('link', {name: 'View all notifications', exact: true}));
+        await submit(page.getByRole('link', {name: 'View All Notifications', exact: true}));
         assert.equal(await page.locator('#notification-category').inputValue(), 'low_stock');
         await submit(page.getByRole('link', {name: 'Show More', exact: true}));
         assert.equal(await page.locator('.notification-item').count(), 13);
         assert.equal(await page.locator('.notification-item.unread').count(), 0, 'Bulk read includes undisplayed category items');
+        assert.equal(await page.locator('.notification-dismiss').count(), 0, 'Active low stock remains visible after reading');
+        const stockCsrf = await page.locator('input[name="csrf_token"]').first().inputValue();
+        await page.request.post(url + '?category=low_stock', {
+            form: {action: 'dismiss', notification_id: '13', csrf_token: stockCsrf}, maxRedirects: 0
+        });
+        assert.equal((await query('SELECT dismissed_at FROM notifications WHERE notification_id = 13'))[0].dismissed_at, null);
         assert.equal(await page.getByRole('link', {name: 'Show More', exact: true}).count(), 0);
         await page.goto(url);
         assert.equal(await page.locator('#notification-category').inputValue(), '');
@@ -189,6 +236,13 @@ const query = sql => {
         }
         const noCsrf = await page.request.post(url + '?view=unread', {form: {action: 'mark_all_read'}});
         assert.equal(noCsrf.status(), 403, 'Read actions still require CSRF');
+        const openWithoutCsrf = await page.request.post(url, {form: {action: 'open_product', notification_id: '11'}});
+        assert.equal(openWithoutCsrf.status(), 403, 'Opening a notice also requires CSRF');
+        const privateOpen = await page.request.post(url, {
+            form: {action: 'open_notification', notification_id: '9000', csrf_token: csrf},
+            maxRedirects: 0
+        });
+        assert.equal(new URL(privateOpen.headers().location, origin).pathname, new URL(url).pathname, 'Opening another account’s notification stays in the list');
         await page.request.post(url, {form: {action: 'mark_read', notification_id: '9000', csrf_token: csrf}});
         // Query only the disposable DB through the same configured connection as the fixture.
         const state = spawnSync(php, ['-r', `require 'src/backend/bootstrap/app.php'; $c=require 'src/backend/config/database.php'; $p=new PDO('mysql:host='.$c['host'].';port='.$c['port'].';dbname=${database}', $c['username'],$c['password']); echo $p->query('SELECT is_read FROM notifications WHERE notification_id=9000')->fetchColumn();`], {encoding: 'utf8', env});
@@ -228,8 +282,8 @@ const query = sql => {
         await submit(page.getByRole('button', {name: 'Mark all as read', exact: true}));
         assert.equal(await page.locator('.notification-item.unread').count(), 0);
         await assertBells(0);
-        assert.equal(await page.getByRole('heading', {name: "You're all caught up"}).count(), 1);
-        await submit(page.getByRole('link', {name: 'View all notifications', exact: true}));
+        assert.equal(await page.getByRole('heading', {name: 'You’re all caught up'}).count(), 1);
+        await submit(page.getByRole('link', {name: 'View All Notifications', exact: true}));
         await submit(page.getByRole('link', {name: 'Show More', exact: true}));
         await submit(page.getByRole('link', {name: 'Show More', exact: true}));
         assert.equal(await page.locator('.notification-item').count(), 27);
@@ -253,7 +307,7 @@ const query = sql => {
         await page.goto(url + '?view=unread');
         await submit(page.getByRole('button', {name: 'Mark as read', exact: true}));
         assert.equal(await page.locator('.notification-item').count(), 0, 'Last individual unread item reaches caught-up state');
-        assert.equal(await page.getByRole('heading', {name: "You're all caught up"}).count(), 1);
+        assert.equal(await page.getByRole('heading', {name: 'You’re all caught up'}).count(), 1);
         }
         fixture('bread_create');
         const active = page.getByRole('region', {name: 'Active batch reminders', exact: true});
@@ -308,16 +362,14 @@ const query = sql => {
 
         // ---- #262: workspace-scoped lists, counts, read state, role and account eligibility ----
         await page.goto(origin + '/components/auth/logout.php');
-        await login('theme_super_admin');
+        await login('theme_admin');
         fixture('workspace_seed');
         const readState = async () => Object.fromEntries(
-            query('SELECT notification_id, is_read FROM notifications WHERE user_id = 2').map(row => [Number(row.notification_id), Number(row.is_read)]));
+            query('SELECT notification_id, is_read FROM notifications WHERE user_id = 1 AND inapp_enabled = 1').map(row => [Number(row.notification_id), Number(row.is_read)]));
         const bell = () => page.locator('.global-topbar .global-notification-button').first();
 
         // 1. A multi-role user sees only the signed-in Workspace's rows, category counts, and bell count.
         await page.goto(url);
-        assert.deepEqual(await page.locator('.notification-content h2').allTextContents(), ['Super admin notice'], 'Super Administrator Workspace only lists its own rows');
-        assert.deepEqual(await page.locator('#notification-category option').allTextContents(), ['All', 'System'], 'Category options follow the active Workspace');
         assert.equal(await bell().locator('strong').textContent(), '1', 'Bell count follows the active Workspace');
         assert.equal(await bell().getAttribute('aria-label'), 'Notifications: 1 unread');
         await page.goto(url + '?category=system');
@@ -329,6 +381,17 @@ const query = sql => {
         assert.deepEqual(await page.locator('#notification-category option').allTextContents(), ['All', 'System'], 'Secondary Workspace exposes only its own categories');
         assert.equal(await page.locator('.notification-view-count').textContent(), '2', 'Unread count follows the active Workspace');
         assert.equal(await bell().locator('strong').textContent(), '2', 'Bell count changes with the Workspace');
+        const otherWorkspace = await page.request.post(url, {
+            form: {action: 'open_notification', notification_id: '9310', csrf_token: await page.locator('input[name="csrf_token"]').first().inputValue()},
+            maxRedirects: 0
+        });
+        assert.equal(new URL(otherWorkspace.headers().location, origin).pathname, new URL(url).pathname, 'Opening from another Workspace stays in the list');
+        assert.equal((await readState())[9310], 0, 'Opening from another Workspace preserves read state');
+        await page.request.post(url, {
+            form: {action: 'dismiss', notification_id: '9311', csrf_token: await page.locator('input[name="csrf_token"]').first().inputValue()},
+            maxRedirects: 0
+        });
+        assert.equal(query('SELECT dismissed_at FROM notifications WHERE notification_id = 9311')[0].dismissed_at, null, 'Dismiss cannot hide another Workspace’s read notification');
 
         await switchWorkspace('admin');
         await page.goto(url);
@@ -354,7 +417,7 @@ const query = sql => {
         fixture('workspace_revoke_role');
         await page.goto(url);
         assert.equal(await page.getByText('Inventory notice', {exact: false}).count(), 0, 'Removing a secondary role revokes that Workspace rows');
-        assert.deepEqual(await page.locator('.notification-content h2').allTextContents(), ['Super admin notice'], 'The session falls back to a Workspace the account still holds');
+        assert.deepEqual(await page.locator('.notification-content h2').allTextContents(), ['Admin system notice', 'Admin adjustment notice'], 'The session falls back to a Workspace the account still holds');
         assert.doesNotMatch(await page.locator('.sidebar-workspace-options').textContent(), /Inventory/, 'Revoked Workspace is no longer offered');
         const revokedCsrf = await page.locator('input[name="csrf_token"]').first().inputValue();
         const rejected = await page.request.post(origin + '/components/auth/workspace.php', {form: {workspace: 'inventory_manager', csrf_token: revokedCsrf}});
@@ -369,15 +432,15 @@ const query = sql => {
         await page.goto(url);
         assert.equal(await page.locator('.notification-item.unread').count(), 0, 'Bulk read clears only the active Workspace');
         assert.equal(await bell().locator('strong').count(), 0, 'Bell count clears only for the active Workspace');
-        assert.deepEqual(await readState(), {9300: 0, 9310: 0, 9311: 1, 9320: 1, 9321: 1, 9330: 0}, 'Reading Inventory leaves other Workspace rows unread');
+        assert.deepEqual(await readState(), {9310: 0, 9311: 1, 9320: 1, 9321: 1, 9330: 0}, 'Reading Inventory leaves other Workspace rows unread');
         await switchWorkspace('admin');
         await page.goto(url);
         assert.equal(await page.locator('.notification-item.unread').count(), 1, 'Administrator unread work survives the Inventory bulk read');
         assert.equal(await page.locator('.notification-item.unread .notification-content h2').textContent(), 'Admin adjustment notice');
         assert.equal(await bell().locator('strong').textContent(), '1');
-        await switchWorkspace('super_admin');
+        await switchWorkspace('cashier');
         await page.goto(url);
-        assert.equal(await page.locator('.notification-item.unread').count(), 1, 'Super Administrator unread work survives the Inventory bulk read');
+        assert.equal(await page.locator('.notification-item.unread').count(), 1, 'Cashier unread work survives the Inventory bulk read');
 
         // 4. A disabled account cannot see scoped rows.
         fixture('workspace_disable');
@@ -385,9 +448,10 @@ const query = sql => {
         assert.equal(new URL(page.url()).searchParams.get('login'), '1', 'Disabled account loses access to scoped Notifications');
         assert.equal(await page.locator('.notification-item').count(), 0, 'Disabled account sees no scoped rows');
         fixture('workspace_enable');
-        await login('theme_super_admin');
+        await login('theme_admin');
+        await switchWorkspace('admin');
         await page.goto(url);
-        assert.deepEqual(await page.locator('.notification-content h2').allTextContents(), ['Super admin notice'], 'Re-enabled account regains only its scoped rows');
+        assert.deepEqual(await page.locator('.notification-content h2').allTextContents(), ['Admin system notice', 'Admin adjustment notice'], 'Re-enabled account regains only its scoped rows');
         assert.equal(await bell().locator('strong').textContent(), '1');
 
         // 5. One account's reads never touch another account's rows (extends the 9000 "Private notice" coverage).
@@ -399,7 +463,7 @@ const query = sql => {
         assert.equal(Number((await query('SELECT is_read FROM notifications WHERE notification_id = 2'))[0].is_read), foreignRead, 'An account cannot mark another account\'s notification read');
         await submit(page.getByRole('button', {name: 'Mark all as read', exact: true}));
         assert.equal(await user3Unread(), user3Before, 'Bulk read never touches another account\'s unread rows');
-        assert.equal(Number((await query("SELECT COUNT(*) AS c FROM notifications WHERE user_id = 2 AND workspace = 'super_admin' AND is_read = 0"))[0].c), 0, 'Own Workspace unread work is still cleared');
+        assert.equal(Number((await query("SELECT COUNT(*) AS c FROM notifications WHERE user_id = 1 AND workspace = 'admin' AND is_read = 0"))[0].c), 0, 'Own Workspace unread work is still cleared');
         console.log('Notification list: passed; screenshots ' + output);
     } finally {
         if (browser) await browser.close();

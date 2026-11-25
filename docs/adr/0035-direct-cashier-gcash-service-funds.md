@@ -1,0 +1,3 @@
+# Direct Cashier GCash service-fund recording
+
+On 2026-11-25, the user replaced repeated Administrator credential approval with direct recording by the responsible Cashier for Service funds, explicitly including Product Drawer Transfer. This reduces counter work while retaining active custody, confirmed actual movements, balance checks, evidence, and the linked Product-drawer entry. New direct records identify the Cashier without claiming Administrator approval; previously approved movements retain their approver. This revises the earlier Administrator/Manager-only funding policy, while approval for held-exchange returns and finalized-record corrections remains separate.

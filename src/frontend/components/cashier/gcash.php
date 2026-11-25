@@ -2,6 +2,16 @@
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
 require_role(['cashier']);
+require_capability(\App\Authorization\RoleCapabilityPolicy::OPERATE_POINT_OF_SALE);
+$showSessionHistory = ($_GET['tab'] ?? '') === 'sessions';
+$sessionHistoryCashierId = (int)$_SESSION['user_id'];
+$sessionHistoryPath = app_url('components/cashier/gcash.php');
+$sessionHistoryView = __DIR__ . '/../../../backend/app/Views/gcash/session_history.php';
+if ($showSessionHistory && ($_GET['session_fragment'] ?? '') === '1') {
+    header('Cache-Control: no-store');
+    require $sessionHistoryView;
+    return;
+}
 $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
 ?>
 <!DOCTYPE html>
@@ -50,7 +60,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
 
         <div class="gcash-tabs-nav-wrap">
             <nav class="gcash-tablist" role="tablist" aria-label="GCash sections">
-                <button type="button" role="tab" id="tab-new-transaction" class="gcash-tab active" aria-selected="true" aria-controls="panel-new-transaction" tabindex="0">
+                <button type="button" role="tab" id="tab-new-transaction" class="gcash-tab<?= $showSessionHistory ? '' : ' active' ?>" aria-selected="<?= $showSessionHistory ? 'false' : 'true' ?>" aria-controls="panel-new-transaction" tabindex="<?= $showSessionHistory ? '-1' : '0' ?>">
                     <i class="bi bi-plus-circle" aria-hidden="true"></i>New Transaction
                 </button>
                 <button type="button" role="tab" id="tab-history" class="gcash-tab" aria-selected="false" aria-controls="panel-history" tabindex="-1">
@@ -59,10 +69,13 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 <button type="button" role="tab" id="tab-funds" class="gcash-tab" aria-selected="false" aria-controls="panel-funds" tabindex="-1">
                     <i class="bi bi-arrow-left-right" aria-hidden="true"></i>Service Fund Movements
                 </button>
+                <button type="button" role="tab" id="tab-sessions" class="gcash-tab<?= $showSessionHistory ? ' active' : '' ?>" aria-selected="<?= $showSessionHistory ? 'true' : 'false' ?>" aria-controls="panel-sessions" tabindex="<?= $showSessionHistory ? '0' : '-1' ?>">
+                    <i class="bi bi-clock-history" aria-hidden="true"></i>Recent GCash Sessions
+                </button>
             </nav>
         </div>
 
-        <div role="tabpanel" id="panel-new-transaction" aria-labelledby="tab-new-transaction" tabindex="0" class="gcash-tabpanel">
+        <div role="tabpanel" id="panel-new-transaction" aria-labelledby="tab-new-transaction" tabindex="0" class="gcash-tabpanel" <?= $showSessionHistory ? 'hidden' : '' ?>>
             <section id="gcash-balances" class="gcash-workspace-balances" aria-label="Expected GCash balances">
                 <div class="gcash-overview-grid gcash-balances-grid" aria-live="polite">
                     <div class="gcash-card gcash-card-balance gcash-balance-card gcash-balance-card-cash">
@@ -300,7 +313,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                         <path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"></path>
                     </svg>
                     <h3>No service fund movements yet</h3>
-                    <p>Cash and wallet fund movements you record will appear here, with their amounts, approvals, and details. Use Move funds when you have an active GCash session.</p>
+                    <p>Cash and wallet fund movements you record will appear here, with their amounts and details. Use Move funds when you have an active GCash session.</p>
                 </div>
                 <div class="gcash-table-wrap" tabindex="0" role="region" aria-label="Your service fund movements">
                     <table data-no-smart-table>
@@ -309,6 +322,10 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     </table>
                 </div>
             </section>
+        </div>
+
+        <div role="tabpanel" id="panel-sessions" aria-labelledby="tab-sessions" tabindex="0" class="gcash-tabpanel" <?= $showSessionHistory ? '' : 'hidden' ?>>
+            <?php if ($showSessionHistory) require $sessionHistoryView; ?>
         </div>
 
         <dialog id="gcash-details-drawer" class="gcash-details-drawer" aria-labelledby="gcash-drawer-title">
@@ -447,6 +464,10 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
             <form id="gcash-open-form">
                 <h2 id="gcash-open-title">Open GCash</h2>
                 <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-open-number">Store GCash number</label>
+                    <input class="pos-input" id="gcash-open-number" name="wallet_number" type="tel" maxlength="20" required placeholder="09XXXXXXXXX" autocomplete="off">
+                </div>
+                <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-open-cash">Counted service cash (PHP)</label>
                     <input class="pos-input" id="gcash-open-cash" name="opening_cash" type="number" step="0.01" min="0" required placeholder="0.00" autocomplete="off" inputmode="decimal">
                 </div>
@@ -552,7 +573,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     </div>
                 </div>
                 <fieldset class="gcash-nc-movements">
-                    <legend>Completed movements</legend>
+                    <legend>Movements already made</legend>
                     <label class="gcash-confirm">
                         <input type="checkbox" id="gcash-nc-cash-collected" name="cash_collected">
                         <span id="gcash-nc-cash-desc">Cash collected from customer (<span id="gcash-nc-cash-text">₱0.00</span>)</span>
@@ -562,6 +583,14 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                         <span id="gcash-nc-wallet-desc">Wallet transfer sent to customer (<span id="gcash-nc-wallet-text">₱0.00</span>)</span>
                     </label>
                 </fieldset>
+                <div class="gcash-field">
+                    <label class="pos-field-label" for="gcash-nc-customer">Customer name (optional)</label>
+                    <input class="pos-input" id="gcash-nc-customer" name="customer_name" type="text" maxlength="100" autocomplete="off">
+                </div>
+                <div class="gcash-field">
+                    <label class="pos-field-label" id="gcash-nc-number-label" for="gcash-nc-number">Recipient GCash number (optional)</label>
+                    <input class="pos-input" id="gcash-nc-number" name="customer_gcash_number" type="tel" maxlength="20" placeholder="09XXXXXXXXX" autocomplete="off">
+                </div>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-nc-notes">Reason for holding</label>
                     <textarea class="pos-input" id="gcash-nc-notes" name="notes" minlength="5" maxlength="500" required rows="2" placeholder="e.g. Cash received, wallet transfer unconfirmed (min 5 chars)"></textarea>
@@ -623,17 +652,6 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <label class="pos-field-label" for="gcash-funding-reason" id="gcash-funding-reason-label">Reason (optional)</label>
                     <input class="pos-input" id="gcash-funding-reason" name="reason" type="text" minlength="5" maxlength="255" placeholder="Add details if needed" autocomplete="off">
                 </div>
-                <fieldset class="gcash-correction-approval">
-                    <legend>Administrator approval</legend>
-                    <div class="gcash-field">
-                        <label class="pos-field-label" for="gcash-funding-approver">Username or email</label>
-                        <input class="pos-input" id="gcash-funding-approver" name="approver_username" type="text" required autocomplete="off">
-                    </div>
-                    <div class="gcash-field">
-                        <label class="pos-field-label" for="gcash-funding-password">Password</label>
-                        <input class="pos-input" id="gcash-funding-password" name="approver_password" type="password" required autocomplete="new-password">
-                    </div>
-                </fieldset>
                 <label class="gcash-confirm"><input type="checkbox" id="gcash-funding-receipt" name="receipt_confirmed" required> I confirm the cash or wallet funds have been received or sent.</label>
                 <div class="gcash-actions">
                     <button class="btn btn-primary" type="submit" id="gcash-funding-submit">Record Movement</button>
@@ -646,6 +664,12 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
             <form id="gcash-resolve-form">
                 <h2 id="gcash-resolve-title">Resolve held exchange</h2>
                 <p id="gcash-resolve-summary" class="gcash-dialog-summary"></p>
+                <dl class="gcash-drawer-meta-list">
+                    <div class="gcash-drawer-meta-row"><dt>Customer</dt><dd id="gcash-resolve-customer">Not recorded</dd></div>
+                    <div class="gcash-drawer-meta-row"><dt id="gcash-resolve-number-label">GCash number</dt><dd id="gcash-resolve-number">Not recorded</dd></div>
+                    <div class="gcash-drawer-meta-row"><dt>Reason for holding</dt><dd id="gcash-resolve-hold-reason">Not recorded</dd></div>
+                    <div class="gcash-drawer-meta-row"><dt>Movements already made</dt><dd id="gcash-resolve-movements"></dd></div>
+                </dl>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-resolve-action">Action</label>
                     <select class="pos-input" id="gcash-resolve-action" name="resolve_action" required>
@@ -659,8 +683,8 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <input class="pos-input" id="gcash-resolve-reference" name="reference" type="text" maxlength="32" placeholder="Required if wallet was unconfirmed" autocomplete="off" spellcheck="false">
                 </div>
                 <div class="gcash-field" id="gcash-resolve-notes-group">
-                    <label class="pos-field-label" for="gcash-resolve-notes">Notes / reason</label>
-                    <input class="pos-input" id="gcash-resolve-notes" name="notes" type="text" minlength="5" maxlength="255" placeholder="Minimum 5 characters" autocomplete="off">
+                    <label class="pos-field-label" for="gcash-resolve-notes">Resolution notes (optional)</label>
+                    <input class="pos-input" id="gcash-resolve-notes" name="notes" type="text" maxlength="255" placeholder="Add details if needed" autocomplete="off">
                 </div>
                 <div id="gcash-return-fields" class="gcash-return-fields" hidden>
                     <div class="gcash-correction-amounts">

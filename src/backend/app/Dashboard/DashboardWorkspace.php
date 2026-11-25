@@ -153,7 +153,7 @@ final class DashboardWorkspace
              WHERE p.status = 'active' AND i.quantity_on_hand <= 0"
         );
         $unresolvedControls = $this->count("SELECT COUNT(*) FROM sale_reversals WHERE status = 'pending'")
-            + $this->count("SELECT COUNT(*) FROM inventory_adjustments WHERE status = 'pending'")
+            + $this->count("SELECT COUNT(*) FROM inventory_adjustments WHERE status IN ('pending', 'returned')")
             + $this->count(
                 "SELECT COUNT(*) FROM cashier_shifts
                  WHERE status = 'closed' AND reviewed_at IS NULL AND cash_variance IS NOT NULL AND ABS(cash_variance) > 0"

@@ -133,6 +133,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         assert.equal(await page.locator('#gcash-cash-in-confirm-group').isVisible(), false, 'No zero-amount confirmations');
         assert.equal(await page.locator('#gcash-complete-cash-in').isDisabled(), true, 'Closed session cannot complete transactions');
         await page.locator('#gcash-open-session-btn').click();
+        await page.locator('#gcash-open-number').fill('09171234567');
         await page.locator('#gcash-open-cash').fill('1000');
         await page.locator('#gcash-open-wallet').fill('5000');
         await page.locator('#gcash-open-submit').click();
@@ -715,6 +716,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
 
         // Ticket #242: Session 2 - Funding movements, linked corrections, resolving needs checking, discrepancy waiver
         await page.locator('#gcash-open-session-btn').click();
+        await page.locator('#gcash-open-number').fill('09171234567');
         await page.locator('#gcash-open-cash').fill('1000');
         await page.locator('#gcash-open-wallet').fill('2000');
         await page.locator('#gcash-open-submit').click();
@@ -730,8 +732,6 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await page.locator('#gcash-funding-amount').fill('500');
         await page.locator('#gcash-funding-source').fill('Store safe');
         await page.locator('#gcash-funding-reason').fill('Replenish service cash drawer');
-        await page.locator('#gcash-funding-approver').fill('theme_admin');
-        await page.locator('#gcash-funding-password').fill(data.password);
         await page.locator('#gcash-funding-receipt').check();
         await page.locator('#gcash-funding-submit').click();
         await page.locator('#gcash-funding-dialog').waitFor({state: 'hidden'});

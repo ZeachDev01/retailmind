@@ -14,7 +14,7 @@ use Throwable;
  */
 final class AdminOverviewReport
 {
-    public const TABS = ['overview', 'transactions', 'reconciliation', 'unresolved', 'money'];
+    public const TABS = ['overview', 'transactions', 'reconciliation', 'sessions', 'unresolved', 'money'];
 
     public function __construct(
         private GCashLiveCustodySession $custody,

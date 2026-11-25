@@ -252,7 +252,7 @@ window.RetailMindInventoryDrafts = (() => {
             const panel = document.createElement('div'); panel.className = 'alert inventory-recovery-alert'; panel.setAttribute('role', 'note'); panel.dataset.recoveryId = draft.id;
             const slot = document.querySelector('[data-inventory-recovery-slot]');
             const label = slot && ({receiving_form: 'Unfinished receiving', 'add-product-form': 'Unfinished product'})[draft.id];
-            const text = document.createElement('span'); text.textContent = label || 'Unfinished inventory work (' + draft.id + '). ';
+            const text = document.createElement('span'); text.textContent = label || (draft.formId === 'stock-issue-form' ? 'Unfinished Stock Issue.' : 'Unfinished inventory work (' + draft.id + '). ');
             const actions = document.createElement('div'); actions.className = 'inventory-recovery-actions';
             const restore = document.createElement('button'); restore.type = 'button'; restore.className = 'btn btn-small'; restore.textContent = 'Resume';
             const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn btn-small btn-secondary'; remove.textContent = 'Discard';
@@ -264,7 +264,7 @@ window.RetailMindInventoryDrafts = (() => {
         } catch (_) { notice('A draft could not be unlocked. Sign in with its original account; do not clear browser data.', true); }
     }
     async function legacyDrafts() {
-        if (localStorage.getItem('retail_mind_add_product_state') || localStorage.getItem('retail_mind_add_product_step')) {
+        if (location.pathname.endsWith('/products.php') && (localStorage.getItem('retail_mind_add_product_state') || localStorage.getItem('retail_mind_add_product_step'))) {
             const panel = document.createElement('div'); panel.className = 'alert alert-warning'; panel.setAttribute('role', 'note'); panel.dataset.legacyProductDraft = '1';
             const text = document.createElement('p'); text.textContent = 'An older Product draft has no account owner and predates private storage. It cannot be restored safely on this shared device. It remains here until you explicitly discard it.';
             const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-small btn-secondary'; button.textContent = 'Discard older Product draft';

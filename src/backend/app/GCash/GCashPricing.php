@@ -72,7 +72,7 @@ final class GCashPricing
             'counter_collect' => (float)$fee,
             'cash_payout' => (float)$amount,
             'wallet_transfer' => 0.0,
-            'net_service_cash' => round(-($amount - $fee), 2),
+            'net_service_cash' => round(- ($amount - $fee), 2),
             'net_wallet' => (float)$amount,
         ];
     }

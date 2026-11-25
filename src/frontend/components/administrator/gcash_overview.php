@@ -112,9 +112,9 @@ $isFilteredActivity = $report->isFilteredActivity;
         </details>
         <?php endif; ?>
         <nav class="gcash-section-nav gcash-tablist" role="tablist" aria-label="GCash overview sections">
-            <?php foreach (['overview' => 'Overview', 'transactions' => 'Transactions', 'reconciliation' => 'Closing checks', 'unresolved' => 'Unresolved exchanges', 'money' => 'Service Fund Movements'] as $key => $label): ?>
+            <?php foreach (['overview' => 'Overview', 'transactions' => 'Transactions', 'reconciliation' => 'Closing checks', 'sessions' => 'GCash Sessions', 'unresolved' => 'Unresolved exchanges', 'money' => 'Service Fund Movements'] as $key => $label): ?>
                 <button type="button" role="tab" class="gcash-tab <?= $key === $activeTab ? 'active' : '' ?>" id="gcash-tab-<?= $key ?>" aria-controls="tab-<?= $key ?>" aria-selected="<?= $key === $activeTab ? 'true' : 'false' ?>" tabindex="<?= $key === $activeTab ? '0' : '-1' ?>">
-                    <i class="bi <?= ['overview' => 'bi-wallet2', 'transactions' => 'bi-arrow-left-right', 'reconciliation' => 'bi-journal-check', 'unresolved' => 'bi-clock-history', 'money' => 'bi-journal-text'][$key] ?>" aria-hidden="true"></i>
+                    <i class="bi <?= ['overview' => 'bi-wallet2', 'transactions' => 'bi-arrow-left-right', 'reconciliation' => 'bi-journal-check', 'sessions' => 'bi-clock-history', 'unresolved' => 'bi-clock-history', 'money' => 'bi-journal-text'][$key] ?>" aria-hidden="true"></i>
                     <?= $label ?>
                     <?php if ($key === 'transactions'): ?><span class="gcash-badge" data-fragment="transactions-badge"><?= $overview === null ? 'Unavailable' : (int)$overview['matching_record_count'] ?></span><?php endif; ?>
                     <?php if ($key === 'reconciliation'): ?><span class="gcash-badge" data-fragment="reconciliation-badge"><?= $overview === null ? 'Unavailable' : (int)$overview['differences_count'] . ' pending' ?></span><?php endif; ?>
@@ -232,6 +232,14 @@ $isFilteredActivity = $report->isFilteredActivity;
         <!-- SECTION 4: Reconciliation Differences -->
         <?php require __DIR__ . '/../../../backend/app/Views/gcash/reconciliation_panel.php'; ?>
 
+        </div>
+
+        <div id="tab-sessions" role="tabpanel" aria-labelledby="gcash-tab-sessions" tabindex="0" <?= $activeTab !== 'sessions' ? 'hidden' : '' ?>>
+            <?php if ($activeTab === 'sessions') {
+                $sessionHistoryCashierId = null;
+                $sessionHistoryPath = app_url('components/administrator/gcash_overview.php');
+                require __DIR__ . '/../../../backend/app/Views/gcash/session_history.php';
+            } ?>
         </div>
 
         <div id="tab-unresolved" role="tabpanel" aria-labelledby="gcash-tab-unresolved" tabindex="0" <?= $activeTab !== 'unresolved' ? 'hidden' : '' ?>>

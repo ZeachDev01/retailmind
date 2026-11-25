@@ -97,11 +97,18 @@ function fixture(action) {
             localStorage.setItem('retail_mind_add_product_step', '2');
         });
         await page.reload();
+        await page.getByRole('button', {name:'Resume', exact:true}).waitFor();
+        assert.equal(await page.locator('[data-legacy-product-draft]').count(), 0, 'Receiving does not offer an older Product draft');
+        await page.goto(origin + '/components/inventory_management/stock_issues.php');
+        await page.evaluate(() => RetailMindInventoryDrafts.restore('initialization-probe'));
+        assert.equal(await page.locator('[data-recovery-id], [data-legacy-product-draft]').count(), 0, 'Stock Issues does not offer Product or Receiving drafts');
+        await page.goto(origin + '/components/inventory_management/products.php');
         await page.getByRole('button', {name:'Discard older Product draft', exact:true}).waitFor();
         assert(!(await page.locator('body').innerText()).includes('Unowned private Product name'), 'Unowned legacy Product values are never rendered');
         assert(await page.evaluate(() => !!localStorage.getItem('retail_mind_add_product_state')), 'Unowned legacy data is retained until explicit Discard');
         assert(await page.evaluate(() => !!sessionStorage.getItem('receiving-draft:999')), 'Other operators legacy drafts are preserved');
         await page.getByRole('button', {name:'Discard older Product draft', exact:true}).click();
+        await page.goto(origin + '/components/report/stock_receiving.php');
         await resumeDraft();
         assert.equal(await page.locator('#supplier').inputValue(), 'Older private store');
         assert.equal(await page.locator('#received_qty').inputValue(), '4');

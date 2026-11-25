@@ -109,7 +109,7 @@ try {
             if ($openingCash === false || $openingCash < 0 || $openingWallet === false || $openingWallet < 0) {
                 throw new DomainException('Enter opening service cash and wallet balance (0 or greater).');
             }
-            $sessionId = $service->openSession($cashierId, (float)$openingCash, (float)$openingWallet);
+            $sessionId = $service->openSession($cashierId, (float)$openingCash, (float)$openingWallet, $input['wallet_number'] ?? null);
             $result = ['session_id' => $sessionId];
         } elseif (($input['action'] ?? '') === 'close_session') {
             $closingCash = filter_var($input['closing_cash'] ?? $input['closing_service_cash'] ?? null, FILTER_VALIDATE_FLOAT);

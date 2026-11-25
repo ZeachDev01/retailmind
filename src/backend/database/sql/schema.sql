@@ -905,6 +905,7 @@ CREATE TABLE `notifications` (
   `attention_count` int(11) DEFAULT NULL,
   `attention_destination` varchar(255) DEFAULT NULL,
   `resolved_at` datetime DEFAULT NULL,
+  `dismissed_at` datetime(6) DEFAULT NULL,
   `is_read` tinyint(1) DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`notification_id`),
@@ -1756,6 +1757,7 @@ CREATE TABLE `gcash_service_sessions` (
   `session_id` int NOT NULL AUTO_INCREMENT,
   `shift_id` int NOT NULL,
   `cashier_id` int NOT NULL,
+  `wallet_number` varchar(11) DEFAULT NULL,
   `opening_service_cash` decimal(12,2) NOT NULL DEFAULT '0.00',
   `opening_wallet_balance` decimal(12,2) NOT NULL DEFAULT '0.00',
   `opened_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1808,7 +1810,7 @@ CREATE TABLE `gcash_funding_movements` (
   `direction` enum('in','out') NOT NULL,
   `evidence_reference` varchar(120) DEFAULT NULL,
   `reason` varchar(255) NOT NULL,
-  `authorized_by` int NOT NULL,
+  `authorized_by` int DEFAULT NULL,
   `recorded_by` int NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `received_by` INT NULL,
@@ -1844,6 +1846,8 @@ CREATE TABLE `gcash_transactions` (
   `confirmed_wallet` tinyint(1) NOT NULL DEFAULT 0,
   `confirmed_cash` tinyint(1) NOT NULL DEFAULT 0,
   `notes` text DEFAULT NULL,
+  `customer_name` varchar(100) DEFAULT NULL,
+  `customer_gcash_number` varchar(11) DEFAULT NULL,
   `verification_status` enum('Pending','Verified','Rejected','Completed','Needs checking') NOT NULL DEFAULT 'Pending',
   `verified_by` int DEFAULT NULL,
   `verification_note` varchar(500) DEFAULT NULL,
@@ -2161,6 +2165,8 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100003_
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611020001_ml_jobs_evidence_cutoff','Add evidence_cutoff and model_version columns to ml_jobs for logical work deduplication') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611020003_forecasting_schedule_policy_defaults','Correct conflicting 23:00 forecasting schedule default to accepted 01:00 policy') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611030001_notification_resolution','Retain resolution for each notification occurrence (#420)') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611250001_notification_dismissal','Track dismissal of read notifications') ON DUPLICATE KEY UPDATE description=VALUES(description);
+INSERT INTO schema_migrations (migration_key,description) VALUES ('202611250002_gcash_cashier_recording','Retain GCash customer and wallet details and allow direct service funding records') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611030002_retire_recovery_account_page','Point saved Recovery Account warnings to Protected Audit Records') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611090001_super_admin_single_workspace','Keep the Super Administrator account on platform governance only') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611100001_fiscal_period_scheduling','Allow scheduled future Fiscal Periods and opt-in automatic rollover') ON DUPLICATE KEY UPDATE description=VALUES(description);

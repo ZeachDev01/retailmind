@@ -177,8 +177,8 @@ $refuse(fn() => $service->recordFundingMovement(2, 'cashier', [
     'receipt_confirmed' => false,
 ]), '/receipt|confirmed/i');
 
-// 3. Refusal: approval alone cannot post money (wrong or missing approver)
-$refuse(fn() => $service->recordFundingMovement(2, 'cashier', [
+// Only the responsible Cashier can directly record funding.
+$refuse(fn() => $service->recordFundingMovement(4, 'cashier', [
     'movement_type' => 'replenishment',
     'fund_type' => 'cash',
     'direction' => 'in',
@@ -187,7 +187,7 @@ $refuse(fn() => $service->recordFundingMovement(2, 'cashier', [
     'approver_username' => 'admin_bob',
     'approver_password' => 'WrongPass',
     'receipt_confirmed' => true,
-]), '/credentials|password|authorization/i');
+]), '/responsibility/i');
 
 // 4. Refusal: Product drawer funding from another cashier's drawer or closed drawer
 // If Alice (user 2) has no open product shift/drawer (shift closed), transfer from drawer is refused.
@@ -207,7 +207,7 @@ $refuse(fn() => $service->recordFundingMovement(2, 'cashier', [
 // Reopen Alice shift 1
 $pdo->exec("UPDATE cashier_shifts SET status = 'open' WHERE shift_id = 1");
 
-// 5. Successful confirmed funding with supervisor approval:
+// Successful confirmed funding recorded directly by the responsible Cashier.
 $fundId = $service->recordFundingMovement(2, 'cashier', [
     'movement_type' => 'product_drawer_transfer',
     'fund_type' => 'cash',
@@ -215,13 +215,11 @@ $fundId = $service->recordFundingMovement(2, 'cashier', [
     'amount' => 500.0,
     'reason' => 'Transfer from own drawer to GCash cash',
     'evidence' => 'Slip-001',
-    'approver_username' => 'admin_bob',
-    'approver_password' => 'AdminPass@123',
     'receipt_confirmed' => true,
 ]);
 
 $fRow = $pdo->query("SELECT * FROM gcash_funding_movements WHERE movement_id = {$fundId}")->fetch(PDO::FETCH_ASSOC);
-$assert((int)$fRow['authorized_by'] === 1, 'Authorized by Admin Bob');
+$assert($fRow['authorized_by'] === null, 'Direct recording has no Administrator approver');
 $assert((int)$fRow['recorded_by'] === 2, 'Recorded by Alice');
 $assert((int)$fRow['receipt_confirmed'] === 1, 'Receipt confirmed');
 $assert((int)$fRow['received_by'] === 2, 'Received by responsible Cashier Alice');
@@ -230,7 +228,7 @@ $assert((int)$fRow['received_by'] === 2, 'Received by responsible Cashier Alice'
 $dMove = $pdo->query("SELECT * FROM cash_drawer_movements WHERE shift_id = 1 ORDER BY drawer_movement_id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
 $assert((float)$dMove['amount'] === 500.0, '500 taken from product drawer');
 
-// 6. Dual-role self-approval & receipt confirmation (Dan: user 3 is cashier and admin)
+// Dual-role staff record directly from the Cashier workspace.
 $pdo->exec("UPDATE gcash_service_sessions SET status = 'closed' WHERE session_id = 1");
 $pdo->exec("UPDATE cashier_shifts SET status = 'closed' WHERE shift_id = 1");
 
@@ -249,7 +247,7 @@ $danFundId = $service->recordFundingMovement(3, 'cashier', [
 ]);
 
 $danRow = $pdo->query("SELECT * FROM gcash_funding_movements WHERE movement_id = {$danFundId}")->fetch(PDO::FETCH_ASSOC);
-$assert((int)$danRow['authorized_by'] === 3, 'Authorized by Dan');
+$assert($danRow['authorized_by'] === null, 'Cashier recording does not claim Administrator approval');
 $assert((int)$danRow['recorded_by'] === 3, 'Recorded by Dan');
 $assert((int)$danRow['received_by'] === 3, 'Received by Dan');
 $assert((int)$danRow['receipt_confirmed'] === 1, 'Receipt confirmed by Dan');

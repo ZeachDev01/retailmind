@@ -229,7 +229,7 @@ final class StoreOperationsDashboardWorkspace
             ? "SELECT COUNT(*) FROM cashier_shifts WHERE status = 'closed' AND reviewed_at IS NULL AND (variance_review_required = 1 OR (variance_review_required IS NULL AND cash_variance IS NOT NULL AND cash_variance != 0 AND ABS(cash_variance) >= CAST(? AS DECIMAL(12,2))))"
             : "SELECT COUNT(*) FROM cashier_shifts WHERE status = 'closed' AND reviewed_at IS NULL AND cash_variance IS NOT NULL AND cash_variance != 0 AND ABS(cash_variance) >= CAST(? AS DECIMAL(12,2))";
         $cashVariances = $this->count($cashCountSql, [(float)$thresholds['cash_variance_amount']]);
-        $inventoryRisks = $this->count("SELECT COUNT(*) FROM inventory_adjustments WHERE status = 'pending'");
+        $inventoryRisks = $this->count("SELECT COUNT(*) FROM inventory_adjustments WHERE status IN ('pending', 'returned')");
         $period = $this->row("SELECT period_name, start_date, end_date, status FROM fiscal_periods WHERE status = 'open' ORDER BY end_date ASC LIMIT 1");
         $periodStatus = $period === [] ? 'not_configured' : ((string)$period['end_date'] < $now->format('Y-m-d') ? 'overdue' : 'open');
 
@@ -547,7 +547,7 @@ final class StoreOperationsDashboardWorkspace
         foreach ($this->rows(
             "SELECT ia.adjustment_id, ia.adjustment_qty, ia.adjustment_type, ia.reported_at, p.product_name
              FROM inventory_adjustments ia JOIN products p ON p.product_id = ia.product_id
-             WHERE ia.status = 'pending' AND (ia.reported_at <= ? OR ABS(ia.adjustment_qty) * p.cost_price >= CAST(? AS DECIMAL(12,2)))
+             WHERE ia.status IN ('pending', 'returned') AND (ia.reported_at <= ? OR ABS(ia.adjustment_qty) * p.cost_price >= CAST(? AS DECIMAL(12,2)))
              ORDER BY ia.reported_at ASC LIMIT 20",
             [$now->modify('-' . (float)$thresholds['inventory_overdue_hours'] . ' hours')->format('Y-m-d H:i:s'),
                 (float)$thresholds['inventory_high_value_amount']]
@@ -670,7 +670,7 @@ final class StoreOperationsDashboardWorkspace
     private function inventory(): array
     {
         return [
-            'escalated' => $this->count("SELECT COUNT(*) FROM inventory_adjustments WHERE status = 'pending'"),
+            'escalated' => $this->count("SELECT COUNT(*) FROM inventory_adjustments WHERE status IN ('pending', 'returned')"),
             'out_of_stock' => $this->count("SELECT COUNT(*) FROM products p JOIN inventory i ON i.product_id = p.product_id WHERE p.status = 'active' AND i.quantity_on_hand <= 0"),
             'low_stock' => $this->count("SELECT COUNT(*) FROM products p JOIN inventory i ON i.product_id = p.product_id WHERE p.status = 'active' AND i.quantity_on_hand > 0 AND i.quantity_on_hand <= p.reorder_level"),
         ];

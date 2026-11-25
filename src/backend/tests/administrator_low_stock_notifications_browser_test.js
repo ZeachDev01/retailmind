@@ -68,8 +68,9 @@ const query = sql => {
         await page.locator('#landing-login-password').fill(data.password);
         await Promise.all([page.waitForURL(url => !url.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
         await page.goto(origin + '/components/notification/notifications.php?category=low_stock&view=unread&batch=10');
-        assert.equal(await page.locator('.notification-item[data-notification-type="low_stock"]').filter({hasText: 'Theme Test Item'}).count(), 1,
-            'The Cashier Workspace receives the low-stock notification');
+        const cashierStock = page.locator('.notification-item[data-notification-type="low_stock"]').filter({hasText: 'Theme Test Item'});
+        assert.equal(await cashierStock.count(), 1, 'The Cashier Workspace receives the low-stock notification');
+        assert.equal(await cashierStock.locator('.notification-open-row').count(), 0, 'Cashier stock alerts do not open the restricted catalog');
         query('UPDATE inventory SET quantity_on_hand = 11 WHERE product_id = 1');
         await page.goto(origin + '/components/notification/notifications.php?category=low_stock&view=unread&batch=10');
         assert.equal(await page.locator('.notification-item[data-notification-type="low_stock"]').filter({hasText: 'Theme Test Item'}).count(), 0,

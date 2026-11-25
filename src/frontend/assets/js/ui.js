@@ -1317,7 +1317,7 @@
     qsa(".table-wrap table, .history-table-wrap table, .correction-table-wrap table, .gcash-table-wrap table", root || document).forEach((table) => {
       if (
         table.matches(".cart-table, .receipt-table, .refund-items-table, [data-no-ghost-rows]") ||
-        table.querySelector(".table-ghost-row, .history-empty, .cart-empty-cell")
+        table.querySelector(".table-ghost-row, .history-empty, .cart-empty-cell, td.dt-empty")
       ) {
         return;
       }

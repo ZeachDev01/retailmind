@@ -159,6 +159,9 @@ try {
                             <div class="u-text-right">
                                 <span class="issue-quantity-label"><?= $report['status'] === 'approved' ? 'Deducted' : 'Reported' ?></span>
                                 <div class="adjustment-qty"><?= htmlspecialchars($formatIssueQty($report)) ?></div>
+                                <?php if ($report['status'] === 'approved'): ?>
+                                    <small>Reported: <?= (int)($report['reported_qty'] ?? abs((int)$report['adjustment_qty'])) ?> <?= ($report['form'] ?? 'piece') === 'pack' ? 'packs' : 'pieces' ?></small>
+                                <?php endif; ?>
                                 <span class="adjustment-status <?= htmlspecialchars($report['status']) ?>">
                                     <?= htmlspecialchars(ucfirst($report['status'])) ?>
                                 </span>
@@ -167,7 +170,7 @@ try {
 
                         <div class="detail-hero-grid">
                             <div class="detail-metric-card">
-                                <span class="detail-metric-label">Cashier</span>
+                                <span class="detail-metric-label">Reported By</span>
                                 <span class="detail-metric-value"><?= htmlspecialchars($report['cashier_name']) ?></span>
                             </div>
                             <div class="detail-metric-card">
@@ -192,7 +195,7 @@ try {
 
                         <?php if (!empty($report['reason'])): ?>
                             <div class="detail-reason-box">
-                                <strong>Cashier note:</strong> <?= htmlspecialchars($report['reason']) ?>
+                                <strong>Issue reason:</strong> <?= htmlspecialchars($report['reason']) ?>
                             </div>
                         <?php endif; ?>
                         <?php if (!empty($report['review_notes'])): ?>
@@ -361,7 +364,7 @@ try {
                         <summary>Staff &amp; date filters</summary>
                         <div class="report-filter-grid u-mt-05">
                             <div class="form-group">
-                                <label for="filter-cashier">Cashier</label>
+                                <label for="filter-cashier">Reported by</label>
                                 <select name="cashier_id" id="filter-cashier">
                                     <option value="">All cashiers</option>
                                     <?php foreach ($cashiers as $cashierOption): ?>
@@ -421,7 +424,7 @@ try {
                                     <th scope="col">Category</th>
                                     <th scope="col">Qty</th>
                                     <th scope="col">Status</th>
-                                    <th scope="col">Cashier</th>
+                                    <th scope="col">Reported by</th>
                                     <th scope="col">Approver</th>
                                     <th scope="col">Reported</th>
                                     <th scope="col">Actions</th>

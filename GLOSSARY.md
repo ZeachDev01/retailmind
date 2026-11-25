@@ -12,6 +12,9 @@ _Avoid_: Super admin, main admin, owner account
 The ordinary account that governs one Store, including creating Staff Accounts and assigning their Workspaces.
 _Avoid_: Admin user, store manager, super admin
 
+**Audit Action Type**:
+The kind of event an Administrator can select in Operational Audit, such as Stock received or Cash refund issued. Several records may share an action type while retaining their own details.
+
 **Staff Account**:
 A login for a person who works in the Store, holding one or more Workspaces and created by an Administrator.
 _Avoid_: User account, employee login, cashier account
@@ -120,6 +123,10 @@ _Avoid_: Product sale, GCash product payment
 The customer-facing record of a completed GCash cash-in or cash-out exchange, identifying its principal, service fee, money exchanged, and GCash reference. An unfinished exchange does not qualify for this receipt.
 _Avoid_: Sale Receipt, payment verification
 
+**Held GCash Exchange**:
+A customer Cash-In or Cash-Out exchange awaiting checking or resolution. Any cash or wallet transfer already made remains part of its money history while the exchange is unfinished.
+_Avoid_: Held Product sale, completed exchange
+
 **GCash Service Cash**:
 The physical money kept in a dedicated cash box or pouch for GCash Services, separate from the product-sale drawer.
 _Avoid_: Product-sale cash, wallet balance
@@ -127,6 +134,10 @@ _Avoid_: Product-sale cash, wallet balance
 **GCash Service Wallet**:
 The single Store-owned GCash wallet dedicated to GCash Services. It is separate from personal wallets and accounts receiving Product payments.
 _Avoid_: Personal wallet, product-payment account
+
+**GCash Service Session**:
+The period during which one Cashier is responsible for the GCash Service Cash and Wallet, from opening or accepting a handover until closing or handing over custody.
+_Avoid_: Cashier Shift, GCash exchange
 
 **Service Fund Movement**:
 A recorded addition to or withdrawal from GCash Service Cash or the GCash Service Wallet, such as replenishment, owner capital, a product-drawer transfer, or shortage recovery. It is separate from a customer's Cash-In or Cash-Out exchange.
@@ -241,12 +252,28 @@ Aggregated analytical summaries of business performance (e.g. daily/weekly reven
 _Avoid_: Sales (when referring to the receipt lookup page)
 
 **Stock Issue**:
-A Cashier-submitted report that units were Damaged, Missing/Lost, Expired, or Other, reviewed and decided by an Inventory Manager.
+A record of units affected by damage, loss, expiry, or another stock issue. A Cashier reports it for an Inventory Manager's decision, or an Inventory Manager records the confirmed issue directly.
 _Avoid_: Damage report, damage claim, damage adjustment
 
 **Stock Issue Oversight**:
 The read-only audit view used by the Administrator to review Store-wide stock-issue lifecycle history and correction counts without mutating inventory.
 _Avoid_: Stock issue approval, inventory adjustment (when referring to administrator oversight)
+
+**Stock Issue Clarification**:
+A historical question or reply about an existing Stock Issue, retained as read-only evidence. New Stock Issues are recorded or decided without a clarification conversation.
+_Avoid_: Edit report, correction (when referring only to a question or reply)
+
+**Stock Issue Correction**:
+A change to the reported details of a Stock Issue, such as its issue type, stock form, quantity, or reason.
+_Avoid_: Reply (when referring to changing report details)
+
+**Verified Stock Issue Quantity**:
+The number of affected units confirmed by the Inventory Manager when recording or reviewing a Stock Issue. It may differ from the Cashier's reported quantity and is the quantity authorized for stock deduction.
+_Avoid_: Reported quantity (when referring to the manager's verified quantity)
+
+**Reported Stock Issue Quantity**:
+The quantity originally submitted by the Cashier for a Stock Issue, preserved after submission. It is distinct from the quantity verified by the Inventory Manager.
+_Avoid_: Verified quantity (when referring to the Cashier's original report)
 
 **Stock Receiving**:
 The Inventory Manager's record of goods brought into the Store, including bulk purchases made by the owner at a supermarket. Quantities may be entered as individual units or packs/cases; supplier and receipt details are optional, and no purchase request, purchase order, or Administrator approval is required. Only good items are recorded: damaged or rejected goods stay with the supplier and enter no stock, and damage found after receiving is reported as a Stock Issue.
@@ -366,6 +393,10 @@ _Avoid_: Pack selling price, selling price
 The price charged to a customer for one Base Unit. Markup may help determine it, but the Inventory Manager chooses the price.
 _Avoid_: Cost price, Sales Pack price
 
+**Confirmed Zero Cost**:
+A Product purchase cost explicitly confirmed as zero because the goods were received free. It is distinct from a cost that has not yet been entered or verified.
+_Avoid_: Missing cost, unknown cost, default zero cost
+
 **Sales Pack**:
 A sealed package containing a fixed number of a Product's Base Units, sold at a dedicated price cheaper than buying that number individually. It may have a barcode distinct from the individual piece barcode; unopened Sales Packs and loose pieces are counted separately within the same Product's stock.
 _Avoid_: Receiving Unit (when referring to a customer purchase)
@@ -418,6 +449,14 @@ _Avoid_: Custom icon component, unstandardized badge color
 **Attention Item**:
 An actionable store-wide or platform-level condition (such as overdue high-value Stock Issues, unreviewed cash variances, or approaching Fiscal Period closures) highlighted on an Administrator or Super Administrator dashboard for review. Normal waiting states and records of routine activity are not Attention Items.
 _Avoid_: Notification (when referring to dashboard alerts), Task, To-do
+
+**Notification Acknowledgement**:
+A staff member's read status for a Notification in the active Workspace. Marking a Notification as read preserves its history and the current status of any underlying condition.
+_Avoid_: Clear (when the intent is to mark as read), resolve alert
+
+**Notification Dismissal**:
+A staff member's choice to hide a read Notification that requires no further action from their active Workspace's All list. The linked business record and its history remain available.
+_Avoid_: Delete notification, resolve alert
 
 **Store Email Alert**:
 An automated transactional notification sent to designated store email addresses regarding operational events—such as critical system health, security actions, or consolidated stock summaries—once verified by a successful test email to the Store's official email address. It delivers actionable operational awareness outside the store without modifying recorded stock or shift custody.

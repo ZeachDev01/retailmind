@@ -2,15 +2,12 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { chromium } = require('playwright');
-const source = fs.readFileSync('src/frontend/components/cashier/stock_issues.php', 'utf8');
-const start = source.indexOf('        const productsApiUrl');
-const script = source.slice(start, source.indexOf('        function filterByStatus', start))
-    .replace(/<\?= json_encode\(\$productsApiUrl\) \?>/, "'/products'");
+const script = fs.readFileSync('src/frontend/assets/js/stock-issue-form.js', 'utf8');
 (async () => {
     const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE });
     try {
         const page = await browser.newPage();
-        await page.setContent(`<button id="idle">Stock issues</button><form id="stock-issue-form">
+        await page.setContent(`<button id="idle">Stock issues</button><form id="stock-issue-form" data-products-api="/products?scope=stock_issues">
             <input id="barcode-input"><input id="product-search" list="stock-issue-products"><datalist id="stock-issue-products"></datalist><input id="product_id" type="hidden">
             <input id="quantity" type="number"><textarea id="explanation"></textarea>
             <select id="category"><option value="damaged">Damaged</option></select><div id="type-info"></div>
@@ -61,7 +58,7 @@ const script = source.slice(start, source.indexOf('        function filterByStat
         assert.equal(await page.inputValue('#barcode-input'), '');
         assert.equal(await page.evaluate(() => requests.length), 4);
         await page.focus('#idle');
-        await page.evaluate(() => barcodeInput.disabled = true);
+        await page.evaluate(() => document.getElementById('barcode-input').disabled = true);
         await scan();
         assert.equal(await page.evaluate(() => requests.length), 4, 'no-shift gate is preserved');
         console.log('Stock issues keyboard scanning: passed');

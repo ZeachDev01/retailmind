@@ -86,13 +86,27 @@ const fixture = action => {
                     await fits('GCash transactions/' + viewport.width);
                 }
                 if (route === 'notification/notifications.php') {
-                    const review = page.getByRole('link', {name: 'Open Stock Issue', exact: true}).first();
+                    const review = page.getByRole('button', {name: 'Open Stock Issue', exact: true}).first();
                     assert(await review.isVisible(), 'Notification conditions offer drill-downs');
                     assert((await review.boundingBox()).height >= 44, 'Notification drill-down is touch sized');
-                    await review.tap();
+                    const row = page.locator('.notification-item').filter({has: review});
+                    const unreadBefore = Number(await page.locator('.notification-view-count').textContent());
+                    const wasUnread = await row.evaluate(el => el.classList.contains('unread'));
+                    assert.equal(wasUnread, viewport.width === 320);
+                    if (viewport.width === 390) {
+                        const category = row.locator('.notification-category');
+                        await category.scrollIntoViewIfNeeded();
+                        const bounds = await category.boundingBox();
+                        await page.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+                    } else {
+                        await review.tap();
+                    }
                     await page.waitForURL('**/administrator/stock_issues.php?detail=1');
                     assert.equal(new URL(page.url()).pathname, '/components/administrator/stock_issues.php', 'Administrator notification opens read-only oversight');
                     await page.getByRole('heading', {name: 'Report #1', exact: true}).waitFor({state: 'visible'});
+                    await visit('notification/notifications.php');
+                    assert.equal(Number(await page.locator('.notification-view-count').textContent()), unreadBefore - Number(wasUnread));
+                    assert.equal(await row.locator('.btn-mark-read').count(), 0, 'Opened Stock Issue is acknowledged');
                 }
                 if (route === 'report/report_generation.php?report=gross_profit') {
                     assert(await page.locator('#at-a-glance-summary').isVisible());

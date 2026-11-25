@@ -216,6 +216,11 @@ foreach ([58,80] as $width) {
         'refund rendering uses shared thermal width and currency');
     $assert(str_contains($gcashHtml,'data-paper-width-mm="'.$width.'"') && str_contains($gcashHtml,'0000000000901')
         && str_contains($gcashHtml,'₱105.00'), 'GCash rendering preserves reference and customer amounts at either width');
+    foreach ([$cashIn, $cashOut, $walletFee] as $gcashReceipt) {
+        ob_start(); ReceiptEngine::renderGCash($gcashReceipt,$width); $html = ob_get_clean();
+        $assert(!str_contains($html, '<svg') && str_contains($html, $gcashReceipt['reference_number']),
+            'Every GCash receipt renders its reference as text without a barcode at either width');
+    }
 }
 $logo = 'data:image/png;base64,' . base64_encode(base64_decode('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAgCAIAAAAt/+nTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAU0lEQVRYhe3YsQkAIAwFUb+4/8pxArEQPAL3WpscFoGkqkZnkx7glQE0A2gG0NbpIcnPOa5O+6r9DxhAM4BmAM0AmgE0A2gG0OJdCGYAzQCaAbQNoAsJO3lArLgAAAAASUVORK5CYII='));
 $expectedLogo = \App\Receipts\ReceiptLogo::source($logo);

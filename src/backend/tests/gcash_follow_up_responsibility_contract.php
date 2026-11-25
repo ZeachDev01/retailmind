@@ -51,6 +51,7 @@ $pdo->exec("
     );
 
     CREATE TABLE gcash_service_sessions (
+        wallet_number TEXT,
         session_id INTEGER PRIMARY KEY AUTOINCREMENT,
         shift_id INTEGER,
         cashier_id INTEGER,
@@ -164,7 +165,7 @@ $pdo->exec("
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     INSERT INTO fiscal_periods (period_code, period_name, start_date, end_date, status)
-    VALUES ('FP-2026-10', 'October 2026', '2026-10-01', '2026-10-31', 'open');
+    VALUES ('FIXTURE', 'Fixture period', '2020-01-01', '2099-12-31', 'open');
 ");
 
 $assert = static function (bool $condition, string $message): void {

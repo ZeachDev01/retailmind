@@ -139,7 +139,7 @@
 #gcash-admin-workspace .gcash-type-pills [aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: #fff; }
 #gcash-admin-workspace .gcash-table-wrap { min-height: 0; max-height: min(64dvh, 560px); overflow: auto; border: 0; border-radius: 0; scrollbar-color: var(--border) transparent; background: var(--card-bg, #fff); }
 #gcash-admin-workspace .gcash-table-wrap table { width: 100%; border-collapse: collapse; margin: 0; }
-#gcash-admin-workspace .gcash-table-wrap th { position: sticky; top: 0; z-index: 1; background: var(--theme-surface-soft, #f8fafc); color: var(--muted); font-size: .8125rem; font-weight: 600; text-transform: none; letter-spacing: normal; white-space: nowrap; border-bottom: 1px solid var(--border); }
+#gcash-admin-workspace .gcash-table-wrap thead th { position: sticky; top: 0; z-index: 1; background: var(--theme-surface-soft, #f8fafc); color: var(--muted); font-size: .8125rem; font-weight: 600; text-transform: none; letter-spacing: normal; white-space: nowrap; border-bottom: 1px solid var(--border); }
 #gcash-admin-workspace .gcash-table-wrap td { font-size: .95rem; line-height: 1.45; font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--border); }
 #gcash-admin-workspace .gcash-table-wrap th, #gcash-admin-workspace .gcash-table-wrap td { padding: .75rem .85rem; vertical-align: middle; }
 #gcash-admin-workspace .gcash-table-wrap th:first-child, #gcash-admin-workspace .gcash-table-wrap td:first-child { padding-left: .875rem; }

@@ -9,6 +9,7 @@ require_any_capability([
 $actorRole = (string)current_role();
 $userFilter = trim((string)($_GET['user_id'] ?? ''));
 $actionFilter = trim((string)($_GET['action'] ?? ''));
+$actionTypeFilter = trim((string)($_GET['action_type'] ?? ''));
 $categoryFilter = trim((string)($_GET['category'] ?? ''));
 $moduleFilter = trim((string)($_GET['module'] ?? ''));
 $dateFrom = trim((string)($_GET['date_from'] ?? ''));
@@ -23,6 +24,7 @@ if ($isExport) {
     verify_csrf_token($_POST['csrf_token'] ?? '');
     $userFilter = trim((string)($_POST['user_id'] ?? ''));
     $actionFilter = trim((string)($_POST['action_filter'] ?? ''));
+    $actionTypeFilter = trim((string)($_POST['action_type'] ?? ''));
     $categoryFilter = trim((string)($_POST['category'] ?? ''));
     $moduleFilter = trim((string)($_POST['module'] ?? ''));
     $dateFrom = trim((string)($_POST['date_from'] ?? ''));
@@ -37,6 +39,7 @@ $protectedAuditRecords = new \App\Audit\ProtectedAuditRecordService($pdo, role_c
 $auditFilters = [
     'user_id' => $userFilter,
     'action' => $actionFilter,
+    'action_type' => $actionTypeFilter,
     'category' => $categoryFilter,
     'module' => $moduleFilter,
     'date_from' => $dateFrom,
@@ -96,7 +99,7 @@ function audit_log_action_class(string $action): string
 function audit_log_category_filter_url(string $category): string
 {
     $query = [];
-    foreach (['user_id', 'action', 'module', 'date_from', 'date_to'] as $key) {
+    foreach (['user_id', 'action', 'action_type', 'module', 'date_from', 'date_to'] as $key) {
         if (isset($_GET[$key]) && is_scalar($_GET[$key]) && trim((string)$_GET[$key]) !== '') {
             $query[$key] = trim((string)$_GET[$key]);
         }
@@ -298,8 +301,9 @@ $matchingRecordCount = $protectedAuditRecords->count($actorRole, $auditFilters);
 $activeUserCount = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE status = 'active'")->fetchColumn();
 $modules = $protectedAuditRecords->modules($actorRole, ['category' => $categoryFilter]);
 $actions = $protectedAuditRecords->actions($actorRole, ['category' => $categoryFilter, 'module' => $moduleFilter]);
-if ($actionFilter !== '' && !in_array($actionFilter, $actions, true)) {
-    array_unshift($actions, $actionFilter);
+$selectedAction = $actorRole === 'admin' ? $actionTypeFilter : $actionFilter;
+if ($selectedAction !== '' && !in_array($selectedAction, $actions, true)) {
+    array_unshift($actions, $selectedAction);
 }
 $canViewPlatformAudit = has_capability(\App\Authorization\RoleCapabilityPolicy::VIEW_PLATFORM_AUDIT);
 $pageTitle = $canViewPlatformAudit ? 'Protected Audit Records' : 'Operational Audit';
@@ -316,6 +320,9 @@ if ($categoryFilter !== '') {
 }
 if ($actionFilter !== '') {
     $activeFilters[] = ['label' => 'Action', 'value' => $actionFilter];
+}
+if ($actionTypeFilter !== '') {
+    $activeFilters[] = ['label' => 'Action type', 'value' => $actionTypeFilter];
 }
 if ($userFilter !== '') {
     $activeFilters[] = ['label' => 'User', 'value' => $userFilter];
@@ -364,6 +371,7 @@ if ($hasStoreConfigurationNav) {
                     <input type="hidden" name="action" value="export_csv">
                     <input type="hidden" name="user_id" id="exportUserFilter" value="<?= htmlspecialchars($userFilter) ?>">
                     <input type="hidden" name="action_filter" id="exportActionFilter" value="<?= htmlspecialchars($actionFilter) ?>">
+                    <input type="hidden" name="action_type" value="<?= htmlspecialchars($actionTypeFilter) ?>">
                     <input type="hidden" name="category" id="exportCategoryFilter" value="<?= htmlspecialchars($categoryFilter) ?>">
                     <input type="hidden" name="module" id="exportModuleFilter" value="<?= htmlspecialchars($moduleFilter) ?>">
                     <input type="hidden" name="date_from" id="exportDateFrom" value="<?= htmlspecialchars($dateFrom) ?>">
@@ -496,10 +504,10 @@ if ($hasStoreConfigurationNav) {
                     </div>
                     <div class="form-group">
                         <label for="audit-history-action">Action</label>
-                        <select id="audit-history-action" name="action">
+                        <select id="audit-history-action" name="<?= $canViewPlatformAudit ? 'action' : 'action_type' ?>">
                             <option value="">All actions</option>
                             <?php foreach ($actions as $action): ?>
-                            <option value="<?= htmlspecialchars($action) ?>" <?= $actionFilter === $action ? 'selected' : '' ?>><?= htmlspecialchars($action) ?></option>
+                            <option value="<?= htmlspecialchars($action) ?>" <?= $selectedAction === $action ? 'selected' : '' ?>><?= htmlspecialchars($action) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -549,9 +557,10 @@ if ($hasStoreConfigurationNav) {
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             var historyFilters = document.getElementById('auditHistoryFilters');
+            var historyAction = document.getElementById('audit-history-action');
             historyFilters.addEventListener('change', function(event) {
                 if (event.target.name === 'category') historyFilters.elements.module.value = '';
-                if (event.target.name !== 'action') historyFilters.elements.action.value = '';
+                if (event.target !== historyAction) historyAction.value = '';
                 historyFilters.requestSubmit();
             });
             var reviewForm = document.getElementById('signInReviewForm');

@@ -21,7 +21,8 @@ const output = fs.mkdtempSync(path.join(os.tmpdir(), 'retailmind-audit-filters-'
                 $userFilter = '4'; $dateFrom = '2026-11-01'; $dateTo = '2026-11-11';
                 $categoryFilter = ''; $moduleFilter = 'Inventory'; $actionFilter = 'Physical stock reconciliation';
                 $modules = ['Inventory', 'Sales'];
-                $actions = ['Physical stock reconciliation', 'Product created'];
+                $selectedAction = 'Physical stock reconciliation';
+                $actions = ['Physical stock reconciliation', 'Product created', 'Stock received'];
                 ?>${form}`});
             for (const width of [1440,390]) {
                 const page = await browser.newPage({viewport:{width,height:900}});
@@ -37,14 +38,16 @@ const output = fs.mkdtempSync(path.join(os.tmpdir(), 'retailmind-audit-filters-'
                 await page.addScriptTag({content:script});
                 assert.equal(await page.getByLabel('Action',{exact:true}).inputValue(),'Physical stock reconciliation');
                 assert.equal(await page.getByLabel('Category',{exact:true}).count(),role === 'super_admin' ? 1 : 0,'Store audit does not offer platform categories');
-                await page.getByLabel('Action',{exact:true}).selectOption('Product created');
+                const actionKey = role === 'admin' ? 'action_type' : 'action';
+                const nextAction = role === 'admin' ? 'Stock received' : 'Product created';
+                await page.getByLabel('Action',{exact:true}).selectOption(nextAction);
                 const selected = await page.evaluate(() => submissions.at(-1));
-                assert.equal(selected.action,'Product created','Action selection submits immediately');
+                assert.equal(selected[actionKey],nextAction,'Action selection submits immediately');
                 assert.equal(selected.user_id,'4');
                 assert.equal(selected.date_from,'2026-11-01');
                 assert.equal(selected.date_to,'2026-11-11');
                 await page.getByLabel('Module',{exact:true}).selectOption('Sales');
-                assert.equal(await page.evaluate(() => submissions.at(-1).action),'','Changing module clears the prior action');
+                assert.equal(await page.evaluate(key => submissions.at(-1)[key], actionKey),'','Changing module clears the prior action');
                 if (role === 'super_admin') {
                     await page.getByLabel('Action',{exact:true}).selectOption('Product created');
                     await page.getByLabel('Category',{exact:true}).selectOption('security');
