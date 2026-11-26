@@ -63,6 +63,8 @@ const server = http.createServer((req, res) => {
             assert.equal(await selector.inputValue(), '15');
             assert.equal(await page.locator('tbody tr:visible').count(), 15);
             assert.equal(await footer.getByRole('button', {name: 'Apply'}).count(), 0);
+            assert(await footer.locator('.rm-page-size').evaluate(el => el.previousElementSibling.textContent.trim() === '1'), 'Page-size dropdown follows page 1');
+            assert.doesNotMatch(await footer.locator('.rm-page-size').innerText(), /entries per page/i);
             await footer.getByRole(route === '/' ? 'link' : 'button', {name: 'Next page', exact: true}).or(footer.getByRole('link', {name: 'Next', exact: true})).click();
             assert.match(await page.locator('tbody tr:visible').first().innerText(), /Record 16/);
             await selector.selectOption('25');
@@ -71,20 +73,48 @@ const server = http.createServer((req, res) => {
             if (route === '/') assert.equal(new URL(page.url()).searchParams.get('q'), 'saved-filter');
             await selector.selectOption('15');
             await page.waitForFunction(() => document.querySelectorAll('tbody tr:not([hidden])').length === 15);
-            for (const theme of ['light', 'dark']) for (const width of [1440, 1024, 768, 390, 320]) {
+            assert.equal(await footer.locator('select').count(), 1, 'Redraw keeps one page-size dropdown');
+            if (route === '/client') {
+                await footer.getByRole('button', {name: 'Page 1', exact: true}).focus();
+                await page.keyboard.press('Tab');
+                assert(await selector.evaluate(el => el === document.activeElement), 'Keyboard order reaches dropdown after page 1');
+                await selector.selectOption('25');
+                assert(await selector.evaluate(el => el === document.activeElement), 'Page-size change preserves keyboard focus');
+                await selector.selectOption('15');
+            }
+            for (const theme of ['light', 'dark']) for (const width of [1440, 1280, 1181, 1024, 820, 768, 390, 320]) {
                 await page.setViewportSize({width, height: 900});
                 await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
                 assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${route}/${theme}/${width}: no overflow`);
                 assert(await footer.locator('a, button, select').evaluateAll(controls => controls.every(control => control.getBoundingClientRect().height >= 44)), '44px targets');
                 {
-                    const bounds = await footer.evaluate(el => {
-                        const box = el.getBoundingClientRect(), select = el.querySelector('label').getBoundingClientRect();
-                        return Math.abs(box.x + box.width / 2 - select.x - select.width / 2);
+                    const layout = await footer.evaluate(el => {
+                        const box = el.getBoundingClientRect(), size = el.querySelector('.rm-page-size').getBoundingClientRect();
+                        const buttons = [...el.querySelector('nav').children].map(button => button.getBoundingClientRect());
+                        const summary = el.firstElementChild.getBoundingClientRect();
+                        return {
+                            controlsInRow: buttons.every(button => Math.abs(button.y - buttons[0].y) <= 1),
+                            summaryAligned: Math.abs(summary.y + summary.height / 2 - size.y - size.height / 2) <= 1,
+                            separate: summary.right <= buttons[0].x,
+                            contained: buttons.every(button => button.x >= box.x && button.right <= box.right),
+                        };
                     });
-                    assert(bounds <= 2, 'Selector is centered');
+                    assert(layout.contained, `${route}/${theme}/${width}: navigation stays within footer`);
+                    if (width >= 768) {
+                        assert(layout.controlsInRow, `${route}/${theme}/${width}: pagination stays on one row`);
+                        assert(layout.summaryAligned, 'Summary aligns with pagination on desktop and tablet');
+                        assert(layout.separate, 'Summary does not overlap pagination');
+                    }
                 }
-                if ([1440, 390].includes(width)) await page.screenshot({path: path.join(output, `${route === '/' ? 'server' : 'client'}-${theme}-${width}.png`), fullPage: true});
+                if ([1440, 1280, 1024, 768, 390].includes(width)) await footer.screenshot({path: path.join(output, `${route === '/' ? 'server' : 'client'}-${theme}-${width}.png`)});
             }
+            await page.setViewportSize({width: 1440, height: 900});
+            await page.locator('main').evaluate(el => { el.style.width = '720px'; });
+            assert(await footer.locator('nav').evaluate(el => {
+                const buttons = [...el.children].map(button => button.getBoundingClientRect());
+                return buttons.every(button => Math.abs(button.y - buttons[0].y) <= 1);
+            }), 'Narrow panel uses tablet layout even on desktop');
+            await page.locator('main').evaluate(el => { el.style.removeProperty('width'); });
         }
         await page.goto(origin + '/?page=999&length=10');
         assert.match(await page.locator('tbody tr:visible').first().innerText(), /Record 81/);

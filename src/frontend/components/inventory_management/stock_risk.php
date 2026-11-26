@@ -28,15 +28,13 @@ if (isset($pdo) && $pdo instanceof PDO && function_exists('get_store_settings'))
 }
 $movementWeeks = $movementPeriod['weeks'];
 $weeklyTotals = array_fill(0, count($movementWeeks), 0);
-$coverageCounts = ['complete' => 0, 'partial' => 0, 'unavailable' => 0, 'unknown' => 0];
+$coverageCounts = ['complete' => 0, 'limited' => 0];
 foreach ($riskRows as $row) {
     foreach ($row['weekly_sales'] ?? [] as $week => $units) {
         $weeklyTotals[$week] += (int)$units;
     }
     $coverage = array_column($row['sales_periods'], 'coverage');
-    $key = in_array('unknown', $coverage, true) ? 'unknown'
-        : (array_diff($coverage, ['complete']) === [] ? 'complete'
-        : (array_diff($coverage, ['unavailable']) === [] ? 'unavailable' : 'partial'));
+    $key = array_diff($coverage, ['complete']) === [] ? 'complete' : 'limited';
     $coverageCounts[$key]++;
 }
 $topMovers = $riskRows;
@@ -46,7 +44,7 @@ $movementChartData = [
     'weekly' => ['labels' => array_column($movementWeeks, 'label'), 'values' => $weeklyTotals],
     'top' => ['labels' => array_map(static fn(array $row): string => $row['product_name'], $topMovers),
         'values' => array_map(static fn(array $row): int => (int)$row['total_sales'], $topMovers)],
-    'coverage' => ['labels' => ['Complete', 'Partial', 'History unavailable', 'Coverage unknown'],
+    'coverage' => ['labels' => ['Complete history', 'Limited history'],
         'values' => array_values($coverageCounts)],
 ];
 ?>
@@ -70,9 +68,9 @@ $movementChartData = [
                 <div class="sr-card-chart"><canvas id="movement-chart-top" role="img" aria-label="Five products with the most units sold in 90 days"></canvas></div>
             </div>
             <div class="overview-chart-card">
-                <div class="overview-chart-header"><div><h3>History coverage</h3></div><span class="info-tooltip"><button class="info-tooltip-trigger" type="button" aria-label="About sales history coverage" aria-describedby="movement-coverage-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="tooltip-box" id="movement-coverage-help" role="tooltip"><?= htmlspecialchars($coverageNote) ?></span></span></div>
+                <div class="overview-chart-header"><div><h3>Product history</h3></div><span class="info-tooltip"><button class="info-tooltip-trigger" type="button" aria-label="About product history" aria-describedby="movement-coverage-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="tooltip-box" id="movement-coverage-help" role="tooltip">Complete history covers the full 90-day review. Limited history covers fewer than 90 days or has an unknown start date. Open product details for the reason.</span></span></div>
                 <div class="sr-coverage">
-                    <div class="sr-card-chart"><canvas id="movement-chart-coverage" role="img" aria-label="Products grouped by how much of the 90-day review is recorded"></canvas></div>
+                    <div class="sr-card-chart"><canvas id="movement-chart-coverage" role="img" aria-label="Products with enough or limited history for the 90-day review"></canvas></div>
                     <ul class="sr-coverage-counts">
                         <?php foreach ($movementChartData['coverage']['labels'] as $i => $coverageLabel): ?>
                             <li><span><?= htmlspecialchars($coverageLabel) ?></span><strong><?= (int)$movementChartData['coverage']['values'][$i] ?></strong></li>
@@ -84,6 +82,7 @@ $movementChartData = [
         <div class="sr-tools">
             <label class="sr-search"><span class="sr-only">Search Stock Movement products</span><i class="bi bi-search" aria-hidden="true"></i><input type="search" id="risk-search" placeholder="Search products" aria-controls="risk-table-body" autocomplete="off"></label>
             <label><span class="sr-only">Stock</span><select id="movement-stock" aria-label="Stock"><option value="in-stock">With stock</option><option value="all">All products</option></select></label>
+            <label><span class="sr-only">Status</span><select id="movement-status" aria-label="Status" aria-controls="risk-table-body"><option value="all">All statuses</option><?php foreach ($movementLabels as $kind => $label): ?><option value="<?= htmlspecialchars($kind) ?>"><?= htmlspecialchars($label) ?></option><?php endforeach; ?></select></label>
         </div>
         <p id="movement-report-status" class="sr-caption" role="status"></p>
         <label class="sr-mobile-sort" for="risk-sort-mobile">Sort products<select id="risk-sort-mobile" aria-label="Sort products"><option value="days">Selling days: low to high</option><option value="name">Product A–Z</option><option value="stock">Stock: high to low</option><option value="sales">Latest units sold: low to high</option></select></label>
@@ -104,7 +103,7 @@ $movementChartData = [
                 $trendLabel = $row['trend'] === null ? 'Unavailable' : ($row['trend'] > 0 ? 'Nisaka' : ($row['trend'] < 0 ? 'Nihinay' : 'Pareho'));
                 $trendIcon = $row['trend'] > 0 ? 'arrow-up-right' : ($row['trend'] < 0 ? 'arrow-down-right' : 'arrow-right');
             ?>
-            <tr data-risk-row data-product-id="<?= $id ?>" data-name="<?= htmlspecialchars($row['product_name']) ?>" data-stock="<?= (int)$row['quantity_on_hand'] ?>" data-sales="<?= $row['recent_sales'] ?>" data-days="<?= $row['selling_days'] ?>" data-search="<?= htmlspecialchars(strtolower($row['product_name'] . ' ' . ($row['sku'] ?? '') . ' ' . ($row['category_name'] ?? ''))) ?>">
+            <tr data-risk-row data-movement-status="<?= htmlspecialchars($row['movement_kind']) ?>" data-product-id="<?= $id ?>" data-name="<?= htmlspecialchars($row['product_name']) ?>" data-stock="<?= (int)$row['quantity_on_hand'] ?>" data-sales="<?= $row['recent_sales'] ?>" data-days="<?= $row['selling_days'] ?>" data-search="<?= htmlspecialchars(strtolower($row['product_name'] . ' ' . ($row['sku'] ?? '') . ' ' . ($row['category_name'] ?? ''))) ?>">
                 <td><div class="sr-product"><button type="button" class="sr-product-link" data-risk-review="<?= $id ?>" aria-haspopup="dialog" aria-controls="movement-drawer" aria-expanded="false" aria-label="View details for <?= htmlspecialchars($row['product_name']) ?>"><?= htmlspecialchars($row['product_name']) ?></button><span><?= htmlspecialchars($row['sku'] ?? '') ?></span></div></td>
                 <td class="sr-num" data-label="Stock"><?= number_format((int)$row['quantity_on_hand']) ?></td>
                 <td class="sr-num" data-label="90-day sales"><?= array_diff(array_column($row['sales_periods'], 'coverage'), ['unavailable']) === [] ? '—' : number_format((int)$row['total_sales']) ?></td>
@@ -114,7 +113,7 @@ $movementChartData = [
                 <td class="sr-row-action"><button type="button" class="sr-review" data-risk-review="<?= $id ?>" aria-label="Open details for <?= htmlspecialchars($row['product_name']) ?>" aria-haspopup="dialog" aria-expanded="false" aria-controls="movement-drawer"><i class="bi bi-chevron-right" aria-hidden="true"></i></button></td>
             </tr>
             <?php endforeach; ?>
-            <tr id="risk-empty" <?= $riskRows ? 'hidden' : '' ?>><td colspan="7"><div class="sr-empty"><strong>No matching products</strong><p>Try another search or stock filter.</p></div></td></tr>
+            <tr id="risk-empty" <?= $riskRows ? 'hidden' : '' ?>><td colspan="7"><div class="sr-empty"><strong>No matching products</strong><p>Try another search, stock or status filter.</p></div></td></tr>
             </tbody>
         </table>
         </div>
@@ -130,7 +129,7 @@ $movementChartData = [
                 <p class="sr-report-scope"></p>
                 <?php if (trim((string)($_SESSION['display_name'] ?? '')) !== ''): ?><p class="sr-report-preparer">Prepared by <?= htmlspecialchars($_SESSION['display_name']) ?></p><?php endif; ?>
             </header>
-            <h2 class="sr-report-heading">Product breakdown</h2>
+            <h2 class="sr-report-heading">Sales history</h2>
             <div class="sr-table-scroll" role="region" aria-label="Summary" tabindex="0">
                 <table class="sr-table" aria-label="Stock Movement summary">
                     <colgroup span="2"></colgroup><colgroup span="3"></colgroup><colgroup span="2"></colgroup>
@@ -138,7 +137,7 @@ $movementChartData = [
                         <tr>
                             <th rowspan="2" scope="col">Product</th>
                             <th rowspan="2" scope="col" class="sr-num">Stock now</th>
-                            <th colspan="3" scope="colgroup" class="sr-report-units">Units sold (base units) and selling days</th>
+                            <th colspan="3" scope="colgroup" class="sr-report-units">Units sold · Days with sales</th>
                             <th rowspan="2" scope="col">Status</th>
                             <th rowspan="2" scope="col">Trend</th>
                         </tr>
@@ -155,14 +154,14 @@ $movementChartData = [
                             $trendIcon = $trend > 0 ? 'arrow-up-right' : ($trend < 0 ? 'arrow-down-right' : 'arrow-right');
                         ?>
                         <tr data-product-id="<?= (int)$row['product_id'] ?>">
-                            <th scope="row"><div class="sr-product"><?= htmlspecialchars($row['product_name']) ?><span><?= htmlspecialchars(implode(' · ', array_filter([$row['sku'] ?? '', $row['category_name'] ?? 'Uncategorized'], 'strlen'))) ?></span></div></th>
+                            <th scope="row"><div class="sr-product"><?= htmlspecialchars($row['product_name']) ?><span><?= htmlspecialchars($row['sku'] ?? '') ?></span></div></th>
                             <td class="sr-num"><?= number_format((int)$row['quantity_on_hand']) ?></td>
                             <?php foreach ($row['sales_periods'] as $salesPeriod):
-                                $coverageLabel = $coverageLabels[$salesPeriod['coverage']];
+                                $coverageLabel = ['complete' => '', 'partial' => 'Partial', 'unavailable' => 'No history', 'unknown' => 'Unknown'][$salesPeriod['coverage']];
                             ?>
                                 <td class="sr-num">
                                     <?= $salesPeriod['units_sold'] === null ? '—' : number_format($salesPeriod['units_sold']) ?>
-                                    <?php if ($salesPeriod['selling_days'] !== null): ?><span class="sr-caption"><?= $salesPeriod['selling_days'] ?> selling <?= $salesPeriod['selling_days'] === 1 ? 'day' : 'days' ?></span><?php endif; ?>
+                                    <?php if ($salesPeriod['selling_days'] !== null): ?><span class="sr-caption"><?= $salesPeriod['selling_days'] ?> <?= $salesPeriod['selling_days'] === 1 ? 'day' : 'days' ?></span><?php endif; ?>
                                     <?php if ($coverageLabel !== ''): ?><span class="sr-caption"><?= htmlspecialchars($coverageLabel) ?></span><?php endif; ?>
                                 </td>
                             <?php endforeach; ?>
@@ -173,18 +172,18 @@ $movementChartData = [
                     </tbody>
                 </table>
             </div>
-            <h2 class="sr-report-heading">Stock flow <span class="sr-caption">· Latest 30 days</span></h2>
+            <h2 class="sr-report-heading">Stock flow <span class="sr-caption">· <?= htmlspecialchars($movementPeriod['label']) ?></span></h2>
             <div class="sr-table-scroll" role="region" aria-label="Stock flow" tabindex="0">
                 <table class="sr-table" aria-label="Stock flow for the latest 30 days">
                     <thead><tr>
                         <th scope="col">Product</th>
-                        <?php foreach ($stockFlowColumns as $label): ?><th scope="col" class="sr-num"><?= htmlspecialchars($label) ?></th><?php endforeach; ?>
+                        <?php foreach (['Opening', 'Received', 'Sales (−)', 'Returned', 'Other (+/−)', 'Closing'] as $label): ?><th scope="col" class="sr-num"><?= htmlspecialchars($label) ?></th><?php endforeach; ?>
                     </tr></thead>
                     <tbody>
                         <?php foreach ($riskRows as $row): ?>
                             <tr data-product-id="<?= (int)$row['product_id'] ?>">
                                 <th scope="row"><div class="sr-product"><?= htmlspecialchars($row['product_name']) ?><span><?= htmlspecialchars($row['sku'] ?? '') ?></span>
-                                    <?php if (-$row['sale_out'] !== $row['recent_sales']): ?><span>Sales and stock movement differ</span><?php endif; ?>
+                                    <?php if (-$row['sale_out'] !== $row['recent_sales']): ?><span>Sales and stock movement differ. Review records.</span><?php endif; ?>
                                 </div></th>
                                 <?php foreach ($stockFlowColumns as $key => $label): ?><td class="sr-num"><?= number_format($row[$key]) ?></td><?php endforeach; ?>
                             </tr>
@@ -193,10 +192,12 @@ $movementChartData = [
                 </table>
             </div>
             <section class="sr-report-notes">
-                <h2 class="sr-report-heading">Report notes</h2>
-                <p class="sr-caption">Three consecutive 30-day periods end yesterday in Philippine time. Today's sales are excluded.</p>
-                <p class="sr-caption"><?= htmlspecialchars($coverageNote) ?></p>
-                <?php foreach ($calculationNotes as $note): ?><p class="sr-caption"><?= htmlspecialchars($note) ?></p><?php endforeach; ?>
+                <h2 class="sr-report-heading">Notes</h2>
+                <p class="sr-caption"><strong>Figures.</strong> Base units, packs converted. Sales end yesterday (PHT), before refunds; stock now includes today. Days count dates with sales. Forecast-only imports are excluded.</p>
+                <p class="sr-caption"><strong>Key.</strong> 0 = no recorded sales; — = unavailable. Partial = created during period; No history = before creation; Unknown = creation date missing.</p>
+                <p class="sr-caption"><strong>Status.</strong> Latest 30 days: Fast = 10–30 selling days; Slow = 0–9, with sales in 90 days. Dead Stock = stock remaining, no sales in full 90-day history. Limited history or stockouts restrict classification; eligible Dead Stock takes precedence.</p>
+                <p class="sr-caption"><strong>Trend.</strong> Nisaka / Nihinay / Pareho = selling days above / below / equal to the prior two-period average. — = limited history or stockouts.</p>
+                <p class="sr-caption"><strong>Balance.</strong> Opening + received + sales (−) + returned + other = closing yesterday. Other includes corrections, stock issues and pullouts. Balances are reconstructed; missing records or losses affect accuracy. Review flagged sales mismatches.</p>
             </section>
         </main>
     </template>

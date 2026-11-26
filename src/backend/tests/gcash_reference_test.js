@@ -13,5 +13,11 @@ assert.equal(parser.extract('Total Amount Sent ₱1.00\nRef No. 0012 345 678901\
 assert.equal(parser.extract('You have received PHP 410.00. Your new balance is PHP 455.05. Ref. No. 0012345678901.', rules, true), '0012345678901');
 assert.equal(parser.extract('0012345678901', rules, true), null, 'OCR requires a reference label');
 assert.equal(parser.extract('Ref No. 00123O5678901', rules, true), null, 'OCR must not silently turn letters into digits');
+for (const input of ['Ref. No.\n0012 345\n678901\nNov 25, 2026', 'Reference Number\r\n0012\r\n345\r\n678901', 'Ref No. 0012 345\n\n678901']) {
+    assert.equal(parser.extract(input, rules, true), '0012345678901', 'OCR can wrap the reference digits');
+}
+for (const input of ['Ref No. 0012 345\n09171234567', 'Ref No. 0012 345\nNov 25, 2026', 'Ref No. 0012 345\n6789O1', 'Ref No. 0012 345\n678901\nRef No. 0098765432109']) {
+    assert.equal(parser.extract(input, rules, true), null, 'Wrapped OCR still rejects invalid or ambiguous references');
+}
 assert.equal(parser.extract('123456', {min: 6, max: 8}), '123456');
 console.log('GCash reference extraction: passed');

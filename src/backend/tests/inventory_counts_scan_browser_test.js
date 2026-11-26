@@ -5,7 +5,7 @@
 // (products with SKU / unit / case codes, zero-stock and inactive products, and
 // one account per role), drives a real Chromium through the authenticated
 // count page with keyboard-wedge characters plus Enter, and asserts the
-// user-visible outcome together with the submitted count, approval and stock
+// user-visible outcome together with the directly saved count and stock
 // records. No test depends on a physical scanner.
 //
 // Missing prerequisites skip locally and fail in CI.
@@ -561,29 +561,11 @@ async function main() {
         check(response.status() === 200, 'the mismatched linked submission is handled without an unsafe write');
         check(state().counts.length === 0, 'server-side mismatch validation refuses the other product');
 
-        await dismissBlockingDialogs(page);
-        const linkedNavigation = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
-        await page.locator('.count-form button[type="submit"]').click();
-        await linkedNavigation;
-        let linkedSnapshot = state();
-        const linkedCount = linkedSnapshot.counts.find((row) =>
-            Number(row.related_adjustment_id) === approvedIssue.adjustment_id);
-        check(linkedCount && Number(linkedCount.product_id) === approvedIssue.product_id,
-            'the pending correction keeps the approved Stock Issue product and association');
-        check(linkedCount && linkedCount.status === 'pending',
-            'the separate linked correction remains pending');
-
-        response = await context.request.post(countsUrl + '?correct=' + approvedIssue.adjustment_id, {
-            form: {
-                csrf_token: linkedCsrf,
-                action: 'reject',
-                count_id: String(linkedCount.count_id)
-            }
+        response = await context.request.post(countsUrl, {
+            form: {csrf_token: linkedCsrf, action: 'approve', count_id: '0'}
         });
-        linkedSnapshot = state();
-        check(response.status() === 200
-            && linkedSnapshot.counts.find((row) => row.count_id === linkedCount.count_id).status === 'rejected',
-            'the existing decision lifecycle can reject the separate linked count');
+        check(response.status() === 200 && state().counts.length === 0,
+            'the retired approval action cannot apply a count');
 
         console.log('Enter-terminated scanning on the count form');
         await page.goto(countsPath);
@@ -751,14 +733,16 @@ async function main() {
 
         console.log('A scan alone records nothing');
         let snapshot = state();
-        check(snapshot.counts.length === 1, 'scanning alone adds no count beyond the linked correction');
+        check(snapshot.counts.length === 0, 'scanning alone adds no count');
 
-        console.log('Count submission and approval');
-        await selectProduct(page, String(products.countable.product_id));
+        console.log('Count submission directly reconciles stock');
+        await page.goto(countsPath + '?correct=' + approvedIssue.adjustment_id);
+        await page.waitForFunction(() => document.getElementById('stock_version').value !== '');
         await page.fill('#physical_quantity', '15');
         await page.fill('#discrepancy_reason', 'Scan workflow reconciliation of the counted shelf.');
         await dismissBlockingDialogs(page);
         const submitNavigation = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
+        page.once('dialog', dialog => dialog.accept());
         let submitClickError = null;
         await page.locator('.count-form button[type="submit"]').click({ timeout: 15000 })
             .catch((error) => { submitClickError = error; });
@@ -766,42 +750,24 @@ async function main() {
             throw submitClickError;
         }
         await submitNavigation;
-        check(await eventually(page, () => document.body.innerText.indexOf('sent for approval') !== -1),
-            'the count is recorded and stays pending');
+        check(await eventually(page, () => document.body.innerText.indexOf('Stock and batches updated') !== -1),
+            'the count saves and immediately updates stock');
 
         snapshot = state();
-        check(snapshot.counts.length === 2, 'the ordinary submission adds exactly one count');
-        const recorded = snapshot.counts.find((row) => !row.related_adjustment_id);
-        check(recorded.status === 'pending', 'the submitted count is pending');
+        check(snapshot.counts.length === 1, 'submission adds exactly one count');
+        const recorded = snapshot.counts.find((row) => Number(row.related_adjustment_id) === approvedIssue.adjustment_id);
+        check(recorded.status === 'approved', 'the submitted correction is already applied');
         check(Number(recorded.system_quantity) === 10, 'the count captured the system quantity on submission');
         check(Number(recorded.physical_quantity) === 15, 'the count stored the entered physical total');
         check(Number(recorded.difference_qty) === 5, 'the count stored the difference');
         const countableState = snapshot.products.find((row) => row.sku === products.countable.sku);
-        check(Number(countableState.quantity_on_hand) === 10,
-            'stock is unchanged until the existing approval runs');
+        check(Number(countableState.quantity_on_hand) === 15,
+            'direct saving reconciles stock without separate approval');
 
-        const pendingRow = page.locator('tbody tr', { hasText: products.countable.sku }).first();
-        await dismissBlockingDialogs(page);
-        const approveButton = pendingRow.locator('button', { hasText: 'Approve' }).first();
-        // The waiter is armed before the click so a fast local response cannot
-        // slip past it, and a click failure is reported instead of surfacing
-        // as an unrelated navigation timeout.
-        const approveNavigation = page.waitForNavigation({ waitUntil: 'domcontentloaded' });
-        let approveClickError = null;
-        await approveButton.click({ timeout: 15000 }).catch((error) => { approveClickError = error; });
-        if (approveClickError) {
-            throw approveClickError;
-        }
-        await approveNavigation;
-        check(await eventually(page, () => document.body.innerText.indexOf('approved and stock reconciled') !== -1),
-            'the existing approval control reconciles the count');
-
-        snapshot = state();
-        check(recorded && state().counts.find((row) => row.count_id === recorded.count_id).status === 'approved',
-            'the approved count is recorded as approved');
-        const approvedState = snapshot.products.find((row) => row.sku === products.countable.sku);
-        check(Number(approvedState.quantity_on_hand) === 15,
-            'approval reconciles stock to the counted total');
+        check(await page.locator('#tab-recent-counts').getAttribute('aria-selected') === 'true',
+            'successful saving opens Recent Counts');
+        check(await page.getByRole('button', {name:'Approve', exact:true}).count() === 0,
+            'there is no separate approval control');
         await context.close();
 
         console.log('Administrator read-only access');
@@ -811,20 +777,15 @@ async function main() {
         await adminPage.goto(countsPath);
         check(await eventually(adminPage, () => document.getElementById('product_search') !== null),
             'Administrators can still open Inventory Counts');
-        check(await adminPage.locator('#product_search').isEnabled(),
-            'Administrator can use the combined lookup without mutation controls');
-        check(await adminPage.locator('#use_system_quantity').isDisabled(),
-            'Administrator quantity shortcut preserves read-only access');
+        check(await adminPage.locator('#panel-recent-counts').isVisible(),
+            'Administrator opens read-only count history');
+        check(await adminPage.locator('#tab-new-count').count() === 0,
+            'Administrator has no new-count tab');
 
         response = await adminContext.request.get(lookupUrl + '?code=' + encodeURIComponent(products.zero.barcode));
         body = await readJson(response);
         check(response.status() === 200 && body.outcome === 'match',
             'Administrator read-only lookup still identifies products');
-
-        await scan(adminPage, products.zero.barcode);
-        check(await eventually(adminPage, (id) => document.getElementById('product_id').value === String(id),
-            products.zero.product_id),
-            'Administrator scanning selects a product without gaining a submit path');
 
         check(await adminPage.locator('.count-form button[type="submit"]').count() === 0,
             'Administrator read-only access renders no Record Count control');
@@ -848,7 +809,7 @@ async function main() {
         });
         check(response.status() === 403, 'Administrator count submission is refused with 403');
         snapshot = state();
-        check(snapshot.counts.length === 2, 'Administrator access created no count');
+        check(snapshot.counts.length === 1, 'Administrator access created no count');
         await adminContext.close();
     } finally {
         if (browser) {

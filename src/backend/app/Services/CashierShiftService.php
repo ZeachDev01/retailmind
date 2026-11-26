@@ -104,6 +104,18 @@ class CashierShiftService
         return $this->cachedDisplayNameCol;
     }
 
+    public function openShifts(): array
+    {
+        return $this->pdo->query(
+            "SELECT cs.shift_id, cs.opened_at, cs.locked_at, " . $this->userDisplayNameColumn('u') . ", r.name AS register_name
+             FROM cashier_shifts cs
+             JOIN users u ON u.user_id = cs.cashier_id
+             LEFT JOIN registers r ON r.register_id = cs.register_id
+             WHERE cs.status = 'open'
+             ORDER BY cs.opened_at, cs.shift_id"
+        )->fetchAll(PDO::FETCH_ASSOC);
+    }
+
     public function getOpenShift(int $cashierId): ?array
     {
         $stmt = $this->pdo->prepare(

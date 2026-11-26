@@ -19,7 +19,7 @@ $pageSize = in_array($pageSize, [10, 15, 25, 50, 100], true) ? $pageSize : 15;
 $entryKey = $_GET['entry'] ?? null;
 $entry = null;
 $neighbors = null;
-$sortColumns = ['product_name', 'sku', 'received_qty', 'accepted_qty', 'damaged_qty', 'expiration_date'];
+$sortColumns = ['product_name', 'sku', 'accepted_qty', 'expiration_date'];
 $sort = in_array($_GET['sort'] ?? null, $sortColumns, true) ? $_GET['sort'] : 'product_name';
 $direction = ($_GET['direction'] ?? null) === 'desc' ? 'desc' : 'asc';
 $itemPageSize = filter_var($_GET['item_length'] ?? 15, FILTER_VALIDATE_INT);
@@ -85,9 +85,8 @@ if ($entry !== null) {
     $detailFilters = ['entry' => $entryKey, 'sort' => $sort, 'direction' => $direction, 'item_length' => $itemPageSize];
     $detailUrl = static fn(array $params = []): string => $url($params + $detailFilters);
     $itemHeaders = [
-        'product_name' => 'Product', 'sku' => 'SKU', 'received_qty' => 'Delivered',
-        'accepted_qty' => 'Accepted', 'damaged_qty' => 'Damaged', 'quantity_mode' => 'Quantity Mode & Conversion',
-        'cost_price' => 'Purchase cost', 'expiration_date' => 'Batch / Expiry', 'notes' => 'Discrepancy / Notes',
+        'product_name' => 'Product', 'sku' => 'SKU', 'accepted_qty' => 'Receive',
+        'cost_price' => 'Purchase cost', 'expiration_date' => 'Batch / Expiry',
     ];
 }
 ?>
@@ -158,8 +157,7 @@ if ($entry !== null) {
                             <th scope="col">Receipt</th>
                             <th scope="col">Recorded by</th>
                             <th scope="col" class="history-quantity">Products</th>
-                            <th scope="col" class="history-quantity">Accepted</th>
-                            <th scope="col" class="history-quantity">Damaged</th>
+                            <th scope="col" class="history-quantity">Receive</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -172,7 +170,6 @@ if ($entry !== null) {
                                 <td><?= htmlspecialchars($record['recorded_by']) ?></td>
                                 <td class="history-quantity"><?= count(array_unique(array_column($record['lines'], 'product_id'))) ?></td>
                                 <td class="history-quantity"><?= $record['total_accepted_qty'] ?></td>
-                                <td class="history-quantity"><?= $record['total_damaged_qty'] ?></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -212,36 +209,23 @@ if ($entry !== null) {
                     <tbody>
                         <?php foreach ($itemRows as $line): ?>
                             <tr>
-                                <td><?= htmlspecialchars($line['product_name']) ?></td>
+                                <td>
+                                    <?= htmlspecialchars($line['product_name']) ?>
+                                    <?php if (!empty($line['pullout_id'])): ?>
+                                        <br><span class="badge badge-info">Replacement (Pullout #<?= (int)$line['pullout_id'] ?>)</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td><code><?= htmlspecialchars($line['sku']) ?></code></td>
                                 <td>
-                                    <?= $line['received_qty'] ?>
+                                    <?= $line['accepted_qty'] ?> <?= $line['accepted_qty'] === 1 ? 'unit' : 'units' ?>
                                     <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1): ?>
-                                        <br><small class="history-quantity-note"><?= (int)$line['received_packs'] ?> pack(s), <?= (int)$line['received_loose'] ?> loose</small>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?= $line['accepted_qty'] ?>
-                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1): ?>
-                                        <br><small class="history-quantity-note"><?= (int)$line['accepted_packs'] ?> pack(s), <?= (int)$line['accepted_loose'] ?> loose</small>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?= $line['damaged_qty'] ?>
-                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1 && ((int)$line['damaged_packs'] > 0 || (int)$line['damaged_loose'] > 0)): ?>
-                                        <br><small class="history-quantity-note"><?= (int)$line['damaged_packs'] ?> pack(s), <?= (int)$line['damaged_loose'] ?> loose</small>
-                                    <?php endif; ?>
-                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1 && ((int)$line['rejected_packs'] > 0 || (int)$line['rejected_loose'] > 0)): ?>
-                                        <br><small class="history-quantity-note">Rejected: <?= (int)$line['rejected_packs'] ?> pack(s), <?= (int)$line['rejected_loose'] ?> loose</small>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?php if (!empty($line['pack_size_used']) && $line['pack_size_used'] > 1): ?>
-                                        Sales packs (<?= (int)$line['received_packs'] ?> pack(s) × <?= (int)$line['pack_size_used'] ?> + <?= (int)$line['received_loose'] ?> loose = <?= $line['received_qty'] ?> units)
-                                    <?php elseif ($line['received_packages'] > 0): ?>
-                                        Packages / cases (<?= $line['received_packages'] ?> package(s) × <?= $line['units_per_package_used'] ?> = <?= $line['received_qty'] ?> units)
-                                    <?php else: ?>
-                                        Base units (<?= $line['received_qty'] ?> unit(s))
+                                        <br><small class="history-quantity-note"><?= (int)$line['accepted_packs'] ?> <?= $line['accepted_packs'] === 1 ? 'pack' : 'packs' ?> × <?= (int)$line['pack_size_used'] ?><?php if ($line['accepted_loose'] > 0): ?> + <?= (int)$line['accepted_loose'] ?> loose<?php endif; ?></small>
+                                    <?php elseif ($line['received_packages'] > 0 && $line['units_per_package_used'] > 1): ?>
+                                        <?php
+                                        $acceptedPackages = intdiv($line['accepted_qty'], $line['units_per_package_used']);
+                                        $looseUnits = $line['accepted_qty'] % $line['units_per_package_used'];
+                                        ?>
+                                        <br><small class="history-quantity-note"><?= $acceptedPackages ?> <?= $acceptedPackages === 1 ? 'package' : 'packages' ?> × <?= $line['units_per_package_used'] ?><?php if ($looseUnits > 0): ?> + <?= $looseUnits ?> loose<?php endif; ?></small>
                                     <?php endif; ?>
                                 </td>
                                 <td>
@@ -272,12 +256,6 @@ if ($entry !== null) {
                                 <td>
                                     <?= htmlspecialchars($line['batch_number'] ?: 'Not recorded') ?><br>
                                     <small><?= htmlspecialchars($line['expiration_date'] ?: 'Not recorded') ?></small>
-                                </td>
-                                <td>
-                                    <?php if (!empty($line['pullout_id'])): ?>
-                                        <span class="badge badge-info">Replacement (Pullout #<?= (int)$line['pullout_id'] ?>)</span><br>
-                                    <?php endif; ?>
-                                    <?= htmlspecialchars(implode(' · ', array_filter([$line['discrepancy_notes'], $line['notes']]))) ?: '-' ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

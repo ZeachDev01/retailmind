@@ -21,9 +21,9 @@ const {chromium} = require('playwright');
         let empty = false;
         let requests = [];
         const errors = [];
-        const rows = [{sale_id: 6, sale_date: '2026-10-01 08:39:18', sale_date_display: 'Oct 1, 2026 · 8:39 AM',
+        const rows = [{sale_id: 2, sale_date: '2026-10-01 08:39:18', sale_date_display: 'Oct 1, 2026 · 8:39 AM',
             cashier_name: 'Saved Cashier ' + 'Long name '.repeat(12), item_count: 3, total_amount: 1234567.89,
-            payment_method: 'cash', attribution_label: 'Shift #1', refund_status: 'None', refunded_amount: 0, remaining_net_amount: 1234567.89}];
+            payment_method: 'cash', attribution_label: 'Shift #1', refund_status: 'Partial Cash Refund', refunded_amount: 5, remaining_net_amount: 1234562.89}];
         async function open(options = {}) {
             const page = await browser.newPage({viewport: {width: 1440, height: 900}, ...options});
             page.on('pageerror', error => errors.push(error.stack));
@@ -33,6 +33,8 @@ const {chromium} = require('playwright');
             }, options);
             await page.route('**/*', async route => {
                 const url = new URL(route.request().url());
+                if (url.searchParams.get('action') === 'refund_conditions') return route.fulfill({contentType: 'text/html', body: http.refunds});
+                if (url.searchParams.get('action') === 'view') return route.fulfill({contentType: 'text/html', body: http.original});
                 if (url.searchParams.get('action') === 'data') {
                     requests.push(url);
                     const matches = !empty && url.searchParams.get('search[value]') !== 'missing';
@@ -127,6 +129,45 @@ const {chromium} = require('playwright');
             }
         }
         await page.emulateMedia({reducedMotion: 'reduce'});
+        for (const width of [1440, 768, 390, 320]) {
+            await page.setViewportSize({width, height: 900});
+            await page.getByRole('button', {name: 'Full details', exact: true}).first().click();
+            await page.getByRole('tab', {name: 'Original receipt', exact: true}).waitFor();
+            await page.locator('#receiptContent .receipt-print-area').waitFor();
+            const summary = page.getByRole('definition').filter({hasText: '₱1,234,567.89'});
+            assert.equal(await summary.count(), 1, 'Original paid is visible in the transaction summary');
+            assert(await page.locator('.receipt-drawer-summary').isVisible(), 'Summary appears with original receipt');
+            for (const theme of ['light', 'dark']) {
+                await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+                await page.screenshot({path: path.join(output, `drawer-${theme}-${width}.png`)});
+            }
+            const header = await page.locator('.sale-receipt-dialog-header').boundingBox();
+            await page.locator('.receipt-drawer-body').evaluate(el => { el.scrollTop = el.scrollHeight; });
+            assert.equal((await page.locator('.sale-receipt-dialog-header').boundingBox()).y, header.y, 'Close control stays fixed while details scroll');
+            await page.locator('.receipt-drawer-body').evaluate(el => { el.scrollTop = 0; });
+            await page.getByRole('tab', {name: 'Refund receipts', exact: true}).click();
+            const copies = page.locator('.receipt-refund-copy');
+            await copies.nth(1).waitFor();
+            assert(await page.locator('.receipt-drawer-summary').isVisible(), 'Same transaction summary remains with refund receipts');
+            assert.equal(await copies.count(), 2, 'Both refunds remain individually selectable');
+            await page.evaluate(() => { window.printCalls = 0; window.print = () => window.printCalls++; });
+            for (const id of [1, 3]) {
+                const copy = copies.filter({has: page.locator('summary', {hasText: `Refund receipt #${id}`})});
+                await copy.locator('summary').click();
+                await copy.getByRole('button', {name: `Print refund receipt #${id}`, exact: true}).click();
+                await page.waitForFunction(() => document.querySelector('.receipt-print-root'));
+                assert.match(await page.locator('.receipt-print-root').innerText(), new RegExp(`Refund #${id}\\b`), 'Print uses the chosen refund only');
+                assert.equal(await page.locator('.receipt-print-root .receipt-print-area').count(), 1);
+                assert.equal(await copy.locator('summary').evaluate(el => {const box=el.getBoundingClientRect();return box.left >= 0 && box.right <= innerWidth;}), true);
+                await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+                await page.screenshot({path: path.join(output, `refund-${id}-${width}.png`)});
+                await copy.locator('summary').click();
+            }
+            assert.equal(await page.evaluate(() => window.printCalls), 2);
+            await page.getByRole('tab', {name: 'Original receipt', exact: true}).click();
+            assert.equal(await page.locator('#receiptContent .receipt-print-area').count(), 1);
+            await page.locator('[data-close-receipt]').click();
+        }
         empty = true;
         await page.getByRole('button', {name: 'Clear filters'}).click();
         await page.locator('#receiptEmptyState').waitFor();

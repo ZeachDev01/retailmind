@@ -272,6 +272,8 @@ function get_store_settings(PDO $pdo): array
         'receipt_footer' => 'Thank you for shopping with us.',
         'currency_symbol' => '₱',
         'timezone' => 'Asia/Manila',
+        'shift_reminder_enabled' => '0',
+        'shift_reminder_time' => '',
     ]);
 }
 

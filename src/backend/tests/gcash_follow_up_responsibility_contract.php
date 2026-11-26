@@ -200,7 +200,7 @@ $pdo->exec("UPDATE gcash_transactions SET verification_status = 'Needs checking'
 // Open shift for Dave (#4) on register 11
 $shiftId4 = $shiftService->openShift(4, 'cashier', 11, 1000.00);
 
-// 2. Handover session from Alice to Dave. Dave accepts only $txId1, NOT $txId2.
+// 2. Normal handover includes every outgoing-owned follow-up, even with a legacy selection list.
 $handover = $gcashService->handoverSession(3, 4, 2000.00, 5000.00, 'Shift handover', [$txId1]);
 
 // Check txId1: accepted by Dave
@@ -209,11 +209,14 @@ $assert((int)$tx1After['cashier_id'] === 3, 'Attribution preserved: original cas
 $assert((int)$tx1After['responsible_user_id'] === 4, 'Follow-up responsibility transferred to Dave');
 $assert($tx1After['responsible_role'] === 'cashier', 'Responsible role is cashier');
 
-// Check txId2: unaccepted -> needs responsible cashier
+// Check txId2: automatically included despite omission from the legacy list.
 $tx2After = $pdo->query("SELECT * FROM gcash_transactions WHERE transaction_id = {$txId2}")->fetch(PDO::FETCH_ASSOC);
 $assert((int)$tx2After['cashier_id'] === 3, 'Attribution preserved: original cashier remains Alice');
-$assert($tx2After['responsible_user_id'] === null, 'Unaccepted exchange has no responsible user');
-$assert($tx2After['responsible_role'] === null, 'Unaccepted exchange has no responsible role');
+$assert((int)$tx2After['responsible_user_id'] === 4, 'All outgoing-owned follow-ups transfer to Dave');
+$assert($tx2After['responsible_role'] === 'cashier', 'Automatically transferred follow-up retains the receiving role');
+
+// Separate fixture for the unassigned-item review and acceptance cases below.
+$pdo->exec("UPDATE gcash_transactions SET responsible_user_id = NULL, responsible_role = NULL WHERE transaction_id = {$txId2}");
 
 // 3. Clarification in audit logging: Handover transfers investigation responsibility, not ownership of underlying money shortage
 $auditStmt = $pdo->query("SELECT * FROM activity_log WHERE action LIKE '%responsibility%' OR action LIKE '%handover%' OR new_value LIKE '%investigation%' ORDER BY log_id DESC");

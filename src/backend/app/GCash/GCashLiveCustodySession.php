@@ -447,9 +447,15 @@ final class GCashLiveCustodySession
             $sessionId,
         ]);
 
-        if ($acceptedTransactionIds !== null || $incomingCashierId === null) {
-            $pendingTxStmt = $this->pdo->query("SELECT transaction_id, cashier_id, responsible_user_id FROM gcash_transactions WHERE verification_status = 'Needs checking'");
+        if (!$emergency || $acceptedTransactionIds !== null || $incomingCashierId === null) {
+            $pendingTxStmt = $this->pdo->prepare("SELECT transaction_id, cashier_id, responsible_user_id FROM gcash_transactions WHERE verification_status = 'Needs checking'"
+                . (!$emergency ? ' AND responsible_user_id = ?' : ''));
+            $pendingTxStmt->execute(!$emergency ? [(int)$session['cashier_id']] : []);
             $pendingTxs = $pendingTxStmt->fetchAll(PDO::FETCH_ASSOC);
+            if (!$emergency) {
+                $this->pdo->prepare('UPDATE gcash_service_sessions SET unresolved_carryover_count = ? WHERE session_id = ?')
+                    ->execute([count($pendingTxs), $sessionId]);
+            }
             $updateTxStmt = $this->pdo->prepare(
                 "UPDATE gcash_transactions
                  SET responsible_user_id = ?, responsible_role = ?, responsibility_notes = ?, responsibility_assigned_at = ?
@@ -457,7 +463,7 @@ final class GCashLiveCustodySession
             );
             foreach ($pendingTxs as $ptx) {
                 $ptxId = (int)$ptx['transaction_id'];
-                if ($incomingCashierId !== null && in_array($ptxId, $acceptedTransactionIds ?? [], true)) {
+                if ($incomingCashierId !== null && (!$emergency || in_array($ptxId, $acceptedTransactionIds ?? [], true))) {
                     $updateTxStmt->execute([
                         $incomingCashierId,
                         $incomingRole,

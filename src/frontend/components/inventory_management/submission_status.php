@@ -7,7 +7,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 $kind = $_GET['kind'] ?? '';
 $token = $_GET['token'] ?? '';
-$kinds = ['pullout', 'receiving', 'count', 'approveCount', 'rejectCount', 'createProduct', 'adjustStock', 'reconcileStock', 'approveReport', 'rejectReport', 'recordConfirmedIssue'];
+$kinds = ['pullout', 'receiving', 'count', 'saveCount', 'approveCount', 'rejectCount', 'createProduct', 'adjustStock', 'reconcileStock', 'approveReport', 'rejectReport', 'recordConfirmedIssue'];
 if (!is_string($kind) || !in_array($kind, $kinds, true) || !is_string($token) || !preg_match('/^[a-f0-9]{48}$/D', $token)) {
     http_response_code(400);
     echo json_encode(['success' => false]);

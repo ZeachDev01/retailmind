@@ -85,7 +85,8 @@ const {chromium} = require('playwright');
                 await page.getByRole('status').filter({hasText: 'GCash overview is unavailable.'}).waitFor();
                 assert.equal(await page.locator('#gcash-overview-expected-cash').textContent(), '—', 'Unavailable balances never imply zero');
             } else {
-                await page.getByText('1 open', {exact: true}).waitFor();
+                await page.locator('#gcash-overview-expected-wallet').filter({hasText: '28,750.50'}).waitFor();
+                assert.equal(await page.locator('.gcash-overview-review').count(), 0, 'Needs checking panel is removed');
                 assert.match(await page.locator('#gcash-overview-expected-wallet').textContent(), /28,750\.50/);
                 await page.getByText('Balance details', {exact: true}).click();
                 assert(await page.getByText('Last actual check: Oct 30, 2026 08:00 AM', {exact: true}).isVisible());
@@ -93,7 +94,6 @@ const {chromium} = require('playwright');
             }
             assert.match(await page.getByRole('link', {name: 'New Cash-In', exact: true}).getAttribute('href'), /type=cash-in/);
             assert.match(await page.getByRole('link', {name: 'New Cash-Out', exact: true}).getAttribute('href'), /type=cash-out/);
-            assert.match(await page.getByRole('link', {name: 'View history'}).getAttribute('href'), /tab=history/);
             for (const width of [1440, 390, 320]) {
                 await page.setViewportSize({width, height: 900});
                 assert(await page.locator('#panel-gcash').evaluate(el => el.scrollWidth <= el.clientWidth), `GCash fits at ${width}`);

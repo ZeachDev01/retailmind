@@ -604,7 +604,9 @@
 
 /* Receipt History uses the shared accessible dialog as a right-hand drawer. */
 @media screen {
-    .receipts-page .sale-receipt-dialog {
+    .receipts-page .sale-receipt-dialog[open] {
+        display: flex;
+        flex-direction: column;
         inset: 0 0 0 auto;
         margin: 0;
         width: min(580px, 100%);
@@ -612,24 +614,46 @@
         height: 100dvh;
         max-height: 100dvh;
         border-radius: 16px 0 0 16px;
+        overflow: hidden;
     }
 }
+.receipts-page .sale-receipt-dialog-header {
+    position: static;
+    flex: 0 0 auto;
+    padding: 1rem 1.25rem;
+}
+.receipts-page .sale-receipt-dialog-header h2 { font-size: 1.125rem; }
+.receipts-page .sale-receipt-dialog-header [data-close-receipt] { min-height: 44px; }
+.receipts-page .receipt-drawer-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+}
+.receipts-page #receiptContent { background: var(--theme-surface-soft, #f8fafc); }
+.receipts-page #receiptContent .receipt-container { padding: 1.25rem; }
+.receipts-page #receiptContent .receipt-actions { justify-content: flex-end; margin: 0 0 1.25rem; }
+.receipts-page #receiptContent .receipt-actions .btn { min-height: 44px; justify-content: center; }
+.receipts-page .sale-receipt-dialog .sale-receipt { margin-block: 0; }
 .receipts-page .receipt-drawer-summary {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem;
-    margin: 1rem;
-    padding: 1rem;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--theme-surface-soft, #f8fafc);
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: .875rem 1rem;
+    margin: 0;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
 }
+.receipts-page .receipt-drawer-summary > div { grid-column: span 3; min-width: 0; }
+.receipts-page .receipt-drawer-summary > div:nth-child(5) { grid-column: 1 / -1; }
+.receipts-page .receipt-drawer-summary > .receipt-drawer-amount { grid-column: span 2; border-top: 1px solid var(--border); padding-top: .875rem; }
 .receipts-page .receipt-drawer-summary[hidden] { display: none; }
 .receipts-page .sale-receipt-dialog [role="tabpanel"][hidden] { display: none; }
 .receipts-page .receipt-drawer-tabs {
     display: flex;
+    flex: 0 0 auto;
     gap: 1.25rem;
-    padding: 0 1rem;
+    padding: 0 1.25rem;
     border-bottom: 1px solid var(--border);
 }
 .receipts-page .receipt-drawer-tabs button {
@@ -648,11 +672,29 @@
     border-bottom-color: var(--primary);
 }
 .receipts-page .receipt-drawer-tabs button:disabled { opacity: .5; cursor: default; }
+.receipts-page .receipt-drawer-tabs button:hover:not(:disabled) { color: var(--primary); }
 .receipts-page .receipt-drawer-summary dt { color: var(--muted); font-size: .8rem; }
-.receipts-page .receipt-drawer-summary dd { margin: .3rem 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.receipts-page .receipt-drawer-summary dd { margin: .25rem 0 0; font-size: .875rem; font-weight: 600; overflow-wrap: anywhere; }
+.receipts-page .receipt-drawer-amount dd { font-size: 1rem; font-variant-numeric: tabular-nums; }
+.receipts-page .sale-receipt-dialog .receipt-dialog-status { margin: 0; padding: 1.5rem 1.25rem; }
+@media (max-width: 480px) {
+    .receipts-page .sale-receipt-dialog[open] { border-radius: 0; }
+    .receipts-page .sale-receipt-dialog-header,
+    .receipts-page .receipt-drawer-summary { padding: .875rem 1rem; }
+    .receipts-page .receipt-drawer-summary { gap: .625rem .875rem; }
+    .receipts-page .receipt-drawer-summary > .receipt-drawer-amount { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; padding-top: .5rem; }
+    .receipts-page .receipt-drawer-amount dd { margin: 0; text-align: right; }
+    .receipts-page #receiptContent .receipt-container { padding: 1rem; }
+    .receipts-page #receiptContent .receipt-actions { flex-direction: row; flex-wrap: wrap; gap: .5rem; }
+    .receipts-page #receiptContent .receipt-actions .btn { flex: 1 1 auto; }
+    .receipts-page .receipt-drawer-tabs { gap: 1rem; padding-inline: 1rem; }
+}
 /* Return conditions live in operational details, outside the printed receipt. */
 .receipts-page .refund-condition-details { padding: 1rem; }
 .receipts-page .refund-condition-details h3 { margin: 1rem 0 .75rem; font-size: 1.05rem; }
+.receipts-page .receipt-refund-copy { margin: .75rem 0; }
+.receipts-page .receipt-refund-copy > summary { padding: .75rem; min-height: 44px; cursor: pointer; color: var(--primary); }
+.receipts-page .receipt-refund-copy .receipt-container { padding: .75rem 0; }
 .receipts-page .refund-condition-form label { font-size: .95rem; font-weight: 600; }
 .receipts-page .refund-condition-form :is(input:not([type="hidden"]):not([type="checkbox"]), select) {
     width: 100%; min-height: 44px; padding: .65rem .9rem;

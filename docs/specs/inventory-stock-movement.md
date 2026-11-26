@@ -9,6 +9,7 @@ The next iteration replaces the repeated 3×30-day grids with charts: three page
 - Three consecutive, non-overlapping 30-day periods ending yesterday in Philippine time. Exact date ranges and month names identify each period; today is excluded from sales and trend.
 - The main table shows Product, Stock, 90-day sales, Selling days, Status, and Trend. Stock is the current recorded quantity; 90-day sales is one total across the three periods; Selling days refers to the latest 30 days.
 - Three page-level charts above the table: weekly movement for all products, the five fastest movers by 90-day units, and history coverage counts. A Chart.js-free browser shows a short fallback note instead of blank canvases.
+- The Product history chart uses two groups: Complete history (all three periods complete) and Limited history (any partial, unavailable or unknown period). Product details and reports retain the exact coverage reasons; movement classification is unchanged.
 - Sales Frequency counts distinct dates with recorded customer sales. Multiple receipts, repeated line items, and bulk purchases on one day count as one selling day. Quantity is separate and Sales Packs use the existing base-unit conversion.
 - Sales remain gross recorded quantities before refunds/reversals. Forecast-only imports are excluded. Receiving, stock issues, pullouts and corrections are not customer sales.
 
@@ -26,6 +27,8 @@ The next iteration replaces the repeated 3×30-day grids with charts: three page
 ## Table, tooltips and drawer
 
 Default to products with positive current stock, sorted by fewest selling days. All products includes zero/negative balances; these are never Dead Stock. Search includes product, SKU and category. Column sorting, mobile sorting and ten-row pagination remain available.
+
+Status filters the table to All statuses (default), Fast-Moving, Slow-Moving, Dead Stock, Limited history or Stockout affected. It combines with search and stock scope and resets pagination. Generate Report includes every matching product in the current sort order in both tables, with the selected status recorded in the report scope. Empty results explain the selected status and disable Generate Report. The page charts continue to summarise all products.
 
 Use short status labels with icons and restrained semantic colors. The existing info-tooltip component explains criteria on hover, keyboard focus and tap; Escape dismisses a tooltip. Longer explanations are not repeated in table rows.
 

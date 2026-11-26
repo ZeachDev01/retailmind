@@ -464,6 +464,39 @@ final class GCashExchangeReview
                 $extraNote = trim((string)($data['notes'] ?? $data['note'] ?? ''));
                 $resolvedNotes = $existingNotes . ($extraNote !== '' ? ' [Resolved Completed: ' . $extraNote . ']' : ' [Resolved Completed]');
 
+                $recordedCashDelta = $targetCashDelta;
+                $recordedWalletDelta = $targetWalletDelta;
+                $completionAdjustmentId = null;
+                $currentSession = $this->custody->getCurrentSession();
+                if ($currentSession && (int)$currentSession['session_id'] !== (int)$tx['session_id']) {
+                    $remainingCash = round($targetCashDelta - (float)$tx['service_cash_delta'], 2);
+                    $remainingWallet = round($targetWalletDelta - (float)$tx['wallet_delta'], 2);
+                    if ($remainingCash != 0.0 || $remainingWallet != 0.0) {
+                        if ($actorId !== (int)$currentSession['cashier_id'] && $this->resolveEligibleRole($actorId) !== 'admin') {
+                            throw new DomainException('Only the current GCash Cashier or an Administrator can complete the remaining money movements.', 403);
+                        }
+                        $expected = $this->custody->calculateSessionExpected((int)$currentSession['session_id']);
+                        if ($expected['expected_service_cash'] + $remainingCash < 0 || $expected['expected_wallet_balance'] + $remainingWallet < 0) {
+                            throw new DomainException('Insufficient service cash or wallet balance to complete this held exchange.', 422);
+                        }
+                        // Keep earlier movements in their session; only the remaining money moves now.
+                        $this->pdo->prepare('INSERT INTO gcash_adjustments (transaction_id, session_id, service_cash_delta, wallet_delta, reason, authorized_by)
+                            VALUES (?, ?, ?, ?, ?, ?)')->execute([
+                                $transactionId, (int)$currentSession['session_id'], $remainingCash, $remainingWallet,
+                                'Completion of held exchange #' . $transactionId, $actorId,
+                            ]);
+                        $completionAdjustmentId = (int)$this->pdo->lastInsertId();
+                        if (in_array('recorded_by', $this->adjustmentColumns(), true)) {
+                            $this->pdo->prepare('UPDATE gcash_adjustments SET recorded_by = ? WHERE adjustment_id = ?')
+                                ->execute([$actorId, $completionAdjustmentId]);
+                        }
+                    }
+                    $recordedCashDelta = (float)$tx['service_cash_delta'];
+                    $recordedWalletDelta = (float)$tx['wallet_delta'];
+                } elseif (!$currentSession && ((float)$tx['service_cash_delta'] !== $targetCashDelta || (float)$tx['wallet_delta'] !== $targetWalletDelta)) {
+                    throw new DomainException('Open a GCash service session before completing the remaining money movements.', 422);
+                }
+
                 $updateStmt = $this->pdo->prepare(
                     "UPDATE gcash_transactions
                      SET verification_status = 'Completed',
@@ -490,8 +523,8 @@ final class GCashExchangeReview
                     $cashFinding,
                     $walletCheckedBy,
                     $walletFinding,
-                    $targetCashDelta,
-                    $targetWalletDelta,
+                    $recordedCashDelta,
+                    $recordedWalletDelta,
                     $targetFee,
                     $resolvedNotes,
                     $transactionId,
@@ -512,8 +545,10 @@ final class GCashExchangeReview
                         'cash_finding' => $cashFinding,
                         'wallet_checked_by' => $walletCheckedBy,
                         'wallet_finding' => $walletFinding,
-                        'service_cash_delta' => $targetCashDelta,
-                        'wallet_delta' => $targetWalletDelta,
+                        'service_cash_delta' => $recordedCashDelta,
+                        'wallet_delta' => $recordedWalletDelta,
+                        'completion_adjustment_id' => $completionAdjustmentId,
+                        'movement_session_id' => $currentSession ? (int)$currentSession['session_id'] : null,
                         'gross_fee' => $targetFee,
                     ],
                     null,

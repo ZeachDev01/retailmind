@@ -329,7 +329,7 @@ foreach ([1 => 'admin', 6 => 'inventory_manager', 2 => 'cashier'] as $recipientI
     $assert($pdo->query("SELECT responsible_role FROM gcash_transactions WHERE transaction_id = {$txId2}")->fetchColumn() === $recipientRole, 'Emergency follow-up records the actual recipient role');
 }
 
-// Omitted acceptance preserves assignments; an explicit list replaces them store-wide.
+// Routine handover transfers outgoing-owned follow-ups; emergency acceptance retains its existing rules.
 foreach (['routine', 'emergency'] as $path) {
     foreach ([null, [], [(string)$txId2], [$txId2]] as $acceptedIds) {
         $pdo->exec("UPDATE gcash_transactions SET responsible_user_id = 3, responsible_role = 'cashier' WHERE verification_status = 'Needs checking'");
@@ -339,11 +339,13 @@ foreach (['routine', 'emergency'] as $path) {
         $result = $path === 'routine'
             ? $gcashService->handoverSession((int)$before['cashier_id'], $incomingId, 2600.0, 4700.0, 'Acceptance contract', $acceptedIds)
             : $gcashService->emergencyHandover(1, $incomingId, 2600.0, 4700.0, 'Acceptance contract', $acceptedIds);
-        $expectedOwner = $acceptedIds === null ? 3 : (in_array($txId2, $acceptedIds, true) ? $incomingId : null);
+        $expectedOwner = $path === 'routine'
+            ? ((int)$before['cashier_id'] === 3 ? $incomingId : 3)
+            : ($acceptedIds === null ? 3 : (in_array($txId2, $acceptedIds, true) ? $incomingId : null));
         $pending = $pdo->query("SELECT transaction_id, responsible_user_id FROM gcash_transactions WHERE verification_status = 'Needs checking'")->fetchAll(PDO::FETCH_ASSOC);
         foreach ($pending as $exchange) {
-            $owner = (int)$exchange['transaction_id'] === $txId2 ? $expectedOwner : ($acceptedIds === null ? 3 : null);
-            $assert($exchange['responsible_user_id'] === $owner, "{$path}: acceptance keeps null, empty and strict-ID behavior across pending exchanges");
+            $owner = $path === 'routine' || (int)$exchange['transaction_id'] === $txId2 ? $expectedOwner : ($acceptedIds === null ? 3 : null);
+            $assert($exchange['responsible_user_id'] === $owner, "{$path}: follow-up ownership respects routine scope and emergency acceptance");
         }
         $closed = $pdo->query("SELECT * FROM gcash_service_sessions WHERE session_id = {$before['session_id']}")->fetch(PDO::FETCH_ASSOC);
         $current = $gcashService->getCurrentSession();

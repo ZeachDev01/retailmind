@@ -125,6 +125,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 log_activity($pdo, (int)$_SESSION['user_id'], 'Receipt logo update', 'Store Settings', null, null, ['action' => $action]);
             });
             $message = $logo === '' ? 'Receipt logo removed. Existing receipts keep their original logo.' : 'Receipt logo saved. New receipts will use this logo.';
+        } elseif ($action === 'save_shift_reminders') {
+            $updates = \App\Services\ShiftReminder::validate($_POST);
+            \App\Store\StoreWriteGate::run($pdo, function () use ($pdo, $updates): void {
+                save_key_value_settings($pdo, 'store_settings', $updates, (int)$_SESSION['user_id']);
+                log_activity($pdo, (int)$_SESSION['user_id'], 'Shift reminders updated', 'Store Settings', null, null, $updates);
+            });
+            $message = 'Shift reminders saved.';
         } elseif ($action === 'save_attention') {
             $updates = [];
             foreach ($fields as $key => $config) {
@@ -157,13 +164,18 @@ if ($failedAction === 'save_receipts') {
         if (is_string($_POST[$key] ?? null)) $requested[$key] = $_POST[$key];
     }
 }
+if ($failedAction === 'save_shift_reminders') {
+    foreach (['shift_reminder_enabled', 'shift_reminder_time'] as $key) {
+        $formSettings[$key] = is_string($_POST[$key] ?? null) ? $_POST[$key] : '';
+    }
+}
 $effective = $service->thresholdsFor('admin');
 $tunnelService = new \App\Services\CloudflareTunnelService();
 $tunnelStatus = $tunnelService->getStatus();
 $qrService = new \App\Services\QrCodeService();
 $initialQrSvg = (!empty($tunnelStatus['online']) && !empty($tunnelStatus['url'])) ? $qrService->generateSvg($tunnelStatus['url'], 220) : '';
 $activeSection = (string)($_GET['section'] ?? 'store-receipts');
-if (!in_array($activeSection, ['store-receipts', 'attention-thresholds', 'remote-access'], true)) $activeSection = 'store-receipts';
+if (!in_array($activeSection, ['store-receipts', 'attention-thresholds', 'shift-reminders', 'remote-access'], true)) $activeSection = 'store-receipts';
 $activeStoreConfigurationSection = $activeSection;
 $remoteAccessStatus = (string)($tunnelStatus['status'] ?? 'offline');
 ?>
@@ -290,6 +302,28 @@ $remoteAccessStatus = (string)($tunnelStatus['status'] ?? 'offline');
                 <div class="form-actions u-mt-1">
                     <button class="btn btn-primary" type="submit">Save thresholds</button>
                 </div>
+            </form>
+        </section>
+        <section class="dashboard-section" data-settings-section="shift-reminders" aria-labelledby="shift-reminders-heading"<?= $activeSection !== 'shift-reminders' ? ' hidden' : '' ?>>
+            <div class="section-header"><h2 id="shift-reminders-heading">Shift reminders</h2></div>
+            <form method="post" data-unsaved-changes="<?= $failedAction === 'save_shift_reminders' ? 'dirty' : '' ?>">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="save_shift_reminders">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="shift_reminder_enabled">Enable reminder</label>
+                        <select id="shift_reminder_enabled" name="shift_reminder_enabled">
+                            <option value="0"<?= ($formSettings['shift_reminder_enabled'] ?? '0') !== '1' ? ' selected' : '' ?>>Off</option>
+                            <option value="1"<?= ($formSettings['shift_reminder_enabled'] ?? '0') === '1' ? ' selected' : '' ?>>On</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="shift_reminder_time">Daily reminder time (Philippine time)</label>
+                        <input type="time" id="shift_reminder_time" name="shift_reminder_time" value="<?= htmlspecialchars((string)($formSettings['shift_reminder_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" aria-describedby="shift-reminder-help">
+                        <small class="field-help u-text-muted" id="shift-reminder-help">Reminds signed-in Cashiers to close their shift. Later repeats after 10 minutes.</small>
+                    </div>
+                </div>
+                <div class="form-actions u-mt-1"><button class="btn btn-primary" type="submit">Save reminders</button></div>
             </form>
         </section>
         <section class="dashboard-section" data-settings-section="remote-access" id="remote-access-card" aria-labelledby="remote-access-heading"<?= $activeSection !== 'remote-access' ? ' hidden' : '' ?>>

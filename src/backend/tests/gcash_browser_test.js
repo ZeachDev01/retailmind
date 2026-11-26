@@ -104,7 +104,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await tabOverview.click();
         assert.equal(await overviewPage.locator('#gcash-overview-expected-cash').textContent(), '₱0.00');
         assert.equal(await overviewPage.locator('#gcash-overview-expected-wallet').textContent(), '₱0.00');
-        assert.equal(await overviewPage.locator('#gcash-overview-nc-count').textContent(), '0 open');
+        assert.equal(await overviewPage.locator('.gcash-overview-review').count(), 0, 'Dashboard omits the Needs checking panel');
         assert.equal(await page.locator('#tab-overview').count(), 0);
         assert.equal(await page.locator('.cashier-topbar').count(), 0);
         const tabNewTx = page.locator('#tab-new-transaction');
@@ -493,15 +493,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         await tabHistory.click();
         await page.locator('#gcash-history-body .gcash-status-needs-checking').waitFor();
 
-        // Ticket #243: Verify Needs checking displayed in Overview
         await tabOverview.click();
-        await overviewPage.locator('#gcash-overview-nc-count').filter({hasText: '1 open'}).waitFor();
-        const ncCard = overviewPage.locator('#gcash-overview-nc-list .gcash-nc-card').first();
-        await ncCard.waitFor();
-        assert.equal((await ncCard.textContent()).includes('Cash-In'), true);
-        assert.equal((await ncCard.textContent()).includes('₱500.00'), true);
-        assert.equal((await ncCard.textContent()).includes('₱10.00 (cash)'), true);
-        assert.equal(await ncCard.getByRole('link', {name: 'Review transaction', exact: true}).isVisible(), true);
 
         // Ticket #240: API tests for record_cash_in
         const staleApi = await post({
@@ -644,9 +636,7 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         const ncRow = page.locator('#gcash-history-body tr', {hasText: 'Customer sent 510 wallet transfer'});
         await ncRow.waitFor();
 
-        // Ticket #243: Overview Needs checking count updated
         await tabOverview.click();
-        await overviewPage.locator('#gcash-overview-nc-count').filter({hasText: '2 open'}).waitFor();
 
         for (const width of [1440, 390, 320]) {
             await overviewPage.setViewportSize({width, height: 900});

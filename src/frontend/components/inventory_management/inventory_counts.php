@@ -79,40 +79,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         if ($action === 'record') {
-            $countId = $countService->recordCount($_POST, (int)$_SESSION['user_id']);
-            $message = "Inventory count #{$countId} recorded and sent for approval.";
-            log_activity(
-                $pdo,
-                (int)$_SESSION['user_id'],
-                'Inventory count recorded',
-                'Inventory Counts',
-                $countId,
-                null,
-                [
-                    'product_id' => (int)($_POST['product_id'] ?? 0),
-                    'physical_quantity' => (int)($_POST['physical_quantity'] ?? 0),
-                    'status' => 'pending',
-                ]
-            );
-        } elseif ($action === 'approve') {
-            $countId = (int)($_POST['count_id'] ?? 0);
-            $countService->approveCount($countId, (int)$_SESSION['user_id'], (string)($_POST['operation_token'] ?? ''));
-            $message = "Inventory count #{$countId} approved and stock reconciled.";
-        } elseif ($action === 'reject') {
-            $countId = (int)($_POST['count_id'] ?? 0);
-            $countService->rejectCount($countId, (int)$_SESSION['user_id'], (string)($_POST['operation_token'] ?? ''));
-            $message = "Inventory count #{$countId} rejected.";
-            log_activity(
-                $pdo,
-                (int)$_SESSION['user_id'],
-                'Inventory count rejected',
-                'Inventory Counts',
-                $countId,
-                ['status' => 'pending'],
-                ['status' => 'rejected']
-            );
+            $countId = $countService->saveCount($_POST, (int)$_SESSION['user_id']);
+            if (isset($_POST['inventory_draft_id'])) $_SESSION['inventory_confirmed_draft'] = (string)$_POST['inventory_draft_id'];
+            $_SESSION['inventory_count_message'] = "Inventory count #{$countId} saved. Stock and batches updated.";
+            header('Location: ' . app_url('components/inventory_management/inventory_counts.php?count_view=recent'), true, 303);
+            exit;
         } else {
-            throw new RuntimeException('Invalid action.');
+            throw new RuntimeException('Open the pending count and record a fresh count. Separate approval is no longer available.');
         }
     } catch (Throwable $e) {
         $error = \App\Support\OperatorAlert::message($e, 'The inventory count could not be saved. Check your connection and try again. Tell your Administrator if this keeps happening.');
@@ -120,9 +93,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $products = $countService->getActiveProducts();
-$counts = $countService->getRecentCounts();
+$message = (string)($_SESSION['inventory_count_message'] ?? '');
+unset($_SESSION['inventory_count_message']);
+$recheckId = max(0, (int)($_GET['recount'] ?? $_POST['recheck_count_id'] ?? 0));
+$recheckCount = $recheckId > 0 ? $countService->getCountForRecount($recheckId) : null;
+if ($recheckId > 0 && !$recheckCount) $error = 'This pending count is no longer available. Check Recent Counts.';
+$selectedProductId = (int)($_POST['product_id'] ?? $recheckCount['product_id'] ?? ($correctionFormActive ? $correctReport['product_id'] : 0));
+$countView = $canMutateInventory && ($_GET['count_view'] ?? 'new') !== 'recent' ? 'new' : 'recent';
+if ($error !== '' && $canMutateInventory) $countView = 'new';
+$search = trim((string)($_GET['q'] ?? ''));
+$sort = in_array($_GET['sort'] ?? '', ['date', 'product', 'system', 'counted', 'difference', 'staff', 'status'], true) ? $_GET['sort'] : 'date';
+$direction = ($_GET['direction'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+$pageSize = in_array((int)($_GET['length'] ?? 15), [10, 15, 25, 50, 100], true) ? (int)($_GET['length'] ?? 15) : 15;
+$totalRows = $countService->countHistory($search);
+$totalPages = max(1, (int)ceil($totalRows / $pageSize));
+$page = max(1, min($totalPages, (int)($_GET['page'] ?? 1)));
+$counts = $countService->getRecentCounts($pageSize, ($page - 1) * $pageSize, $search, $sort, $direction);
+$rows = $counts;
+$showCountActions = $canMutateInventory && count(array_filter($counts, static fn(array $count): bool => $count['status'] === 'pending')) > 0;
+$hasNext = $page < $totalPages;
+$paginationFilters = ['count_view' => 'recent', 'q' => $search, 'sort' => $sort, 'direction' => $direction];
+$paginationLabel = 'Inventory count pages';
+$url = static fn(array $changes): string => '?' . http_build_query(array_replace($paginationFilters + ['page' => $page, 'length' => $pageSize], $changes));
+$sortUrl = static fn(string $column): string => $url(['sort' => $column, 'direction' => $sort === $column && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]);
 $pendingTotal = $countService->getPendingCountTotal();
 $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_code_lookup.php');
+$recordToken = $error !== '' && is_string($_POST['operation_token'] ?? null) ? $_POST['operation_token'] : bin2hex(random_bytes(24));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -133,14 +129,18 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
     <title>Inventory Counts</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/style.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/inventory.css')) ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/css/inventory-counts.css') . '?v=' . filemtime(__DIR__ . '/../../assets/css/inventory-counts.css')) ?>">
 <?php require __DIR__ . '/../../../backend/includes/inventory_drafts.php'; ?>
 </head>
 
-<body>
+<body class="inventory-counts-page">
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
-            <h1 class="u-sr-only">Inventory Counts</h1>
+            <div class="inventory-page-heading">
+                <h1>Inventory Counts</h1>
+                <div class="inventory-recovery-slot" data-inventory-recovery-slot></div>
+            </div>
             <?php if ($message): ?>
                 <div class="alert tag-success"><?= htmlspecialchars($message) ?></div>
             <?php endif; ?>
@@ -148,9 +148,13 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                 <div class="alert-error"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
 
+            <nav class="count-tabs" role="tablist" aria-label="Inventory count sections">
+                <?php if ($canMutateInventory): ?><button type="button" role="tab" id="tab-new-count" class="count-tab" aria-selected="<?= $countView === 'new' ? 'true' : 'false' ?>" aria-controls="panel-new-count" tabindex="<?= $countView === 'new' ? '0' : '-1' ?>">New Count</button><?php endif; ?>
+                <button type="button" role="tab" id="tab-recent-counts" class="count-tab" aria-selected="<?= $countView === 'recent' ? 'true' : 'false' ?>" aria-controls="panel-recent-counts" tabindex="<?= $countView === 'recent' ? '0' : '-1' ?>">Recent Counts</button>
+            </nav>
             <div class="count-layout">
-                <div class="count-panel">
-                    <h3>New count</h3>
+                <div class="count-panel" role="tabpanel" id="panel-new-count" aria-label="New Count" <?= $countView !== 'new' ? 'hidden' : '' ?>>
+                    <div class="count-panel-heading"><h2>New stock count</h2></div>
                     <?php if ($correctionFormActive): ?>
                         <div class="message success">
                             Correcting approved stock issue report #<?= (int)$correctReport['adjustment_id'] ?>
@@ -167,18 +171,22 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                     <?php endif; ?>
 
                     <?php if ($canMutateInventory): ?>
+                        <?php if ($recheckCount): ?><p class="alert">Recount for pending count #<?= $recheckId ?>. Enter fresh quantities; saving replaces the pending count and keeps its history.</p><?php endif; ?>
                         <form method="POST" class="count-form">
                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
                             <input type="hidden" name="action" value="record">
+                            <input type="hidden" name="operation_token" value="<?= htmlspecialchars($recordToken) ?>">
+                            <input type="hidden" name="stock_version" id="stock_version" value="">
+                            <?php if ($recheckCount): ?><input type="hidden" name="recheck_count_id" value="<?= $recheckId ?>"><?php endif; ?>
                             <?php if ($correctionFormActive): ?>
                                 <input type="hidden" name="related_adjustment_id" value="<?= (int)$correctReport['adjustment_id'] ?>">
                             <?php endif; ?>
                     <?php else: ?>
                         <div class="count-form">
-                            <p class="section-description">Read-only access. Inventory Managers record, approve, or reject counts.</p>
+                            <p class="section-description">Read-only access. Inventory Managers save stock counts.</p>
                     <?php endif; ?>
 
-                        <div class="form-group">
+                        <div class="form-group count-product-field">
                             <label for="product_id">Product</label>
                             <div class="count-product-control">
                                 <input type="text" id="product_search" hidden
@@ -198,7 +206,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                                     <option
                                         value="<?= (int)$product['product_id'] ?>"
                                         data-system-qty="<?= (int)$product['quantity_on_hand'] ?>"
-                                        <?= $correctionFormActive && (int)$correctReport['product_id'] === (int)$product['product_id'] ? 'selected' : '' ?>>
+                                        <?= $selectedProductId === (int)$product['product_id'] ? 'selected' : '' ?>>
                                         <?= htmlspecialchars($product['sku'] . ' - ' . $product['product_name']) ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -210,6 +218,9 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                             </div>
                         </div>
 
+                        <p id="count_entry_placeholder" class="count-entry-placeholder">Search for a product to compare system stock with your physical count.</p>
+                        <div class="count-entry-layout" id="count_entry_layout" hidden>
+                        <section class="count-entry-main" aria-label="Physical stock">
                         <div id="batch_reconciliation_section" class="form-group" hidden>
                             <div id="batch_mismatch_alert" class="alert-error" style="margin-bottom: 12px; padding: 10px; border-radius: 4px;" hidden></div>
                             <div id="unbatched_stock_alert" class="alert" style="margin-bottom: 12px; padding: 10px; border-radius: 4px; background: #fff3cd; color: #856404; border: 1px solid #ffeeba;" hidden></div>
@@ -217,7 +228,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                             <label>Count by batch</label>
                             <p class="section-description">Count each batch. Leave unknown expiration dates blank.</p>
                             <div class="table-wrap" style="margin-bottom: 12px;">
-                                <table id="batch_counts_table" data-no-smart-table>
+                                <table id="batch_counts_table" data-no-smart-table data-no-ghost-rows>
                                     <thead>
                                         <tr>
                                             <th>Batch</th>
@@ -250,12 +261,15 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                             </div>
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-group" id="single_quantity_group">
                             <label for="physical_quantity">Counted quantity</label>
                             <input type="number" name="physical_quantity" id="physical_quantity" min="0" required <?= $canMutateInventory ? '' : 'readonly' ?>>
                             <button type="button" id="use_system_quantity" class="btn btn-small btn-secondary" disabled>Use system quantity</button>
                         </div>
 
+                        </section>
+                        <aside class="count-review" aria-label="Count summary">
+                        <h3>Count summary</h3>
                         <div class="quantity-preview" aria-live="polite">
                             <div>
                                 <span>System</span>
@@ -284,117 +298,115 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                         </div>
 
                         <?php if ($canMutateInventory): ?>
-                            <button type="submit" class="btn btn-block">Record Count</button>
+                            <button type="submit" class="btn btn-block" id="save_count" disabled>Save Count</button>
+                        </aside>
+                        </div>
                         </form>
                         <?php else: ?>
+                        </aside>
+                        </div>
                         </div>
                         <?php endif; ?>
                 </div>
 
-                <div class="count-panel">
-                    <div class="section-header">
-                        <div>
-                            <h3>Recent counts</h3>
-                        </div>
+                <div class="count-panel" role="tabpanel" id="panel-recent-counts" aria-labelledby="tab-recent-counts" <?= $countView !== 'recent' ? 'hidden' : '' ?>>
+                    <div class="count-history-toolbar">
+                    <div class="count-panel-heading">
+                        <h2>Count history</h2>
+                        <span class="count-history-total"><?= number_format($totalRows) ?> <?= $totalRows === 1 ? 'count' : 'counts' ?></span>
                     </div>
-
-                    <div class="table-wrap">
-                        <table>
+                    <form method="GET" class="count-history-search" role="search">
+                        <input type="hidden" name="count_view" value="recent">
+                        <input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>">
+                        <input type="hidden" name="direction" value="<?= htmlspecialchars($direction) ?>">
+                        <input type="hidden" name="length" value="<?= $pageSize ?>">
+                        <div class="count-search-field">
+                        <label for="count_history_search" class="sr-only">Search count history</label>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+                        <input type="search" name="q" id="count_history_search" placeholder="Search product or SKU" value="<?= htmlspecialchars($search) ?>">
+                        </div>
+                        <button type="submit" class="btn btn-secondary count-search-submit">Search</button>
+                        <?php if ($search !== ''): ?><a class="count-clear-search" href="<?= htmlspecialchars($url(['q' => '', 'page' => 1])) ?>">Clear</a><?php endif; ?>
+                    </form>
+                    </div>
+                    <?php if ($pendingTotal > 0): ?><p class="muted"><?= $pendingTotal ?> older pending count(s) need a fresh count before stock can be updated.</p><?php endif; ?>
+                    <div class="table-wrap count-history-table-wrap">
+                        <table class="count-history-table" data-no-smart-table data-no-ghost-rows>
                             <thead>
                                 <tr>
-                                    <th>Date & Time</th>
-                                    <th>Product</th>
-                                    <th>System</th>
-                                    <th>Counted</th>
-                                    <th>Difference</th>
-                                    <th>Reason</th>
-                                    <th>Counted By</th>
-                                    <th>Approved By</th>
-                                    <th>Status</th>
-                                    <th>Action</th>
+                                    <?php foreach (['date' => 'Date & Time', 'product' => 'Product', 'system' => 'System', 'counted' => 'Counted', 'difference' => 'Difference'] as $column => $label): ?>
+                                        <th scope="col" class="<?= in_array($column, ['system', 'counted', 'difference'], true) ? 'count-number' : '' ?>" aria-sort="<?= $sort === $column ? ($direction === 'asc' ? 'ascending' : 'descending') : 'none' ?>"><a href="<?= htmlspecialchars($sortUrl($column)) ?>"><?= $label ?><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="<?= $sort === $column ? ($direction === 'asc' ? 'm7 14 5-5 5 5' : 'm7 10 5 5 5-5') : 'm8 9 4-4 4 4M8 15l4 4 4-4' ?>"/></svg></a></th>
+                                    <?php endforeach; ?>
+                                    <th scope="col">Reason</th>
+                                    <?php foreach (['staff' => 'Counted By', 'status' => 'Status'] as $column => $label): ?>
+                                        <th scope="col" aria-sort="<?= $sort === $column ? ($direction === 'asc' ? 'ascending' : 'descending') : 'none' ?>"><a href="<?= htmlspecialchars($sortUrl($column)) ?>"><?= $label ?><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="<?= $sort === $column ? ($direction === 'asc' ? 'm7 14 5-5 5 5' : 'm7 10 5 5 5-5') : 'm8 9 4-4 4 4M8 15l4 4 4-4' ?>"/></svg></a></th>
+                                    <?php endforeach; ?>
+                                    <?php if ($showCountActions): ?><th scope="col">Action</th><?php endif; ?>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if ($counts): ?>
                                     <?php foreach ($counts as $count): ?>
-                                        <?php $difference = (int)$count['difference_qty']; ?>
+                                        <?php $difference = (int)$count['difference_qty']; $countDate = explode(' · ', format_display_datetime($count['counted_at']), 2); ?>
                                         <tr>
-                                            <td><?= htmlspecialchars(format_display_datetime($count['counted_at'])) ?></td>
-                                            <td>
-                                                <strong><?= htmlspecialchars($count['sku']) ?></strong>
-                                                <br><small class="muted"><?= htmlspecialchars($count['product_name']) ?></small>
+                                            <td class="count-date"><span><?= htmlspecialchars($countDate[0]) ?></span><?php if (isset($countDate[1])): ?><small><?= htmlspecialchars($countDate[1]) ?></small><?php endif; ?></td>
+                                            <td class="count-product-cell">
+                                                <strong><?= htmlspecialchars($count['product_name']) ?></strong>
+                                                <div class="count-product-meta"><span><?= htmlspecialchars($count['sku']) ?></span>
+                                                <?php if (!empty($count['batch_count'])): ?>
+                                                    <button type="button" class="count-batch-link btn-view-batches" data-count-id="<?= (int)$count['count_id'] ?>" aria-label="View <?= (int)$count['batch_count'] ?> batches for count #<?= (int)$count['count_id'] ?>"><?= (int)$count['batch_count'] ?> batch<?= (int)$count['batch_count'] === 1 ? '' : 'es' ?></button>
+                                                <?php endif; ?>
+                                                </div>
                                             </td>
                                             <?php $hasCountPack = !empty($count['product_pack_size']) && (int)$count['product_pack_size'] > 1; ?>
-                                            <td>
+                                            <td class="count-number">
                                                 <?= (int)$count['system_quantity'] ?>
                                                 <?php if ($hasCountPack && array_key_exists('system_sealed_quantity', $count)): ?>
                                                     <br><small class="muted"><?= (int)$count['system_sealed_quantity'] ?> pk, <?= (int)$count['system_loose_quantity'] ?> loose</small>
                                                 <?php endif; ?>
                                             </td>
-                                            <td>
+                                            <td class="count-number count-actual">
                                                 <?= (int)$count['physical_quantity'] ?>
                                                 <?php if ($hasCountPack && array_key_exists('physical_sealed_quantity', $count)): ?>
                                                     <br><small class="muted"><?= (int)$count['physical_sealed_quantity'] ?> pk, <?= (int)$count['physical_loose_quantity'] ?> loose</small>
                                                 <?php endif; ?>
-                                                <?php if (!empty($count['batch_count'])): ?>
-                                                    <br><button type="button" class="btn btn-small btn-secondary btn-view-batches" data-count-id="<?= (int)$count['count_id'] ?>" style="margin-top: 4px; padding: 2px 6px; font-size: 11px;">
-                                                        <?= (int)$count['batch_count'] ?> batch<?= (int)$count['batch_count'] === 1 ? '' : 'es' ?>
-                                                    </button>
-                                                <?php endif; ?>
                                             </td>
-                                            <td>
+                                            <td class="count-number">
                                                 <strong class="<?= $difference < 0 ? 'diff-negative' : ($difference > 0 ? 'diff-positive' : '') ?>">
                                                     <?= $difference > 0 ? '+' . $difference : $difference ?>
                                                 </strong>
+                                                <small class="count-difference-note"><?= $difference < 0 ? 'short' : ($difference > 0 ? 'extra' : 'matched') ?></small>
                                             </td>
-                                            <td>
+                                            <td class="count-reason">
                                                 <?= htmlspecialchars($count['discrepancy_reason']) ?>
                                                 <?php if (!empty($count['related_adjustment_id'])): ?>
                                                     <br><small class="muted">Correction of stock issue report #<?= (int)$count['related_adjustment_id'] ?></small>
                                                 <?php endif; ?>
                                             </td>
-                                            <td><?= htmlspecialchars($count['counted_by_name']) ?></td>
-                                            <td>
-                                                <?= htmlspecialchars($count['approved_by_name'] ?? '-') ?>
-                                                <?php if (!empty($count['approved_at'])): ?>
-                                                    <br><small class="muted"><?= htmlspecialchars(format_display_datetime($count['approved_at'])) ?></small>
-                                                <?php endif; ?>
-                                            </td>
+                                            <td class="count-staff"><?= htmlspecialchars($count['counted_by_name']) ?></td>
                                             <td>
                                                 <span class="status-pill status-<?= htmlspecialchars($count['status']) ?>">
-                                                    <?= htmlspecialchars($count['status']) ?>
+                                                    <?= htmlspecialchars(['approved' => 'Saved', 'pending' => 'Needs recount', 'rejected' => 'Closed'][$count['status']] ?? $count['status']) ?>
                                                 </span>
                                             </td>
-                                            <td>
+                                            <?php if ($showCountActions): ?><td>
                                                 <?php if ($count['status'] === 'pending' && $canMutateInventory): ?>
-                                                    <div class="count-actions">
-                                                        <form method="POST" class="inline-form">
-                                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
-                                                            <input type="hidden" name="action" value="approve">
-                                                            <input type="hidden" name="count_id" value="<?= (int)$count['count_id'] ?>">
-                                                            <button type="submit" class="btn btn-small">Approve</button>
-                                                        </form>
-                                                        <form method="POST" class="inline-form">
-                                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
-                                                            <input type="hidden" name="action" value="reject">
-                                                            <input type="hidden" name="count_id" value="<?= (int)$count['count_id'] ?>">
-                                                            <button type="submit" class="btn btn-small btn-secondary">Reject</button>
-                                                        </form>
-                                                    </div>
+                                                    <a class="btn btn-small btn-secondary" href="?recount=<?= (int)$count['count_id'] ?>">Count again</a>
                                                 <?php else: ?>
                                                     <span class="muted">-</span>
                                                 <?php endif; ?>
-                                            </td>
+                                            </td><?php endif; ?>
                                         </tr>
                                     <?php endforeach; ?>
                                 <?php else: ?>
                                     <tr>
-                                        <td class="u-empty-cell-padded" colspan="10">No inventory counts recorded yet.</td>
+                                        <td class="count-history-empty" colspan="<?= $showCountActions ? 9 : 8 ?>"><strong><?= $search !== '' ? 'No counts match your search.' : 'No inventory counts recorded yet.' ?></strong><span><?= $search !== '' ? 'Try another product name or SKU.' : 'Saved stock counts will appear here.' ?></span></td>
                                     </tr>
                                 <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
+                    <?php require __DIR__ . '/../../../backend/app/Views/table_pagination.php'; ?>
                 </div>
             </div>
 
@@ -409,12 +421,39 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
     </div>
 
     <script>
+        const countTabs = Array.from(document.querySelectorAll('.count-tabs > [role="tab"]'));
+        function selectCountTab(tab, focus = false) {
+            countTabs.forEach(button => {
+                const selected = button === tab;
+                button.setAttribute('aria-selected', String(selected));
+                button.tabIndex = selected ? 0 : -1;
+                document.getElementById(button.getAttribute('aria-controls')).hidden = !selected;
+            });
+            const location = new URL(window.location.href);
+            location.searchParams.set('count_view', tab.id === 'tab-new-count' ? 'new' : 'recent');
+            window.history.replaceState(null, '', location);
+            if (focus) tab.focus();
+        }
+        countTabs.forEach((tab, index) => {
+            tab.addEventListener('click', () => selectCountTab(tab));
+            tab.addEventListener('keydown', event => {
+                let next;
+                if (event.key === 'ArrowRight') next = (index + 1) % countTabs.length;
+                if (event.key === 'ArrowLeft') next = (index + countTabs.length - 1) % countTabs.length;
+                if (event.key === 'Home') next = 0;
+                if (event.key === 'End') next = countTabs.length - 1;
+                if (next === undefined) return;
+                event.preventDefault();
+                selectCountTab(countTabs[next], true);
+            });
+        });
         const productSelect = document.getElementById('product_id');
         const physicalInput = document.getElementById('physical_quantity');
         const useSystemQuantity = document.getElementById('use_system_quantity');
         const systemQty = document.getElementById('systemQty');
         const physicalQty = document.getElementById('physicalQty');
         const differenceQty = document.getElementById('differenceQty');
+        let latestCoverageRequest = 0;
 
         function updatePreview() {
             const option = productSelect.options[productSelect.selectedIndex];
@@ -457,10 +496,10 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             const s = parseInt(topLevelSealedInput.value, 10) || 0;
             const l = parseInt(topLevelLooseInput.value, 10) || 0;
             const pSize = parseInt(activeCoverage.pack_size, 10) || 1;
-            if (topLevelSealedInput.value !== '' || topLevelLooseInput.value !== '') {
+            if (topLevelSealedInput.value !== '' && topLevelLooseInput.value !== '') {
                 physicalInput.value = (s * pSize) + l;
-                updatePreview();
-            }
+            } else physicalInput.value = '';
+            updatePreview();
         }
         if (topLevelSealedInput) topLevelSealedInput.addEventListener('input', recomputeTopLevelPackCount);
         if (topLevelLooseInput) topLevelLooseInput.addEventListener('input', recomputeTopLevelPackCount);
@@ -486,9 +525,6 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             }
         });
         updatePreview();
-        if (productSelect.value) {
-            fetchBatchCoverage(productSelect.value);
-        }
 
         const batchSection = document.getElementById('batch_reconciliation_section');
         const batchMismatchAlert = document.getElementById('batch_mismatch_alert');
@@ -501,10 +537,12 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
         const batchDetailBody = document.getElementById('batch_detail_body');
         let extraBatchIndex = 0;
         let activeCoverage = null;
+        let countInputMode = '';
+        if (productSelect.value) fetchBatchCoverage(productSelect.value);
 
         window.RetailMindInventoryDrafts?.register({
             eligible: form => form.matches('.count-form, .review-form, .inline-form'),
-            submissionKind: (form, action) => ({record:'count', approve:'approveCount', reject:'rejectCount'})[action] || '',
+            submissionKind: (form, action) => ({record:'saveCount'})[action] || '',
             async prepare(draft) {
                 if (draft.id !== 'record:') return;
                 const value = name => draft.values.find(item => item.name === name)?.value;
@@ -524,8 +562,15 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             }
         });
         function fetchBatchCoverage(productId) {
+            const requestId = ++latestCoverageRequest;
+            activeCoverage = null;
+            document.getElementById('stock_version')?.setAttribute('value', '');
+            const saveButton = document.getElementById('save_count');
+            if (saveButton) saveButton.disabled = true;
             if (!productId || productId <= 0) {
                 if (batchSection) batchSection.hidden = true;
+                document.getElementById('count_entry_layout').hidden = true;
+                document.getElementById('count_entry_placeholder').hidden = false;
                 activeCoverage = null;
                 return;
             }
@@ -534,13 +579,62 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             })
                 .then(res => res.json())
                 .then(data => {
-                    if (!data.success || !data.coverage) return;
+                    if (requestId !== latestCoverageRequest || String(productSelect.value) !== String(productId)) return;
+                    if (!data.success || !data.coverage) throw new Error('Batch coverage unavailable');
                     activeCoverage = data.coverage;
                     renderBatchSection(data.coverage);
+                    const revealEntry = document.getElementById('count_entry_layout').hidden;
+                    document.getElementById('count_entry_layout').hidden = false;
+                    document.getElementById('count_entry_placeholder').hidden = true;
+                    document.getElementById('stock_version').value = data.coverage.stock_version;
+                    productSelect.selectedOptions[0].dataset.systemQty = data.coverage.on_hand;
+                    if (saveButton) saveButton.disabled = false;
+                    updatePreview();
+                    if (physicalInput.disabled || revealEntry) focusActualCount();
                     return data.coverage;
                 })
-                .catch(() => { activeCoverage = null; });
+                .catch(() => {
+                    if (requestId !== latestCoverageRequest || String(productSelect.value) !== String(productId)) return;
+                    activeCoverage = null;
+                    document.getElementById('scan_status').textContent = 'Current stock could not be loaded. Select the product again to retry.';
+                });
         }
+
+        function focusActualCount() {
+            if (document.getElementById('panel-new-count').hidden) return;
+            const input = document.querySelector('#batch_reconciliation_section .batch-count-input:not([disabled])')
+                || (!topLevelSealedInput.disabled ? topLevelSealedInput : physicalInput);
+            input.focus();
+        }
+
+        function syncCountInputs() {
+            if (!activeCoverage) return;
+            const hasBatchInputs = batchSection.querySelector('.batch-count-input') !== null;
+            const hasPacks = activeCoverage.has_sales_pack && !hasBatchInputs;
+            const mode = hasBatchInputs ? 'batch' : (hasPacks ? 'pack' : 'piece');
+            if (mode !== countInputMode && (mode !== 'piece' || countInputMode !== '')) {
+                physicalInput.value = '';
+                topLevelSealedInput.value = '';
+                topLevelLooseInput.value = '';
+            }
+            countInputMode = mode;
+            document.getElementById('single_quantity_group').hidden = hasBatchInputs || hasPacks;
+            physicalInput.disabled = hasBatchInputs || hasPacks;
+            physicalInput.required = !physicalInput.disabled;
+            topLevelPackWrap.style.display = hasPacks ? 'grid' : 'none';
+            [topLevelSealedInput, topLevelLooseInput].forEach(input => {
+                input.disabled = !hasPacks;
+                input.required = hasPacks;
+            });
+        }
+
+        document.querySelector('form.count-form')?.addEventListener('submit', event => {
+            if (!activeCoverage || !document.getElementById('stock_version').value) {
+                event.preventDefault();
+                return;
+            }
+            if (!window.confirm('Save this count? System: ' + systemQty.textContent + '. Actual: ' + physicalQty.textContent + '. Difference: ' + differenceQty.textContent + '. Stock and batches will be updated.')) event.preventDefault();
+        });
 
         function escapeHtml(str) {
             return String(str).replace(/[&<>"']/g, function (m) {
@@ -607,7 +701,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                                            name="batches[${idx}][physical_sealed_quantity]" inputmode="numeric" aria-label="Packs counted, batch ${escapeHtml(bNum)}"
                                            min="0" style="width: 65px;" data-pack-size="${coverage.pack_size}"
                                            data-system-qty="${b.sealed_quantity ?? 0}"
-                                           value="${b.sealed_quantity ?? 0}" <?= $canMutateInventory ? '' : 'readonly' ?>>
+                                           required placeholder="Count" <?= $canMutateInventory ? '' : 'readonly' ?>>
                                 </div>
                                 <div>
                                     <label style="font-size:10px; display:block;">Loose</label>
@@ -615,7 +709,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                                            name="batches[${idx}][physical_loose_quantity]" inputmode="numeric" aria-label="Loose pieces counted, batch ${escapeHtml(bNum)}"
                                            min="0" style="width: 65px;"
                                            data-system-qty="${b.loose_quantity ?? 0}"
-                                           value="${b.loose_quantity ?? 0}" <?= $canMutateInventory ? '' : 'readonly' ?>>
+                                           required placeholder="Count" <?= $canMutateInventory ? '' : 'readonly' ?>>
                                 </div>
                                 <input type="hidden" class="batch-base-qty" name="batches[${idx}][physical_quantity]" value="${b.remaining_quantity}">
                             </div>
@@ -625,7 +719,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                             <input type="hidden" name="batches[${idx}][batch_id]" value="${b.batch_id}">
                             <input type="number" class="batch-count-input batch-count-loose" name="batches[${idx}][physical_quantity]" inputmode="numeric" aria-label="Counted quantity, batch ${escapeHtml(bNum)}"
                                    min="0" style="width: 80px;" data-system-qty="${b.remaining_quantity}"
-                                   placeholder="0" <?= $canMutateInventory ? '' : 'readonly' ?>>
+                                   required placeholder="Count" <?= $canMutateInventory ? '' : 'readonly' ?>>
                         `;
                     }
 
@@ -641,6 +735,9 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             }
 
             attachBatchInputListeners();
+            syncCountInputs();
+            if (coverage.batches.length > 0 || coverage.has_sales_pack) physicalInput.value = '';
+            updatePreview();
         }
 
         function attachBatchInputListeners() {
@@ -658,6 +755,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
             if (rows.length === 0) return;
             let sum = 0;
             let hasAny = false;
+            const complete = Array.from(batchSection.querySelectorAll('.batch-count-input')).every(input => input.value !== '');
             rows.forEach(function (row) {
                 const sealedInp = row.querySelector('.batch-count-sealed');
                 const looseInp = row.querySelector('.batch-count-loose');
@@ -680,14 +778,15 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                     }
                 }
             });
-            if (hasAny) {
-                physicalInput.value = sum;
-                updatePreview();
-            }
+            physicalInput.value = hasAny && complete ? sum : '';
+            updatePreview();
         }
 
         if (addExtraBatchBtn) {
             addExtraBatchBtn.addEventListener('click', function () {
+                if (!activeCoverage) return;
+                if (!batchSection.querySelector('.batch-count-input') && physicalInput.value !== ''
+                    && !window.confirm('Switch to counting by batch? Enter the actual quantities in the found batch instead.')) return;
                 const key = 'extra_' + (++extraBatchIndex);
                 const div = document.createElement('div');
                 div.className = 'extra-batch-row';
@@ -697,17 +796,17 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                     batchFields = `
                         <div class="form-group" style="margin-bottom:4px;">
                             <label style="font-size:12px;">Sealed Packs (x ${activeCoverage.pack_size})</label>
-                            <input type="number" class="batch-count-input batch-count-sealed" name="batches[${key}][physical_sealed_quantity]" inputmode="numeric" aria-label="Found batch sealed packs" min="0" value="0" data-pack-size="${activeCoverage.pack_size}" style="width:100%;">
+                            <input type="number" class="batch-count-input batch-count-sealed" name="batches[${key}][physical_sealed_quantity]" inputmode="numeric" aria-label="Found batch sealed packs" min="0" required placeholder="Count" data-pack-size="${activeCoverage.pack_size}" style="width:100%;">
                         </div>
                         <div class="form-group" style="margin-bottom:4px;">
                             <label style="font-size:12px;">Loose Pieces</label>
-                            <input type="number" class="batch-count-input batch-count-loose" name="batches[${key}][physical_loose_quantity]" inputmode="numeric" aria-label="Found batch loose pieces" min="0" value="0" style="width:100%;">
+                            <input type="number" class="batch-count-input batch-count-loose" name="batches[${key}][physical_loose_quantity]" inputmode="numeric" aria-label="Found batch loose pieces" min="0" required placeholder="Count" style="width:100%;">
                         </div>
                         <input type="hidden" class="batch-base-qty" name="batches[${key}][physical_quantity]" inputmode="numeric" aria-label="Found batch counted quantity" value="0">
                     `;
                 } else {
                     batchFields = `
-                        <div class="form-group" style="margin-bottom:4px; grid-column: span 2;">
+                        <div class="form-group" style="margin-bottom:4px; grid-column: 1 / -1;">
                             <label style="font-size:12px;">Counted Quantity *</label>
                             <input type="number" class="batch-count-input batch-count-loose" name="batches[${key}][physical_quantity]" inputmode="numeric" aria-label="Found batch counted quantity" min="1" required style="width:100%;">
                         </div>
@@ -718,7 +817,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                         <strong>Found batch</strong>
                         <button type="button" class="btn btn-small btn-secondary remove-batch-btn" style="padding:1px 6px;">&times; Remove</button>
                     </div>
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+                    <div class="count-found-fields">
                         ${batchFields}
                         <div class="form-group" style="margin-bottom:4px;">
                             <label style="font-size:12px;">Expiration date (optional)</label>
@@ -728,7 +827,7 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                             <label style="font-size:12px;">Batch number / label (optional)</label>
                             <input type="text" name="batches[${key}][batch_number]" autocomplete="off" aria-label="Found batch number or label" placeholder="e.g. FOUND-01" style="width:100%;">
                         </div>
-                        <div class="form-group" style="margin-bottom:4px; grid-column: span 2;">
+                        <div class="form-group" style="margin-bottom:4px; grid-column: 1 / -1;">
                             <label style="font-size:12px;">Notes (optional)</label>
                             <input type="text" name="batches[${key}][notes]" autocomplete="off" aria-label="Found batch notes" placeholder="e.g. Unbatched shelf stock" style="width:100%;">
                         </div>
@@ -736,10 +835,13 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
                 `;
                 div.querySelector('.remove-batch-btn').addEventListener('click', function () {
                     div.remove();
+                    syncCountInputs();
                     recomputeTotalFromBatches();
                 });
                 extraBatchesList.appendChild(div);
                 attachBatchInputListeners();
+                syncCountInputs();
+                recomputeTotalFromBatches();
             });
         }
 
@@ -1032,8 +1134,8 @@ $productCodeLookupUrl = app_url('components/barcodeScanner/apiScanner/product_co
 
                         applyProductSelection(body.product);
                         showScanMatch(body.product, body.matched_code_kind);
-                        setScanStatus('Matched by ' + (kindLabels[body.matched_code_kind] || 'code') + '. Enter the counted total.', 'ok');
-                        physicalInput.focus();
+                        setScanStatus('Matched by ' + (kindLabels[body.matched_code_kind] || 'code') + '. Enter the actual count.', 'ok');
+                        if (!physicalInput.disabled) physicalInput.focus();
                         updatePreview();
                         return;
                     }

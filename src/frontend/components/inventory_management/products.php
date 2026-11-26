@@ -1651,7 +1651,7 @@ foreach ($products as $product) {
                                 <option>25</option>
                                 <option>50</option>
                                 <option>100</option>
-                            </select> entries per page</label>
+                            </select></label>
                         <span hidden class="product-pagination-status" id="page-status" aria-live="polite"></span>
                         <nav class="pagination-buttons" id="pagination-buttons" aria-label="Product pages"></nav>
                     </footer>
@@ -1845,6 +1845,26 @@ foreach ($products as $product) {
 </details>
 </div>
 </div>
+<label class="u-checkbox-label" for="create-sell-packs"><input type="checkbox" id="create-sell-packs" name="sell_sealed_packs" aria-controls="sales-pack-fields"> Also sell sealed packs</label><div id="sales-pack-fields" hidden>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="create-pack-size">Pieces per Sales Pack *</label>
+                                    <input type="number" min="2" max="2147483647" step="1" name="pack_size" id="create-pack-size" disabled>
+                                    <small class="field-error">Enter a whole-number count of at least 2.</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="create-pack-price">Sales Pack Price (&#8369;) *</label>
+                                    <input type="number" step="0.01" min="0.01" max="99999999.99" name="pack_price" id="create-pack-price" disabled aria-describedby="pack-price-calc-preview">
+                                    <small class="field-error">Enter a pack price lower than buying its pieces separately.</small>
+                                </div>
+                                <div class="form-group full">
+                                    <label for="create-pack-barcode">Sales Pack Barcode *</label>
+                                    <input name="pack_barcode" id="create-pack-barcode" maxlength="50" placeholder="Scan or enter the pack barcode" disabled>
+                                    <small class="field-error">Enter a unique Sales Pack barcode.</small>
+                                </div>
+                            </div>
+                            <p class="pricing-readout" id="pack-price-calc-preview" aria-live="polite"></p>
+                            </div>
 <details class="product-create-options" id="create-receiving-options"<?= $receivingOrigin && !$productHandoff ? ' open' : '' ?>><summary><span>Receiving package</span><span class="product-option-value" id="create-receiving-summary"></span></summary>
 <div class="form-grid">
 <div class="form-group">
@@ -1871,26 +1891,6 @@ foreach ($products as $product) {
 <div class="form-group"><label for="create-receiving-barcode">Receiving Package Barcode (optional)</label><input id="create-receiving-barcode" name="case_barcode" maxlength="80" placeholder="Outer carton, case, or box barcode"><small class="field-help">For receiving stock, not checkout.</small></div>
 </div>
 </details>
-<label class="u-checkbox-label" for="create-sell-packs"><input type="checkbox" id="create-sell-packs" name="sell_sealed_packs" aria-controls="sales-pack-fields"> Also sell sealed packs</label><div id="sales-pack-fields" hidden>
-                            <div class="form-grid">
-                                <div class="form-group">
-                                    <label for="create-pack-size">Pieces per Sales Pack *</label>
-                                    <input type="number" min="2" max="2147483647" step="1" name="pack_size" id="create-pack-size" disabled>
-                                    <small class="field-error">Enter a whole-number count of at least 2.</small>
-                                </div>
-                                <div class="form-group">
-                                    <label for="create-pack-price">Sales Pack Price (&#8369;) *</label>
-                                    <input type="number" step="0.01" min="0.01" max="99999999.99" name="pack_price" id="create-pack-price" disabled aria-describedby="pack-price-calc-preview">
-                                    <small class="field-error">Enter a pack price lower than buying its pieces separately.</small>
-                                </div>
-                                <div class="form-group full">
-                                    <label for="create-pack-barcode">Sales Pack Barcode *</label>
-                                    <input name="pack_barcode" id="create-pack-barcode" maxlength="50" placeholder="Scan or enter the pack barcode" disabled>
-                                    <small class="field-error">Enter a unique Sales Pack barcode.</small>
-                                </div>
-                            </div>
-                            <p class="pricing-readout" id="pack-price-calc-preview" aria-live="polite"></p>
-                            </div>
 <?php if ($productHandoff): ?>
 <div class="form-group" id="product-return-mode" hidden>
     <label for="return-quantity-mode">Quantity type for this delivery</label>

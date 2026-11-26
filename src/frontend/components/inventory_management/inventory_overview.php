@@ -2,6 +2,7 @@
 // components/inventory_management/inventory_overview.php
 require_once __DIR__ . '/../../../backend/includes/auth.php';
 require_once __DIR__ . '/../../../backend/includes/functions.php';
+require_once __DIR__ . '/../../../backend/includes/product_images.php';
 require_once __DIR__ . '/../../../backend/app/Services/InventoryService.php';
 require_once __DIR__ . '/../../../backend/app/Services/ProductService.php';
 require_role(['admin', 'super_admin', 'inventory_manager']);
@@ -277,6 +278,7 @@ try {
                     <?php foreach ($products as $product): ?>
                     <?php
                         $productId = (int)$product['product_id'];
+                        $productImage = product_image_url($product['product_image'] ?? null);
                         $quantity = (int)($product['quantity_on_hand'] ?? 0);
                         $threshold = max((int)($product['reorder_level'] ?? 0), (int)($product['safety_stock'] ?? 0));
                         $stockState = $quantity <= 0 ? 'out' : ($quantity <= $threshold ? 'low' : 'available');
@@ -296,7 +298,7 @@ try {
                     ?>
                     <tr data-overview-product-row data-category="<?= htmlspecialchars($productCategory) ?>" data-search="<?= htmlspecialchars(implode(' ', [$product['product_name'], $product['brand'] ?? '', $product['sku'] ?? '', $product['barcode'] ?? ''])) ?>" data-stock-state="<?= $stockState ?>" data-low="<?= $isLowStock ? '1' : '0' ?>" data-expiring="<?= $isExpiring ? '1' : '0' ?>" data-expired="<?= $isExpired ? '1' : '0' ?>" data-missing-exp="<?= $hasMissingExp ? '1' : '0' ?>" data-unbatched="<?= $hasUnbatched ? '1' : '0' ?>">
                         <td class="overview-select-cell"><input type="checkbox" class="overview-row-select" aria-label="Select <?= htmlspecialchars($product['product_name']) ?>"></td>
-                        <td data-sort-value="<?= htmlspecialchars($product['product_name']) ?>"><div class="overview-product-name"><span class="overview-product-thumb"><i class="bi bi-box-seam" aria-hidden="true"></i></span><span><strong><?= htmlspecialchars($product['product_name']) ?></strong><small><?= htmlspecialchars($product['brand'] ?: 'No brand') ?></small></span></div></td>
+                        <td data-sort-value="<?= htmlspecialchars($product['product_name']) ?>"><div class="overview-product-name"><span class="overview-product-thumb"><?php if ($productImage !== ''): ?><img src="<?= htmlspecialchars($productImage) ?>" alt="" width="40" height="40" loading="lazy"><?php endif; ?><i class="bi bi-box-seam" aria-hidden="true"></i></span><span><strong><?= htmlspecialchars($product['product_name']) ?></strong><small><?= htmlspecialchars($product['brand'] ?: 'No brand') ?></small></span></div></td>
                         <td><span class="overview-stock-status overview-stock-status--<?= $statusClass ?>"><?= htmlspecialchars($statusLabel) ?></span></td>
                         <td data-sort-value="<?= htmlspecialchars(($product['sku'] ?? '') . ' ' . ($product['barcode'] ?? '')) ?>"><strong><?= htmlspecialchars($product['sku'] ?? '-') ?></strong><small><?= htmlspecialchars($product['barcode'] ?: 'Not assigned') ?></small></td>
                         <td><?= htmlspecialchars($productCategory) ?></td>
@@ -454,6 +456,12 @@ try {
 <script src="<?= htmlspecialchars(app_url('assets/js/stock-risk.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/stock-risk.js')) ?>"></script>
 <script src="<?= htmlspecialchars(app_url('assets/js/info-tooltip.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/info-tooltip.js')) ?>"></script>
 <script>
+document.querySelectorAll('.overview-product-thumb img').forEach(image => {
+    const showPlaceholder = () => image.remove();
+    image.addEventListener('error', showPlaceholder, {once: true});
+    if (image.complete && image.naturalWidth === 0) showPlaceholder();
+});
+
 window.addEventListener('pagehide', () => document.documentElement.classList.remove('overview-fefo-active'));
 
 const inventoryChartData = <?= $chartDataJson ?>;

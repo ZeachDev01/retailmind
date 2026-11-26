@@ -23,6 +23,12 @@ $workspace = new StoreOperationsDashboardWorkspace(
     new RoleCapabilityPolicy()
 );
 $dashboard = $workspace->load('admin', $selectedRange);
+try {
+    $openShifts = (new \App\Services\CashierShiftService($pdo))->openShifts();
+} catch (Throwable $error) {
+    error_log('Open shifts unavailable: ' . $error->getMessage());
+    $openShifts = null;
+}
 
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 $backupRecommendation = (new \App\Backup\BackupKeyRecommendation($pdo))->recommendation((int)$_SESSION['user_id'], (string)current_role());
@@ -162,6 +168,11 @@ $attentionCount = count($dashboard['exceptions'] ?? []) + ($hasGcash ? 1 : 0);
                     </div>
                 <?php endif; ?>
             </section>
+
+            <section class="dashboard-section" id="open-cashier-shifts" aria-labelledby="open-shifts-heading" data-shift-status-url="<?= $escape(app_url('components/auth/shift_status.php')) ?>">
+                <?php require __DIR__ . '/../../../backend/app/Views/open_cashier_shifts.php'; ?>
+            </section>
+            <script src="<?= $escape(theme_url('assets/js/open-cashier-shifts.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/open-cashier-shifts.js')) ?>"></script>
 
             <?php if ($dashboard['headline'] !== []): ?>
                 <section class="store-status-section" id="store-status-section" aria-labelledby="store-status-title">

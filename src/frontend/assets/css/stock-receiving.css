@@ -307,7 +307,25 @@
 .receiving-product-group .add-receiving-batch { margin: .75rem 1.25rem 1.25rem; }
 .receiving-product-group + .receiving-product-group, .receiving-review-product + .receiving-review-product { border-top: 1px solid var(--border); }
 .receiving-current-cost { margin: 0; padding: 1rem 1.25rem; }
-@media (max-width: 1100px) {
+@media (min-width: 768px) and (max-width: 1180px) {
+    .stock-receiving-page .receiving-form { grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); }
+    .receiving-panel-heading { flex-wrap: wrap; padding: .875rem .75rem; }
+    .receiving-catalog-actions { flex-wrap: wrap; gap: .5rem; }
+    .receiving-search-bar, .receiving-summary-body { padding: .875rem .75rem; }
+    .receiving-search-group { flex-wrap: wrap; }
+    .receiving-search-group input[type="search"],
+    .receiving-search-group input[type="text"] { flex-basis: 100%; }
+    .receiving-search-group button { flex-grow: 1; }
+    .receiving-catalog { padding: .75rem; }
+    .receiving-form .receiving-line,
+    .receiving-form[data-step="1"] .receiving-line { padding: .875rem .75rem; }
+    .receiving-line .form-grid,
+    .receiving-line .form-section.receiving-quantity > .form-grid,
+    .receiving-extras .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .receiving-form :is(input, select) { min-width: 0; padding-inline: .5rem; }
+    .receiving-review-line { padding: .875rem .75rem; }
+}
+@media (max-width: 767px) {
     .stock-receiving-page .receiving-form { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
     .receiving-line .form-grid,
     .receiving-line .form-section.receiving-quantity > .form-grid,

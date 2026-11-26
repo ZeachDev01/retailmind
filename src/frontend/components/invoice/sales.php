@@ -29,18 +29,32 @@ if ($action === 'refund_conditions') {
             $conditionConfirmation = $saved['confirmation'];
         }
         if (!(new \App\Receipts\ReceiptEngine($pdo))->fetchSale($sale_id, $storeId)) throw new DomainException('Receipt not found in the authorized Store.');
-        $refundQuery = $pdo->prepare('SELECT refund_id FROM cash_refunds WHERE sale_id=?' . ($actorRole==='cashier'?' AND cashier_id=?':'') . ' ORDER BY refund_id');
+        $refundQuery = $pdo->prepare('SELECT refund_id, cashier_id, created_at, refund_amount FROM cash_refunds WHERE sale_id=?' . ($actorRole==='cashier'?' AND cashier_id=?':'') . ' ORDER BY refund_id');
         $refundQuery->execute($actorRole==='cashier'?[$sale_id,$actorId]:[$sale_id]);
-        $refundIds = $refundQuery->fetchAll(PDO::FETCH_COLUMN);
-        if (!$refundIds) echo '<p>No Cash Refund details are available in this Workspace.</p>';
+        $refundRows = $refundQuery->fetchAll(PDO::FETCH_ASSOC);
+        if (!$refundRows) echo '<p>No Cash Refund details are available in this Workspace.</p>';
         $returnedRefunds = [];
-        foreach ($refundIds as $refundId) $returnedRefunds[(int)$refundId] = $conditionService->details($actorId, $actorRole, (int)$refundId);
+        foreach ($refundRows as $refundRow) $returnedRefunds[(int)$refundRow['refund_id']] = $conditionService->details($actorId, $actorRole, (int)$refundRow['refund_id']);
+        $receiptEngine = new \App\Receipts\ReceiptEngine($pdo);
+        $paperWidthMm = $receiptEngine->resolvePaperWidth($actorId, $actorRole);
         if (isset($conditionConfirmation)) echo '<p role="status">' . htmlspecialchars($conditionConfirmation) . '</p>';
-        foreach ($returnedRefunds as $refundId => $conditionLines) {
+        foreach ($refundRows as $refundRow) {
+            $refundId = (int)$refundRow['refund_id'];
+            $conditionLines = $returnedRefunds[$refundId];
             echo '<h3>Cash Refund #' . (int)$refundId . '</h3>';
+            echo '<p>' . htmlspecialchars(\App\Services\PhilippineTime::format($refundRow['created_at'])) . ' · ' . receipt_money($refundRow['refund_amount']) . '</p>';
+            $refundReceipt = $receiptEngine->fetchRefundForCashier($refundId, (int)$refundRow['cashier_id'], $storeId);
+            if ($refundReceipt !== null) {
+                echo '<details class="receipt-refund-copy"><summary>Refund receipt #' . $refundId . '</summary><div class="receipt-container">';
+                echo '<div class="receipt-actions no-print"><button type="button" class="btn btn-secondary" onclick="printReceiptSection(this)">Print refund receipt #' . $refundId . '</button></div>';
+                \App\Receipts\ReceiptEngine::renderRefund($refundReceipt, $paperWidthMm);
+                echo '</div></details>';
+            } else {
+                echo '<p>Saved refund receipt is unavailable.</p>';
+            }
             require __DIR__ . '/../../../backend/app/Views/refund_return_conditions.php';
         }
-        if ($refundIds) echo '<p><a href="' . htmlspecialchars(app_url('components/cashier/refund_corrections.php')) . '">View linked Refund Correction Reviews</a></p>';
+        if ($refundRows) echo '<p><a href="' . htmlspecialchars(app_url('components/cashier/refund_corrections.php')) . '">View linked Refund Correction Reviews</a></p>';
     } catch (DomainException | InvalidArgumentException $e) {
         http_response_code($_SERVER['REQUEST_METHOD']==='POST'?422:403);
         echo '<p role="alert">' . htmlspecialchars($e->getMessage()) . '</p>';
@@ -213,7 +227,7 @@ if (in_array($action, ['view', 'reprint', 'thermal'], true) && $sale_id > 0) {
                     <span>To date</span>
                     <input type="date" id="receiptDateTo" autocomplete="off" aria-describedby="receiptTableStatusMessage">
                 </label>
-                <label class="receipt-refund-filter"><span>Cash Refund status</span><select id="receiptRefundStatus"><option value="">All Cash Refunds</option><option value="none">No Cash Refund</option><option value="partial">Partially refunded</option><option value="full">Fully refunded</option></select></label>
+                <label class="receipt-refund-filter"><span>Cash Refund status</span><select id="receiptRefundStatus"><option value="">All receipts</option><option value="none">No Cash Refund</option><option value="partial">Partially refunded</option><option value="full">Fully refunded</option></select></label>
                 <?php if ($canViewAllReceipts): ?>
                     <label>
                         <span>Cashier</span>
@@ -462,13 +476,15 @@ document.addEventListener('DOMContentLoaded', function() {
     drawerTabs.className = 'receipt-drawer-tabs';
     drawerTabs.setAttribute('role', 'tablist');
     drawerTabs.setAttribute('aria-label', 'Receipt details');
-    drawerTabs.innerHTML = '<button type="button" id="receiptPaperTab" role="tab" aria-controls="receiptContent" aria-selected="true" tabindex="0">Receipt</button>' +
-        '<button type="button" id="receiptOtherTab" role="tab" aria-controls="receiptOtherDetails" aria-selected="false" tabindex="-1" disabled>Other Details</button>';
+    drawerTabs.innerHTML = '<button type="button" id="receiptPaperTab" role="tab" aria-controls="receiptContent" aria-selected="true" tabindex="0">Original receipt</button>' +
+        '<button type="button" id="receiptOtherTab" role="tab" aria-controls="receiptOtherDetails" aria-selected="false" tabindex="-1" disabled>Refund receipts</button>';
     const drawerSummary = document.createElement('dl');
     drawerSummary.className = 'receipt-drawer-summary';
+    drawerSummary.hidden = true;
+    drawerSummary.setAttribute('aria-label', 'Transaction summary');
     const refundConditions = document.createElement('section');
     refundConditions.className = 'refund-condition-details';
-    otherPanel.append(drawerSummary, refundConditions);
+    otherPanel.append(refundConditions);
     let conditionSaleId = null;
     async function loadRefundConditions(saleId) {
         conditionSaleId = saleId;
@@ -516,8 +532,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-    receiptPanel.before(drawerTabs);
-    receiptPanel.after(otherPanel);
+    const drawerBody = document.createElement('div');
+    drawerBody.className = 'receipt-drawer-body';
+    receiptPanel.before(drawerTabs, drawerBody);
+    drawerBody.append(drawerSummary, receiptPanel, otherPanel);
     const tabs = Array.from(drawerTabs.querySelectorAll('[role="tab"]'));
     const panels = [receiptPanel, otherPanel];
     let currentReceiptTabIndex = 0;
@@ -559,17 +577,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const receipt = table.row(button.closest('tr')).data();
         if (!receipt) return;
         drawerSummary.replaceChildren();
+        drawerSummary.hidden = false;
         loadRefundConditions(receipt.sale_id);
         const money = function(value) {
             return '₱' + Number(value).toLocaleString('en-PH', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         };
         Object.entries({
+            'Date · Philippine time': receipt.sale_date_display,
+            'Cashier': receipt.cashier_name,
+            'Payment': receipt.payment_method,
             'Cashier shift': receipt.attribution_label,
             'Cash Refunds': receipt.refund_status,
+            'Original paid': money(receipt.total_amount),
             'Refunded': money(receipt.refunded_amount),
             'Remaining net': money(receipt.remaining_net_amount)
         }).forEach(function(entry) {
             const field = document.createElement('div');
+            if (['Original paid', 'Refunded', 'Remaining net'].includes(entry[0])) field.className = 'receipt-drawer-amount';
             const label = document.createElement('dt');
             const value = document.createElement('dd');
             label.textContent = entry[0];
@@ -577,6 +601,7 @@ document.addEventListener('DOMContentLoaded', function() {
             field.append(label, value);
             drawerSummary.append(field);
         });
+        drawerBody.scrollTop = 0;
         tabs[1].disabled = false;
         selectDrawerTab(0);
         window.viewReceipt(receipt.sale_id, button);

@@ -32,7 +32,7 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
     <a class="skip-link" href="#cashier-overview">Skip to main content</a>
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
-        <main class="main-content" id="cashier-overview" data-api="<?= htmlspecialchars(app_url('components/cashier/gcash_api.php?action=overview')) ?>" data-history="<?= htmlspecialchars(app_url('components/cashier/gcash.php?tab=history')) ?>">
+        <main class="main-content" id="cashier-overview" data-api="<?= htmlspecialchars(app_url('components/cashier/gcash_api.php?action=overview')) ?>">
             <h1 class="sr-only">Dashboard Overview</h1>
             <div class="gcash-tabs-nav-wrap">
                 <nav class="gcash-tablist" role="tablist" aria-label="Cashier overview">
@@ -277,81 +277,6 @@ $lowStockWarnings = $dashboardService->getCashierLowStockWarnings($cashierId);
                 </div>
             </section>
 
-            <section class="pos-panel gcash-overview-section gcash-overview-review" aria-labelledby="gcash-overview-nc-title">
-                <div class="pos-panel-header">
-                    <div class="pos-panel-title">
-                        <div class="pos-panel-icon"><i class="bi bi-shield-check" aria-hidden="true"></i></div>
-                        <div>
-                            <h2 id="gcash-overview-nc-title">Needs checking</h2>
-                        </div>
-                    </div>
-                    <div class="gcash-overview-review-actions">
-                        <span id="gcash-overview-nc-count" class="gcash-status gcash-status-needs-checking">—</span>
-                        <a class="btn btn-secondary" href="<?= htmlspecialchars(app_url('components/cashier/gcash.php?tab=history')) ?>">View history <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
-                    </div>
-                </div>
-                <div id="gcash-overview-nc-list" class="gcash-nc-list"></div>
-            </section>
-            <template id="gcash-overview-empty-template">
-                <div class="gcash-empty-state">
-                    <svg class="gcash-empty-illustration" width="220" height="170" viewBox="0 0 220 170" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                        <defs>
-                            <linearGradient id="rm-gcash-card-grad-t" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="var(--card-bg, #ffffff)" />
-                                <stop offset="100%" stop-color="var(--theme-surface-soft, #f1f5f9)" />
-                            </linearGradient>
-                            <linearGradient id="rm-gcash-brand-grad-t" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="#007dfe" />
-                                <stop offset="100%" stop-color="#0056b3" />
-                            </linearGradient>
-                            <linearGradient id="rm-gcash-badge-grad-t" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="#10b981" />
-                                <stop offset="100%" stop-color="#059669" />
-                            </linearGradient>
-                            <filter id="rm-gcash-empty-shadow-t" x="-20%" y="-15%" width="140%" height="140%" filterUnits="userSpaceOnUse">
-                                <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="rgba(15, 23, 42, 0.12)" />
-                            </filter>
-                        </defs>
-                        <ellipse cx="110" cy="148" rx="76" ry="12" fill="var(--theme-surface-soft, rgba(0, 125, 254, 0.08))" />
-                        <circle cx="110" cy="80" r="54" fill="var(--primary, #007dfe)" opacity="0.06" />
-                        <g filter="url(#rm-gcash-empty-shadow-t)">
-                            <rect x="74" y="20" width="72" height="114" rx="14" fill="url(#rm-gcash-card-grad-t)" stroke="var(--border, #cbd5e1)" stroke-width="1.5" />
-                        </g>
-                        <rect x="98" y="26" width="24" height="3" rx="1.5" fill="var(--muted, #94a3b8)" opacity="0.6" />
-                        <rect x="80" y="34" width="60" height="22" rx="6" fill="url(#rm-gcash-brand-grad-t)" opacity="0.95" />
-                        <rect x="86" y="41" width="12" height="8" rx="2" fill="#ffffff" opacity="0.95" />
-                        <rect x="103" y="41" width="31" height="3" rx="1.5" fill="#ffffff" opacity="0.85" />
-                        <rect x="103" y="46" width="20" height="2.5" rx="1.25" fill="#ffffff" opacity="0.6" />
-                        <rect x="82" y="66" width="36" height="4" rx="2" fill="var(--muted, #94a3b8)" opacity="0.4" />
-                        <rect x="124" y="66" width="16" height="4" rx="2" fill="#10b981" opacity="0.8" />
-                        <rect x="82" y="76" width="44" height="4" rx="2" fill="var(--muted, #94a3b8)" opacity="0.3" />
-                        <rect x="130" y="76" width="10" height="4" rx="2" fill="#007dfe" opacity="0.6" />
-                        <line x1="82" y1="88" x2="138" y2="88" stroke="var(--border, #cbd5e1)" stroke-width="1.5" stroke-dasharray="3 3" />
-                        <rect x="82" y="96" width="24" height="5" rx="2" fill="#007dfe" opacity="0.85" />
-                        <rect x="116" y="96" width="22" height="5" rx="2" fill="#007dfe" opacity="0.9" />
-                        <circle cx="110" cy="123" r="3.5" fill="var(--muted, #94a3b8)" opacity="0.4" />
-                        <g transform="translate(130, 88)">
-                            <circle cx="18" cy="18" r="22" fill="url(#rm-gcash-badge-grad-t)" filter="url(#rm-gcash-empty-shadow-t)" />
-                            <circle cx="18" cy="18" r="20" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" fill="none" />
-                            <path d="M12 18 L16 22 L24 14" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-                        </g>
-                        <path d="M50 46 L52 40 L58 38 L52 36 L50 30 L48 36 L42 38 L48 40 Z" fill="#007dfe" opacity="0.75" />
-                        <path d="M170 34 L171.5 29 L176.5 27.5 L171.5 26 L170 21 L168.5 26 L163.5 27.5 L168.5 29 Z" fill="#f59e0b" opacity="0.85" />
-                        <circle cx="46" cy="82" r="3" fill="#10b981" opacity="0.75" />
-                        <circle cx="174" cy="74" r="2.5" fill="#007dfe" opacity="0.6" />
-                    </svg>
-                    <h3>All clear — No transactions need checking</h3>
-                    <p class="gcash-empty-desc">All transactions are verified and in balance. Discrepancies will appear here for review.</p>
-                    <div class="gcash-empty-actions">
-                        <a href="<?= htmlspecialchars(app_url('components/cashier/gcash.php?tab=history')) ?>" class="btn btn-secondary">
-                            <i class="bi bi-clock-history" aria-hidden="true"></i> View History
-                        </a>
-                        <a href="<?= htmlspecialchars(app_url('components/cashier/gcash.php')) ?>" class="btn btn-primary">
-                            <i class="bi bi-arrows-angle-expand" aria-hidden="true"></i> Open Workspace
-                        </a>
-                    </div>
-                </div>
-            </template>
             </div>
         </div>
 

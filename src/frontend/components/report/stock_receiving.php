@@ -1190,7 +1190,7 @@ function renderCatalog() {
             }
             const row = addReceivingLine({product_id: p.product_id});
             showStep(1, false);
-            if (row) focusReceivingQuantity(row);
+            if (row) row.closest('.receiving-product-group').querySelector('.receiving-group-toggle').focus();
         });
 
         body.append(name, meta, costStock, pack, button);

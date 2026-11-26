@@ -62,3 +62,17 @@ Stock Receiving and Product catalog now provide a title-row recovery slot. Priva
 Focused Product draft and receiving notice tests, `npm run check`, and the rebuilt stylesheet check passed. The broader private-recovery suite did not complete: its offline submission scenario first advanced before asynchronous Review completed; a diagnostic wait then exposed an undefined `.html` value in that suite's response parser. Those diagnostic test edits were removed; the production recovery and submission logic was not changed.
 
 The receiving selection and Review flow passed TestSprite (14/14 steps): [run 70a75ca9](https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/abe16d0b-21f0-432e-8a86-72b1436c42fe/execution/c292e8ce-5d56-4e39-8ba5-d09fdc696c3d/test/70a75ca9-1a24-4f6a-9a02-6749fe300f5a). Live-site deployment remains unverified.
+
+## Tablet layout parity — 2026-11-25
+
+Tablet widths now retain the desktop catalog/editor split and side-by-side Review/summary. At 768–1180px, compact panel padding, wrapping headings, full-width search and paired quantity/lot/expiry fields keep the existing workflow usable. Phone stacking remains below 768px. Existing colors, typography, controls and transaction behavior are preserved; no tokens or dependencies were added.
+
+`stock_receiving_landscape_browser_test.js` passed 12 viewport rows from 390–1366px, including portrait/landscape tablets and both sides of the 900px shell breakpoint. Geometry checks cover panel alignment, search width, paired lot/expiry fields, retained values, reachable Review/Save and page overflow; editor captures cover both themes. Inspected renders are under ignored `output/playwright/stock-receiving-landscape/`. `inline_receiving_browser_test.js` and `npm run check` passed; the view audit retains an unrelated duplicate `open-register` ID warning in `cashier/shifts.php`. Physical tablets, Safari and touch gestures remain unverified.
+
+The receiving selection/Review flow also passed [TestSprite run 4b187193](https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/abe16d0b-21f0-432e-8a86-72b1436c42fe/execution/1728f194-a169-4af2-9bdb-eccf9cf78fce/test/4b187193-3602-4e0b-be31-8cf38b426d1b), 15/15 steps against a disposable Store. That run verifies the workflow at its default browser size; tablet geometry evidence comes from Playwright.
+
+### Catalog Add focus — 2026-11-25
+
+Catalog Add to delivery now focuses the added product's disclosure heading instead of its quantity input. The product still opens, but adding it does not programmatically invoke the software keyboard. Barcode scanning keeps its existing quantity focus. The regression reproduces the original input-focus failure and passes with a synthesized Chromium touchscreen tap at 820px, followed by the 12-size responsive checks. `npm run check` and PHP lint passed. Physical software-keyboard behavior remains unverified.
+
+The receiving selection/Review workflow passed [TestSprite run 3372944b](https://www.testsprite.com/dashboard-v3/o/5ab7f0fd-df67-5a25-8d50-cf950137b75b/projects/abe16d0b-21f0-432e-8a86-72b1436c42fe/execution/82561b6e-acbe-4ce3-841c-772e4c66eff4/test/3372944b-b9b3-4640-bc72-007e654bbe90), 14/14 steps. The focused catalog-tap assertion is covered by local Playwright.

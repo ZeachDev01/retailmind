@@ -20,6 +20,7 @@ const html = execFileSync(php, [], {encoding: 'utf8', input: `<?php
     require_once ${JSON.stringify(path.resolve(__dirname, '../bootstrap/app.php').replaceAll('\\', '/'))};
     require_once ${JSON.stringify(path.resolve(__dirname, 'support/stock_movement_schema.php').replaceAll('\\', '/'))};
     function app_url($path) { return $path; }
+    require_once ${JSON.stringify(path.resolve(__dirname, '../includes/product_images.php').replaceAll('\\', '/'))};
     function format_display_datetime($value) { return $value; }
     $products = [];
     foreach ([20, 2, 0, 8] as $id => $quantity) {
@@ -27,6 +28,7 @@ const html = execFileSync(php, [], {encoding: 'utf8', input: `<?php
             'sku' => 'SKU-' . $id, 'barcode' => '123456789' . $id, 'brand' => 'Shalom',
             'category_name' => 'Food', 'quantity_on_hand' => $quantity, 'reorder_level' => 5,
             'unit_price' => 30, 'cost_price' => 20, 'next_expiration' => null,
+            'product_image' => $id === 0 ? 'storage/images/rice.png' : ($id === 1 ? 'storage/images/missing.png' : null),
             'has_missing_expiration' => $id === 1, 'undated_quantity' => $id === 1 ? 2 : 0];
     }
     $total_products = 4; $total_units = 30; $out_of_stock = 1; $missing_expiration_count = 1;
@@ -123,6 +125,9 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
             const errors = [];
             page.on('pageerror', error => errors.push(error.message));
             const overviewUrl = 'http://retailmind.test/retailmind/src/frontend/components/inventory_management/inventory_overview.php';
+            await page.route('**/product_image.php?file=*', route => route.request().url().endsWith('rice.png')
+                ? route.fulfill({contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')})
+                : route.fulfill({status: 404, body: ''}));
             let refreshRequests = 0;
             await page.route(url => url.pathname.endsWith('/inventory_overview.php'), route => {
                 if (route.request().headers()['x-retailmind-navigation'] === '1') {
@@ -159,6 +164,24 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
             assert.equal(await page.locator('[data-movement-sort="1"]').evaluate(button => button.closest('th').getAttribute('aria-sort')), 'descending');
             await page.locator('.overview-metric[data-overview-view="all"]').click();
             assert.equal(await page.locator('[data-overview-product-row]:visible').count(), 4);
+            const photo = page.locator('.overview-product-thumb img');
+            await photo.first().scrollIntoViewIfNeeded();
+            await page.waitForFunction(() => {
+                const image = document.querySelector('.overview-product-thumb img');
+                return image?.complete && image.naturalWidth > 0
+                    && !document.querySelector('.overview-product-thumb img[src*="missing.png"]');
+            });
+            assert.equal(await photo.count(), 1, 'Only the saved, loadable photo remains');
+            assert.equal(await photo.evaluate(img => getComputedStyle(img).objectFit), 'contain');
+            const frame = await photo.locator('..').boundingBox();
+            assert.equal(frame.width, 40);
+            assert.equal(frame.height, 40);
+            assert.equal(await page.locator('.overview-product-thumb i:visible').count(), 3, 'Missing and failed photos show placeholders');
+            for (const theme of ['light', 'dark']) {
+                await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+                await page.screenshot({path: path.join(output, `product-photos-${theme}-${width}.png`)});
+            }
+            await page.evaluate(() => document.documentElement.dataset.theme = 'light');
             const search = page.getByLabel('Search products', {exact: true});
             assert.equal(await page.locator('button.overview-metric').count(), 7, 'Original summary cards remain');
             assert.equal(await page.locator('.overview-metric-icon').count(), 7, 'Original card icons remain');
@@ -198,16 +221,46 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
                 assert.ok(height > 0 && height <= maxHeight, 'The chart stays compact: ' + selector + ' (' + height + 'px)');
             }
             const coverageCounts = page.locator('.sr-coverage-counts li');
-            assert.equal(await coverageCounts.count(), 4, 'Coverage keeps a text count beside the chart');
+            for (const [selector, axis] of [['#movement-chart-weekly', 'x'], ['#movement-chart-top', 'y'], ['#movement-chart-coverage', 'arc']]) {
+                const canvas = page.locator(selector);
+                await canvas.scrollIntoViewIfNeeded();
+                const target = await canvas.evaluate((canvas, axis) => {
+                    const chart = window.Chart.getChart(canvas);
+                    const element = chart.getDatasetMeta(0).data[0];
+                    const point = axis === 'arc' ? element.getCenterPoint() : {
+                        x: axis === 'x' ? element.x : (chart.chartArea.left + chart.chartArea.right) / 2,
+                        y: axis === 'y' ? element.y : (chart.chartArea.top + chart.chartArea.bottom) / 2
+                    };
+                    return {...point, value:chart.data.datasets[0].data[0]};
+                }, axis);
+                await canvas.hover({position:{x:target.x, y:target.y}});
+                await page.waitForFunction(selector => window.Chart.getChart(document.querySelector(selector)).tooltip.opacity > 0, selector);
+                const tooltip = await canvas.evaluate(canvas => {
+                    const tooltip = window.Chart.getChart(canvas).tooltip;
+                    return {index:tooltip.dataPoints[0].dataIndex, text:tooltip.body[0].lines.join(' ')};
+                });
+                assert.equal(tooltip.index, 0, 'Hover selects the expected chart value');
+                assert.equal(tooltip.text, new Intl.NumberFormat('en-PH').format(target.value) + (axis === 'arc'
+                    ? (target.value === 1 ? ' product' : ' products') : (target.value === 1 ? ' unit sold' : ' units sold')));
+                if (width === 1440 && axis === 'x') await page.screenshot({path:path.join(output,'stock-movement-hover.png')});
+                await page.mouse.move(0, 0);
+            }
+            assert.deepEqual((await coverageCounts.allInnerTexts()).map(text => text.replace(/\s+/g, ' ').trim()),
+                ['Complete history 10', 'Limited history 3'], 'Partial and unknown history join the limited group');
+            assert.deepEqual(await page.locator('#movement-chart-coverage').evaluate(canvas => {
+                const chart = window.Chart.getChart(canvas);
+                return {labels:chart.data.labels, values:chart.data.datasets[0].data};
+            }), {labels:['Complete history', 'Limited history'], values:[10, 3]}, 'Chart and text counts agree');
+            assert.equal(await page.getByRole('heading', {name:'Product history', exact:true}).count(), 1);
             for (const example of coverageExamples) await assertRowSales(page, example);
             const inconsistentHistory = await assertRowSales(page, {
                 product:5, units:['5', '5', '15'], coverage:['History unavailable', '', ''], total: '25'
             });
             assert.equal(await inconsistentHistory.locator('td[data-label="90-day sales"]').innerText(), '25',
                 'A positive historical figure stays readable when a period is unavailable');
-            const coverageGuide = page.getByRole('button', {name:'About sales history coverage', exact:true});
+            const coverageGuide = page.getByRole('button', {name:'About product history', exact:true});
             await coverageGuide.focus();
-            assert.match(await page.locator('#movement-coverage-help').innerText(), /0 means.*dash.*Partial means.*History unavailable means.*Coverage unknown means/);
+            assert.match(await page.locator('#movement-coverage-help').innerText(), /Complete history covers.*90-day review.*Limited history covers.*product details/);
             await coverageGuide.press('Escape');
             const statusGuide = page.getByRole('button', {name:'About Stock Movement statuses',exact:true}).filter({visible:true});
             await statusGuide.focus();
@@ -320,7 +373,7 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
             assert.deepEqual(await summary.locator('thead tr').last().getByRole('columnheader').allInnerTexts(), periodRanges);
             const summaryHeadings = await summary.locator('thead tr').first().getByRole('columnheader').allInnerTexts();
             assert.deepEqual(summaryHeadings.map(text => text.replace(/\s+/g, ' ')), [
-                'Product', 'Stock now', 'Units sold (base units) and selling days', 'Status', 'Trend'
+                'Product', 'Stock now', 'Units sold · Days with sales', 'Status', 'Trend'
             ]);
             for (const example of coverageExamples) {
                 const row = summary.getByRole('row').filter({
@@ -331,21 +384,28 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
                     cells.map(cell => cell.replace(/\s+/g, ' ')),
                     example.units.map((units, index) => {
                         const days = example.days[index];
-                        const sellingDays = days === '—' ? '' : days + (days === '1' ? ' selling day' : ' selling days');
-                        return [units, sellingDays, example.coverage[index]].filter(Boolean).join(' ');
+                        const sellingDays = days === '—' ? '' : days + (days === '1' ? ' day' : ' days');
+                        const coverage = {'History unavailable':'No history', 'Coverage unknown':'Unknown'}[example.coverage[index]] ?? example.coverage[index];
+                        return [units, sellingDays, coverage].filter(Boolean).join(' ');
                     })
                 );
             }
             const stockFlow = report.getByRole('table', {name: 'Stock flow for the latest 30 days', exact: true});
-            assert.equal(await stockFlow.getByRole('columnheader', {name:'Returns to stock', exact:true}).count(), 1);
+            assert.deepEqual(await stockFlow.getByRole('columnheader').allTextContents(), ['Product', 'Opening', 'Received', 'Sales (−)', 'Returned', 'Other (+/−)', 'Closing']);
             const product3Flow = stockFlow.getByRole('row').filter({
                 has: report.getByRole('rowheader', {name: /^Movement Product 3\b/})
             });
             assert.deepEqual(await product3Flow.getByRole('cell').allInnerTexts(), ['-11', '50', '-9', '0', '0', '30']);
-            assert.equal(await report.getByText('0 means no sales were recorded.', {exact:false}).count(),1,'The report explains coverage once');
+            assert.equal(await report.getByText('0 = no recorded sales;', {exact:false}).count(),1,'The report explains coverage once');
             assert.equal(await report.getByText('Forecast-only imports are excluded.', {exact:false}).count(),1,'The report includes the shared calculation basis');
             assert.equal(await report.locator('.sr-report-brand strong').innerText(),'Shalom Store');
             assert.equal(await report.locator('.sr-report-letterhead h1').innerText(),'Stock Movement Report');
+            assert.deepEqual(await report.locator('.sr-report-heading').allTextContents(), ['Sales history', 'Stock flow · Oct 13, 2026 – Nov 11, 2026', 'Notes']);
+            const reportNotes = await report.locator('.sr-report-notes').innerText();
+            assert.match(reportNotes, /Days count dates with sales/);
+            assert.match(reportNotes, /prior two-period average/);
+            assert.ok(reportNotes.split(/\s+/).length < 200, 'Report notes stay concise');
+            assert.doesNotMatch(await report.locator('.sr-report-scope').innerText(), /Search: All/);
             assert.match(await report.locator('.sr-report-stamp').innerText(),/PHT/);
             assert.match(await report.locator('.sr-report-scope').innerText(),/All products.*13 products.*base units/);
             assert.equal(await report.locator('.sr-report-preparer').innerText(),'Prepared by Inventory Reviewer <test>','Preparer remains text, including angle brackets');
@@ -354,6 +414,7 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
             assert.equal(await report.locator('.sr-period-label').innerText(), 'Aug 14, 2026 – Nov 11, 2026 · 90-day review');
             assert.ok(await report.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Report fits the viewport');
             if (width < 640) {
+                await report.screenshot({path:path.join(output,'stock-movement-report-mobile.png'),fullPage:true});
                 const scrollArea = report.getByRole('region', {name: 'Summary', exact: true});
                 await scrollArea.press('ArrowRight');
                 await report.waitForFunction(() => document.querySelector('.sr-table-scroll').scrollLeft > 0);
@@ -384,9 +445,43 @@ const partialPage = execFileSync(php, [navigationFixture, '1'], {encoding: 'utf8
             const filteredReport = await filteredPromise;
             await filteredReport.waitForLoadState();
             await assertReportProducts(filteredReport, [2]);
-            assert.match(await filteredReport.locator('.sr-report-scope').innerText(),/With stock.*Search: Movement Product 2.*1 products/);
+            assert.match(await filteredReport.locator('.sr-report-scope').innerText(),/With stock.*Search: Movement Product 2.*1 product\b/);
+            assert.doesNotMatch(await filteredReport.locator('.sr-report-scope').innerText(),/1 products/);
             await filteredReport.close();
             await page.getByLabel('Search Stock Movement products',{exact:true}).fill('');
+            const statusFilter = page.getByRole('combobox', {name:'Status', exact:true});
+            for (const [status, products] of [['fast', [12, 11, 10]], ['slow', [9, 8, 7, 6]],
+                ['dead', [1]], ['limited', [5, 4, 2]], ['stockout', [3]]]) {
+                await statusFilter.selectOption(status);
+                assert.deepEqual(await page.locator('[data-risk-row]:visible').evaluateAll(rows =>
+                    rows.map(row => Number(row.dataset.productId) - 100)), products, 'Status filters the table: ' + status);
+                const statusReportPromise = page.waitForEvent('popup');
+                await page.getByRole('button', {name:'Generate Report',exact:true}).click();
+                const statusReport = await statusReportPromise;
+                await statusReport.waitForLoadState();
+                await assertReportProducts(statusReport, products);
+                const label = await statusFilter.locator('option:checked').innerText();
+                assert.ok((await statusReport.locator('.sr-report-scope').innerText()).includes(label), 'Report names the selected status');
+                await statusReport.getByRole('button', {name:'Print / Save as PDF',exact:true}).evaluate(button => {
+                    window.print = () => { window.printed = true; }; button.click();
+                });
+                assert.equal(await statusReport.evaluate(() => window.printed), true, 'Filtered report remains printable');
+                await statusReport.close();
+                if (status === 'dead') {
+                    await page.screenshot({path:path.join(output, `stock-movement-dead-stock-${width}.png`),fullPage:true});
+                    await page.getByLabel('Search Stock Movement products',{exact:true}).fill('missing');
+                    assert.equal(await page.locator('#risk-empty strong').innerText(), 'No Dead Stock products found');
+                    assert.equal(await page.getByRole('button', {name:'Generate Report',exact:true}).isDisabled(), true);
+                    await page.getByLabel('Search Stock Movement products',{exact:true}).fill('');
+                }
+            }
+            await page.getByLabel('Stock',{exact:true}).selectOption('all');
+            await page.getByLabel('Search Stock Movement products',{exact:true}).fill('MOVE-13');
+            assert.equal(await page.locator('[data-risk-row]:visible').count(), 1, 'Status combines with stock scope and SKU search');
+            await page.getByLabel('Stock',{exact:true}).selectOption('in-stock');
+            assert.equal(await page.locator('#risk-empty').isVisible(), true, 'Stock scope still excludes zero stock');
+            await page.getByLabel('Search Stock Movement products',{exact:true}).fill('');
+            await statusFilter.selectOption('all');
             await page.evaluate(()=>{window.originalOpen=window.open;window.open=()=>null;});
             await page.getByRole('button',{name:'Generate Report',exact:true}).click();
             assert.match(await page.locator('#movement-report-status').innerText(),/Allow pop-ups/);

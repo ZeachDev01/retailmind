@@ -1,0 +1,3 @@
+# Apply verified Inventory Counts directly
+
+On 2026-11-26, the user chose one Inventory Manager confirmation to save a verified Inventory Count and apply its Stock Count Correction together. The previous record-then-approve flow allowed the same Manager to approve their own count, so its extra step offered no independent check; direct saving instead preserves explicit physical quantities, a reviewed difference, attribution, history, and stock-change safeguards. Batch or sealed/loose inputs are the sole source of the total, and old pending counts require a fresh count rather than automatic application; see [the confirmed workflow](../discussions/simplified-inventory-counts.md).

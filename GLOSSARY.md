@@ -148,7 +148,7 @@ The physical cash in the service cash box and digital balance in the GCash merch
 _Avoid_: Filtered balance, historical balance, period balance
 
 **GCash Handover**:
-The recorded transfer of responsibility for GCash Service Cash and the GCash Service Wallet from the outgoing Cashier to the incoming Cashier, using counted cash and a checked wallet balance. Closing the outgoing Cashier Shift alone does not transfer this responsibility.
+The recorded transfer of responsibility for GCash Service Cash and the GCash Service Wallet to the incoming Cashier, using counted cash and a checked wallet balance; a normal handover includes all Held GCash Exchanges assigned to the outgoing Cashier, including inherited follow-ups. Earlier shortage liability remains separate, and closing the outgoing Cashier Shift alone does not transfer custody or follow-up responsibility.
 _Avoid_: POS shift closure, automatic custody transfer
 
 **GCash Activity Scope**:
@@ -211,9 +211,29 @@ _Avoid_: Bill, Invoice (when referring to retail customer sales)
 The authorized correction workflow for returning goods and refunding payment against a completed sale within an active Cashier Shift.
 _Avoid_: Reversal, Return (when referring to the transaction record)
 
+**Register**:
+The named checkout counter associated with a Cashier Shift and its drawer.
+_Avoid_: Shifter (when referring to the counter)
+
 **Cashier Shift**:
 An operational period linked to a register and drawer where a cashier performs sales and refunds. It is separate from the cashier's authenticated access to RetailMind.
 _Avoid_: Work period, Session
+
+**Open Cashier Shift**:
+A Cashier Shift that has not been closed, including one opened on an earlier date. Locking the shift or logging out does not close it.
+_Avoid_: Logged-in cashier, unlocked shift
+
+**Shift Close Reminder**:
+A daily reminder for a Cashier to close their Open Cashier Shift at the Store's configured time. It does not close the shift or replace the normal closing process.
+_Avoid_: Automatic shift closure, forced logout
+
+**Previous-day Cashier Shift**:
+An Open Cashier Shift whose opening date is earlier than the current Philippine calendar date. It retains its actual opening, activity and closing times.
+_Avoid_: Automatically closed shift, backdated shift
+
+**Shift Close Email Reminder**:
+A limited email notice to the responsible Cashier and Administrators that a Cashier Shift remains open after its reminder deadline. It provides awareness without closing the shift or confirming inbox receipt.
+_Avoid_: Automatic closure, repeated daily shift email
 
 **Drawer Movement**:
 A recorded physical addition to or removal from a Cashier Shift's product-sale drawer, identifying where the cash came from or went. It is separate from a Product sale, Cash Refund, or customer GCash exchange.
@@ -282,6 +302,10 @@ _Avoid_: Purchase approval, stock count (when referring to newly bought goods)
 **Shopping Entry**:
 A saved record of goods brought into the Store together through Stock Receiving. It can contain multiple products or batches, with an optional supplier receipt reference.
 
+**Receive Quantity**:
+The number of good base units accepted into Store stock in a Shopping Entry. Damaged or rejected goods are excluded, including in historical entries that recorded them separately.
+_Avoid_: Delivered quantity (when referring to goods accepted into stock)
+
 **Replenishment Recommendation**:
 A suggestion of which products need more stock and how much to buy, reviewed by the Inventory Manager. It guides buying without placing an order or changing stock; actual purchases may differ from the suggestion.
 _Avoid_: Automatic order, required purchase quantity
@@ -305,6 +329,10 @@ _Avoid_: Expired stock, automatic disposal
 **Limited History**:
 A Product whose recorded history does not cover the full 90-day Stock Movement review period. Its recorded sales remain visible, but a complete movement judgment is unavailable.
 _Avoid_: Dead Stock, zero demand
+
+**Product History**:
+The span of a Product's recorded existence within the Stock Movement review period. It is sufficient when it covers the full 90 days and limited when it covers less or its starting date is unknown.
+_Avoid_: Sales quantity, sales frequency
 
 **Forecast Quantity**:
 The estimated number of a Product's Base Units expected to sell over a stated future period. It is distinct from the suggested purchase quantity in a Replenishment Recommendation.
@@ -408,6 +436,10 @@ _Avoid_: Total physical stock (when expired goods remain)
 **Stock Count Correction**:
 A correction of a Product's recorded stock to its verified physical count, including unopened Sales Packs and loose pieces where applicable. It covers incorrect starting quantities and differences found during inventory checks, with a recorded reason.
 _Avoid_: Emergency Stock Adjustment, Physical Sales Pack Reconciliation
+
+**Inventory Count**:
+A recorded check of a Product's actual physical stock against its recorded stock, by batch and by unopened Sales Packs and loose pieces where applicable. A verified difference results in a Stock Count Correction.
+_Avoid_: Stock Receiving (when referring to checking existing stock)
 
 **Pack Opening**:
 The conversion of an unopened Sales Pack into its fixed number of loose Base Units for individual sale. It changes the form of the stock without changing the total quantity of goods.

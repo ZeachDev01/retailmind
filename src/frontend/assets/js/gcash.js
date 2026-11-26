@@ -12,6 +12,7 @@
     let saving = false, reviewing = false, checking = false, duplicate = false;
     let debounce, lookup, historyRequest = 0, sessionRequest = 0, page = 1, rows = [], reviewRow;
     let worker, photoUrl, cameraVersion = 0, leaving = false;
+    let photoReference = reference;
     let currentSession = null, lastClosedSession = null, resolveTx = null, correctionTx = null, waiverSession = null, returnToken = null;
     let bannerDismissTimer = null, bannerAnimationTimer = null, closedBannerDismissed = false;
     const notify = (message, type = 'info') => window.RetailMindUI.toast(message, type);
@@ -133,8 +134,8 @@
 
         const cashierName = currentSession.cashier_name || ('Cashier #' + currentSession.cashier_id);
         statusPill.textContent = `Under control of ${cashierName}`;
-        statusPill.className = 'gcash-status gcash-status-rejected';
-        banner.className = 'gcash-session-banner locked';
+        statusPill.className = 'gcash-status gcash-status-verified';
+        banner.className = 'gcash-session-banner active';
         msg.textContent = `GCash is being handled by ${cashierName}. Only that Cashier can record transactions. Point of Sale remains available.`;
         openBtn.hidden = true;
         closeBtn.hidden = true;
@@ -583,6 +584,11 @@
         });
     }
 
+    let holdDraft = false;
+    el('form').addEventListener('reset', () => {
+        holdDraft = false;
+        el('needs-checking-form')?.reset();
+    });
     if (el('needs-checking-btn')) {
         el('needs-checking-btn').addEventListener('click', () => {
             const validPrincipal = validatePrincipal(el('amount').value);
@@ -618,13 +624,13 @@
                 }
             }
 
-            el('nc-reference').value = reference.value.trim();
             el('nc-number-label').textContent = isCashOut ? 'Sender GCash number (optional)' : 'Recipient GCash number (optional)';
-            el('nc-customer').value = '';
-            el('nc-number').value = '';
-            el('nc-cash-collected').checked = Boolean(el('confirm-cash')?.checked);
-            el('nc-wallet-sent').checked = Boolean(el('confirm-wallet')?.checked);
-            el('nc-notes').value = '';
+            if (!holdDraft) {
+                el('nc-reference').value = reference.value.trim();
+                el('nc-cash-collected').checked = Boolean(el('confirm-cash')?.checked);
+                el('nc-wallet-sent').checked = Boolean(el('confirm-wallet')?.checked);
+                holdDraft = true;
+            }
             el('needs-checking-dialog').showModal();
             el('nc-notes').focus();
         });
@@ -637,11 +643,6 @@
                 return;
             }
             const notes = el('nc-notes').value.trim();
-            if (notes.length < 5) {
-                notify('Enter a reason for checking (at least 5 characters).', 'warning');
-                el('nc-notes').focus();
-                return;
-            }
             const type = el('type')?.value || 'Cash-In';
             const isCashOut = type === 'Cash-Out';
             const feeMethod = isCashOut ? (el('fee-method')?.value || 'Fee via GCash') : 'Fee in cash';
@@ -1122,8 +1123,16 @@
         el('photo-dialog').showModal();
     });
     el('photo-dialog-close').addEventListener('click', () => el('photo-dialog').close());
-    el('camera-open').addEventListener('click', () => el('camera-file').click());
-    el('photo-open').addEventListener('click', () => el('photo-file').click());
+    function choosePhoto(target, picker) {
+        closeCamera();
+        photoReference = target;
+        el(picker).click();
+    }
+    el('camera-open').addEventListener('click', () => choosePhoto(reference, 'camera-file'));
+    el('photo-open').addEventListener('click', () => choosePhoto(reference, 'photo-file'));
+    el('resolve-camera-open').addEventListener('click', () => choosePhoto(el('resolve-reference'), 'camera-file'));
+    el('resolve-photo-open').addEventListener('click', () => choosePhoto(el('resolve-reference'), 'photo-file'));
+    el('resolve-dialog').addEventListener('close', closeCamera);
     let libraryPromise;
     function loadOCR() {
         if (window.Tesseract) return Promise.resolve();
@@ -1143,7 +1152,8 @@
         if (!file) return;
         closeCamera();
         const version = cameraVersion;
-        if (!parser.extract(reference.value, rules)) scanStatus('');
+        photoReference.closest('.gcash-field').append(el('camera'));
+        if (photoReference === reference && !parser.extract(reference.value, rules)) scanStatus('');
         el('ocr-status').textContent = 'Reading photo…';
         el('camera').hidden = false;
         el('ocr-review').hidden = true;
@@ -1189,12 +1199,14 @@
         const candidate = parser.normalize(el('ocr-candidate').value);
         if (!parser.valid(candidate, rules)) { notify('Correct the suggested reference before using it.', 'warning'); return; }
         if (saving) return;
-        reference.value = candidate;
-        closeCamera(); reference.focus(); await checkReference();
+        photoReference.value = candidate;
+        closeCamera();
+        photoReference.focus();
+        if (photoReference === reference) await checkReference();
     });
     // Session dialogs
     el('open-session-btn').addEventListener('click', () => {
-        el('open-number').value = '';
+        try { el('open-number').value = localStorage.getItem('retailmind.gcash.walletNumber') || ''; } catch (_) { el('open-number').value = ''; }
         el('open-cash').value = '';
         el('open-wallet').value = '';
         el('open-dialog').showModal();
@@ -1212,6 +1224,7 @@
         el('open-submit').disabled = true;
         try {
             await request(null, {action: 'open_session', opening_cash: cash, opening_wallet: wallet, wallet_number: el('open-number').value.trim()});
+            try { localStorage.setItem('retailmind.gcash.walletNumber', el('open-number').value.trim()); } catch (_) {}
             el('open-dialog').close();
             notify('GCash responsibility opened.', 'success');
             if (document.getElementById('tab-sessions')?.getAttribute('aria-selected') === 'true') loadSessionHistory(true);
@@ -1300,11 +1313,29 @@
     });
 
     if (el('handover-session-btn')) {
-        el('handover-session-btn').addEventListener('click', () => {
+        el('handover-session-btn').addEventListener('click', async () => {
             el('handover-cash').value = '';
             el('handover-wallet').value = '';
             el('handover-notes').value = '';
+            const held = el('handover-held');
+            held.textContent = 'Loading held exchanges…';
+            el('handover-submit').disabled = true;
             el('handover-dialog').showModal();
+            try {
+                const data = await request({action: 'follow_up'});
+                if (!el('handover-dialog').open || leaving) return;
+                held.replaceChildren();
+                for (const tx of data.needs_checking || []) {
+                    const row = document.createElement('p');
+                    row.textContent = `#${tx.transaction_id} · ${tx.transaction_type} · ${phpFormatter.format(tx.principal_amount ?? tx.amount)} · ${tx.customer_name || 'Not recorded'} · ${tx.notes || 'No holding reason recorded'}`;
+                    held.append(row);
+                }
+                if (!held.childNodes.length) held.textContent = 'No held exchanges to hand over.';
+                el('handover-submit').disabled = false;
+            } catch (error) {
+                held.textContent = 'Could not load held exchanges. Close and reopen Hand over to try again.';
+                notify(error.message, 'error');
+            }
         });
         el('handover-cancel').addEventListener('click', () => el('handover-dialog').close());
         el('handover-form').addEventListener('submit', async event => {
@@ -1540,6 +1571,11 @@
         }
     });
 
+    const refreshCustody = () => {
+        if (!leaving && !document.hidden) loadSessionStatus();
+    };
+    window.addEventListener('focus', refreshCustody);
+    document.addEventListener('visibilitychange', refreshCustody);
     window.addEventListener('pagehide', () => { leaving = true; clearTimeout(debounce); lookup?.abort(); closeCamera(); });
     const params = new URLSearchParams(window.location.search);
     if (params.get('type') === 'cash-out') el('type').value = 'Cash-Out';

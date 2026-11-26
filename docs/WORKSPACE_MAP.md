@@ -27,6 +27,7 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
 - **GCash Portal**: `components/cashier/gcash.php` (API: `gcash_api.php`, Receipt: `gcash_receipt.php`)
   - Hold for checking carries checked movements into the hold record. Optional customer name and recipient/sender GCash number are shown with the holding reason in Resolve; resolution notes are optional. Returns retain evidence and approval. New sessions require the Store GCash number, retained in Recent GCash Sessions and handover. Service funds recording is direct, including Product Drawer Transfer; historical approvals remain readable. See `docs/discussions/gcash-held-exchange-clarification.md` and ADR-0035.
   - Verification: `gcash_held_exchange_browser_test.js`, `gcash_session_history_browser_test.js`, `gcash_fund_movements_integration_browser_test.js` (includes the disposable-database upgrade check), `gcash_funding_receipt_contract.php`, `emergency_gcash_handover_contract.php`.
+  - Normal handover lists and automatically transfers all outgoing-owned held follow-ups, including inherited items. Original movements and shortage responsibility stay intact; completion posts remaining money movements into current custody. Receiving Cashiers can open the completed inherited receipt. Emergency/service-stop acceptance is unchanged. Verification: `gcash_handover_browser_test.js`, `gcash_follow_up_responsibility_contract.php`; see `docs/discussions/gcash-held-exchange-handover.md`.
   - **Service Fund Movements** tab: own recorded movements across sessions (`gcash_api.php?action=fund_movements`); Administrator GCash Overview uses the same label for all recorders, with All money history available for exchanges/corrections.
   - Verification: `gcash_funding_receipt_contract.php`, `gcash_money_history_contract.php`, `gcash_fund_movements_browser_test.js`, `gcash_fund_movements_integration_browser_test.js`.
   - Partials: `src/backend/app/Views/gcash_receipt_dialog.php`, `gcash_receipt.php`
@@ -73,6 +74,7 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Receiving code lookup prefers explicit packaging barcodes over overlapping SKUs, rejects conflicting types and distinguishes inactive/error outcomes. Unknown codes retain their classification in encrypted recovery; manual carton selection requires saved-size confirmation or actual base units. Existing conversions still require refreshed Review. See `docs/verification/receiving-code-recovery-481.md`.
   - Verification: `inline_receiving_browser_test.js`, `stock_receiving_ui_browser_test.js`, `stock_receiving_landscape_browser_test.js`, `stock_receiving_scan_browser_test.js`, `known_receiving_cost_mysql_test.php`, `supplier_replacement_receiving_test.php`.
 - **Inventory Control**:
+  - Counts use New Count / Recent Counts tabs, direct atomic saving, derived batch totals, and server-side history search/sort/pagination. Page styles: `assets/css/inventory-counts.css`. Verification: `inventory_count_reconciliation_test.php`, `inventory_counts_scan_browser_test.js`, `inventory_counts_workflow_browser_test.js`; agreed flow: `docs/discussions/simplified-inventory-counts.md`.
   - Physical Counts: `components/inventory_management/inventory_counts.php` (`App\Services\InventoryCountService`)
   - Stock Issues: `components/inventory_management/stock_issues.php` (`StockIssueService`): direct record-and-deduct, Pending review with editable verified quantity, and Recent decisions.
   - Supplier Pullouts: `components/inventory_management/supplier_pullouts.php` (`App\Services\SupplierPulloutService`)
@@ -83,6 +85,7 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
 ### Administrator (`admin`)
 - **Dashboard**: `components/administrator/dashboard.php`
   - Backend Services: `App\Dashboard\StoreOperationsDashboardWorkspace`, `App\Services\DashboardService`
+  - Open cashier shifts: uncached `components/auth/shift_status.php`, `open-cashier-shifts.js`, and `app/Views/open_cashier_shifts.php`; refreshes every 30 seconds independently of sales periods.
 - **GCash Admin Overview**: `components/administrator/gcash_overview.php` (API: `gcash_overview_api.php`, fragments: `gcash_overview_fragments.php`)
   - Backing JS: `gcash-admin-overview.js`
   - Backend Services: `App\Services\GCashTransactionService`, `App\GCash\AdminOverviewReport`
@@ -90,6 +93,7 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Register Counters: `components/administrator/registers.php` (`App\Services\RegisterService`)
   - Store Calendar: `components/administrator/store_calendar.php` (`App\Store\StoreCalendar`, JS: `store-staff-availability.js`)
   - Store Configuration: `components/administrator/store_settings.php` (`App\Store\StoreSetupConfirmations`)
+  - Shift reminders: `store_settings.php?section=shift-reminders`, directly below Attention thresholds; `App\Services\ShiftReminder` and shell `shift-reminder.js` remind Cashiers through SweetAlert at the configured Philippine time. Later snoozes for ten minutes. Verification: `shift_reminder_test.php`, `shift_reminder_browser_test.js`, `session_activity_http_test.js`; scope: `docs/discussions/store-overview-open-shifts.md`.
   - Fiscal Periods: `components/system_administrator/fiscal_periods.php` (Modal: `components/modals/fiscal_periods.php`, `App\Services\FiscalPeriodGuardService`)
   - Stock Issue Oversight: `components/administrator/stock_issues.php` (read-only)
   - Refund Correction Reviews: `components/cashier/refund_corrections.php`

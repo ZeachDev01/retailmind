@@ -133,8 +133,8 @@ body.stock-movement-report { margin:0; padding:24px; background:#eef1f5; color:#
 .stock-movement-report .sr-report-scope { overflow-wrap:anywhere; }
 .stock-movement-report .sr-report-heading { margin:24px 0 8px; font-size:16px; color:var(--text); break-after:avoid; }
 .stock-movement-report .sr-report-heading .sr-caption { font-weight:400; }
-.stock-movement-report .sr-table-scroll { overflow:auto; border:1px solid var(--border); border-radius:10px; }
-.stock-movement-report .sr-report-notes p { margin:5px 0; max-width:90ch; }
+.stock-movement-report .sr-table-scroll { overflow:auto; border:1px solid var(--border); border-radius:4px; }
+.stock-movement-report .sr-report-notes p { margin:4px 0; max-width:90ch; }
 .stock-movement-report .sr-table { min-width:760px; font-size:12px; }
 .stock-movement-report .sr-table thead { position:static; clip-path:none; width:auto; height:auto; overflow:visible; display:table-header-group; }
 .stock-movement-report .sr-table tbody { display:table-row-group; }
@@ -143,6 +143,8 @@ body.stock-movement-report { margin:0; padding:24px; background:#eef1f5; color:#
 .stock-movement-report .sr-table thead th { padding:9px 12px; font-size:11px; font-weight:700; color:#334155; background:#f1f5f9; white-space:normal; border-top:0; }
 .stock-movement-report .sr-table tbody th { background:transparent; color:var(--text); font-size:inherit; text-align:left; white-space:normal; overflow-wrap:anywhere; }
 .stock-movement-report .sr-table .sr-num { text-align:right; }
+.stock-movement-report .sr-table { font-variant-numeric:tabular-nums; }
+.stock-movement-report .sr-table :is(tbody tr, thead tr:first-child) > :first-child { width:24%; }
 .stock-movement-report .sr-table .sr-report-units { text-align:center; }
 .stock-movement-report .sr-table .sr-report-period { white-space:normal; min-width:90px; }
 .stock-movement-report .sr-table .sr-num .sr-caption { display:block; font-size:11px; }

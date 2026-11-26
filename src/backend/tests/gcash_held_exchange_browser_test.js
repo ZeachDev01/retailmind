@@ -60,11 +60,14 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
             return response.json();
         };
         const held = await post({action: 'record_cash_in', principal: 100, outcome: 'Needs checking',
-            confirmed_cash: false, confirmed_wallet: false, notes: 'Customer will return later'});
+            confirmed_cash: false, confirmed_wallet: false, notes: ''});
         await post({action: 'resolve_needs_checking', transaction_id: held.id, resolve_action: 'cancel', notes: '', reason: ''});
         const history = await (await context.request.get(api + '?action=history')).json();
         assert.equal(history.transactions.find(tx => tx.transaction_id === held.id).verification_status, 'Rejected',
             'A held exchange without money movements can be cancelled without resolution notes');
+        const blankOut = await post({action: 'record_cash_out', principal: 100, outcome: 'Needs checking',
+            confirmed_cash: false, confirmed_wallet: false, notes: ''});
+        await post({action: 'resolve_needs_checking', transaction_id: blankOut.id, resolve_action: 'cancel', notes: '', reason: ''});
         const cashHeld = await post({action: 'record_cash_in', principal: 100, outcome: 'Needs checking',
             confirmed_cash: true, confirmed_wallet: false, notes: 'Wallet transfer could not be confirmed'});
         await post({action: 'record_return', transaction_id: cashHeld.id, returned_cash: 105, returned_wallet: 0,
@@ -93,6 +96,10 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         await page.reload();
         await page.locator('#gcash-follow-up p').filter({hasText: '#' + identified.id + ' ·'}).getByRole('button').click();
         const resolve = page.locator('#gcash-resolve-dialog');
+        for (const name of ['Take photo', 'Choose photo']) {
+            const button = resolve.getByRole('button', {name, exact: true});
+            assert.equal((await button.innerText()).trim(), '', name + ' uses an icon with an accessible name');
+        }
         assert.equal(await resolve.getByText('Ana <Reyes>', {exact: true}).count(), 1,
             'Resolve shows the saved customer name as text');
         assert.match(await resolve.innerText(), /09171234567/);
@@ -107,6 +114,11 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         await page.getByLabel('Customer name (optional)', {exact: true}).fill('Ben Santos');
         await page.getByLabel('Sender GCash number (optional)', {exact: true}).fill('09181234567');
         await page.locator('#gcash-nc-notes').fill('Wallet received; cash payout pending');
+        await page.locator('#gcash-nc-cancel').click();
+        await page.locator('#gcash-needs-checking-btn').click();
+        assert.equal(await page.locator('#gcash-nc-customer').inputValue(), 'Ben Santos', 'Back retains customer');
+        assert.equal(await page.locator('#gcash-nc-number').inputValue(), '09181234567', 'Back retains number');
+        assert.equal(await page.locator('#gcash-nc-notes').inputValue(), 'Wallet received; cash payout pending', 'Back retains reason');
         const [heldResponse] = await Promise.all([
             page.waitForResponse(response => response.url().includes('/gcash_api.php') && response.request().method() === 'POST'),
             page.locator('#gcash-nc-submit').click()
@@ -130,6 +142,40 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         await page.locator('#gcash-follow-up p').filter({hasText: '#' + legacy.transaction_id + ' ·'}).getByRole('button').click();
         assert.equal(await resolve.getByText('Not recorded', {exact: true}).count(), 2,
             'Held exchanges without customer details remain available for resolution');
+        const receiptPage = await context.newPage();
+        await receiptPage.setContent('<div style="background:white;color:black;padding:40px;font:32px Arial;width:800px">GCash receipt<br>Ref No. 0012345678901</div>');
+        const photo = {name: 'receipt.png', mimeType: 'image/png', buffer: await receiptPage.locator('div').screenshot()};
+        await receiptPage.close();
+        const [photoPicker] = await Promise.all([
+            page.waitForEvent('filechooser'),
+            resolve.getByRole('button', {name: 'Choose photo', exact: true}).click()
+        ]);
+        await photoPicker.setFiles(photo);
+        await resolve.getByLabel('Suggested reference', {exact: true}).waitFor({timeout: 30000});
+        assert.equal(await resolve.getByLabel('Suggested reference', {exact: true}).inputValue(), '0012345678901',
+            'Receipt OCR preserves leading zeroes in the suggested reference');
+        assert.equal(await page.locator('#gcash-resolve-reference').inputValue(), '', 'Photo requires digit review before use');
+        for (const width of [1440, 768, 390]) {
+            await page.setViewportSize({width, height: 844});
+            assert.equal(await resolve.evaluate(node => node.scrollWidth <= node.clientWidth), true, 'Photo review fits width ' + width);
+            await page.screenshot({path: path.join(output, 'resolve-photo-' + width + '.png'), fullPage: true});
+        }
+        await resolve.getByRole('button', {name: 'Use reference', exact: true}).click();
+        assert.equal(await page.locator('#gcash-resolve-reference').inputValue(), '0012345678901');
+        assert.equal(await page.locator('#gcash-reference').inputValue(), '', 'Resolve photo leaves new transaction reference untouched');
+        assert.equal(await page.locator('#gcash-camera-file').getAttribute('capture'), 'environment');
+        const [cameraPicker] = await Promise.all([
+            page.waitForEvent('filechooser'),
+            resolve.getByRole('button', {name: 'Take photo', exact: true}).click()
+        ]);
+        await cameraPicker.setFiles(photo);
+        await resolve.getByLabel('Suggested reference', {exact: true}).waitFor({timeout: 30000});
+        await page.keyboard.press('Escape');
+        await resolve.waitFor({state: 'hidden'});
+        await page.waitForFunction(() => !document.getElementById('gcash-photo-preview').hasAttribute('src'));
+        assert.equal(await page.locator('#gcash-photo-preview').getAttribute('src'), null, 'Closing Resolve clears the photo');
+        await page.locator('#gcash-follow-up p').filter({hasText: '#' + legacy.transaction_id + ' ·'}).getByRole('button').click();
+        assert.equal(await page.locator('#gcash-camera').isVisible(), false, 'Reopening Resolve does not retain a previous photo');
         await page.locator('#gcash-resolve-reference').fill('0012345678901');
         const [completed] = await Promise.all([
             page.waitForResponse(response => response.url().includes('/gcash_api.php') && response.request().method() === 'POST'),
@@ -137,6 +183,8 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         ]);
         assert.equal(completed.status(), 200, await completed.text());
         const completedHistory = await (await context.request.get(api + '?action=history')).json();
+        assert.equal(completedHistory.transactions.find(tx => tx.transaction_id === legacy.transaction_id).reference_number,
+            '0012345678901', 'The API retains the entered reference including its leading zeroes');
         assert.equal(completedHistory.transactions.find(tx => tx.transaction_id === legacy.transaction_id).verification_status,
             'Completed', 'Legacy held exchanges complete with blank resolution notes and customer details');
         const completedStatus = await (await context.request.get(api + '?action=session_status')).json();
@@ -144,8 +192,19 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
             'Completing the held exchange does not collect its already recorded cash twice');
         assert.equal(completedStatus.session.expected_wallet_balance, 3855,
             'Completing the held exchange records only its remaining wallet transfer');
+        await page.getByRole('button', {name: 'Close GCash Service Receipt', exact: true}).click();
+        const [newPhotoPicker] = await Promise.all([
+            page.waitForEvent('filechooser'), page.locator('#gcash-photo-open').click()
+        ]);
+        await newPhotoPicker.setFiles(photo);
+        await page.getByLabel('Suggested reference', {exact: true}).waitFor({timeout: 30000});
+        assert.equal(await page.locator('.gcash-reference-field #gcash-photo-preview').isVisible(), true,
+            'New Transaction can still read photos after Resolve used the shared reader');
+        await page.locator('#gcash-ocr-candidate').fill('0012345678902');
+        await page.getByRole('button', {name: 'Use reference', exact: true}).click();
+        assert.equal(await page.locator('#gcash-reference').inputValue(), '0012345678902');
         assert.deepEqual(errors, []);
-        console.log('GCash held exchange: passed (confirmations, optional customer details, saved Resolve context, optional notes, legacy completion, responsive dialog)');
+        console.log('GCash held exchange: passed (confirmations, customer details, optional notes, receipt OCR, choose/take photo, cleanup, legacy completion, responsive dialog)');
         console.log('Screenshots: ' + output);
     } finally {
         if (browser) await browser.close();

@@ -8,6 +8,34 @@ $config = require __DIR__ . '/../../config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $config['host'], $config['port']),
     $config['username'], $config['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 if ($argv[1] === 'cleanup') { $pdo->exec("DROP DATABASE IF EXISTS `{$database}`"); exit; }
+if (in_array($argv[1], ['inventory_count_setup', 'inventory_count_state', 'inventory_count_changed', 'inventory_count_history'], true)) {
+    $pdo->exec("USE `{$database}`");
+    if ($argv[1] === 'inventory_count_setup') {
+        $pdo->exec("INSERT INTO product_batches (product_id,batch_number,quantity,remaining_quantity,loose_quantity,expiration_date)
+            VALUES (1,'COUNT-A',6,6,6,'2030-06-01'),(1,'COUNT-B',4,4,4,NULL)");
+        $pdo->exec("INSERT INTO inventory_counts (product_id,system_quantity,physical_quantity,difference_qty,discrepancy_reason,counted_by,status)
+            VALUES (1,10,8,-2,'Old pending shelf count',3,'pending')");
+        $pdo->exec("INSERT INTO products (product_id,sku,barcode,product_name,pack_size,pack_barcode,pack_price,unit_price,cost_price)
+            VALUES (2,'COUNT-PACK','COUNT-PACK-UNIT','Count Pack Item',12,'COUNT-PACK-BARCODE',100,10,3),
+                   (3,'COUNT-EMPTY','COUNT-EMPTY-BARCODE','Count Empty Item',NULL,NULL,NULL,10,3),
+                   (4,'COUNT-UNBATCHED','COUNT-UNBATCHED-UNIT','Count Unbatched Pack',12,'COUNT-UNBATCHED-PACK',100,10,3)");
+        $pdo->exec('INSERT INTO inventory (product_id,quantity_on_hand) VALUES (2,26),(3,0),(4,14)');
+        $pdo->exec("INSERT INTO product_batches (product_id,batch_number,quantity,remaining_quantity,sealed_quantity,loose_quantity)
+            VALUES (2,'COUNT-PACK-A',26,26,2,2)");
+    } elseif ($argv[1] === 'inventory_count_changed') {
+        $pdo->exec('UPDATE inventory SET quantity_on_hand=quantity_on_hand-1 WHERE product_id=1');
+        $pdo->exec("UPDATE product_batches SET remaining_quantity=remaining_quantity-1,loose_quantity=loose_quantity-1 WHERE batch_number='COUNT-A'");
+    } elseif ($argv[1] === 'inventory_count_history') {
+        $insert = $pdo->prepare("INSERT INTO inventory_counts (product_id,system_quantity,physical_quantity,difference_qty,discrepancy_reason,counted_by,status,counted_at) VALUES (1,10,?,?,'History page fixture',3,'approved',?)");
+        for ($i = 0; $i < 65; $i++) $insert->execute([$i, $i - 10, '2026-10-' . str_pad((string)(1 + $i % 28), 2, '0', STR_PAD_LEFT) . ' 12:00:00']);
+    }
+    echo json_encode([
+        'counts' => $pdo->query('SELECT * FROM inventory_counts ORDER BY count_id')->fetchAll(PDO::FETCH_ASSOC),
+        'stock' => $pdo->query('SELECT product_id,quantity_on_hand FROM inventory ORDER BY product_id')->fetchAll(PDO::FETCH_ASSOC),
+        'batches' => $pdo->query('SELECT batch_id,product_id,batch_number,remaining_quantity,sealed_quantity,loose_quantity,expiration_date FROM product_batches ORDER BY batch_id')->fetchAll(PDO::FETCH_ASSOC),
+    ]);
+    exit;
+}
 if (in_array($argv[1], ['barcode_correction_setup', 'barcode_correction_state', 'barcode_correction_claim'], true)) {
     require_once __DIR__ . '/../../app/Services/ProductService.php';
     require_once __DIR__ . '/../../app/Services/ProductCodeLookupService.php';

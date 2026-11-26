@@ -84,6 +84,9 @@ const fixture = action => execFileSync(php, ['src/backend/tests/support/theme_fi
         const recent = cashier.locator('#panel-sessions');
         assert.equal(await recent.locator('tr[data-session-id]').count(), 11);
         assert.equal(await recent.locator('[data-session-id="1"]').count(), 0, 'Cashier scope overrides supplied user ID');
+        const firstDates = recent.locator('tr[data-session-id]').first().locator('td').filter({has: cashier.locator('.gcash-session-date')});
+        assert.deepEqual(await firstDates.locator('.gcash-session-date').allTextContents(), ['Oct 20, 2026', 'Oct 20, 2026']);
+        assert.deepEqual(await firstDates.locator('small').allTextContents(), ['10:00 AM', '11:00 AM']);
         await recent.getByLabel('Entries per page').selectOption('10');
         await cashier.waitForURL(url => url.searchParams.get('session_length') === '10');
         await recent.getByRole('link', {name: 'Next'}).click();
@@ -101,6 +104,7 @@ const fixture = action => execFileSync(php, ['src/backend/tests/support/theme_fi
         await submitSession('open');
         await recent.locator('tr[data-session-id]').filter({hasText: '₱125.00'}).waitFor();
         assert.match(await recent.locator('tr[data-session-id]').first().innerText(), /09171234567/);
+        assert.equal(await recent.locator('tr[data-session-id]').first().locator('td').nth(4).innerText(), '—', 'An open session has no closing time');
 
         const admin = await login('admin');
         await admin.goto(origin + '/components/administrator/gcash_overview.php');

@@ -136,6 +136,7 @@ Operational policies settled on 2026-10-19 for implementation (#237):
 ### 3. Closing, carryover, and unresolved obligations
 - **Non-blocking shift close**: Unresolved `Needs checking` exchanges do not block Cashier Shift closing or POS product drawer closing.
 - **Approved carryover**: At shift closing, unresolved exchanges must be acknowledged. Approved carryover transfers the unresolved obligation to the incoming shift or leaves it flagged for Administrator resolution.
+- **Normal handover follow-up**: The outgoing Cashier's assigned held exchanges, including inherited follow-ups, are listed and automatically transferred on the existing Hand over submission. Earlier money history and shortage responsibility remain intact; later resolution movements belong to current custody without repeating earlier movements. This design does not change emergency handover or service stop; see [discovery status and decisions](../discussions/gcash-held-exchange-handover.md).
 - **Transparent reconciliation**: Closing counts reconcile cash and wallet against actual recorded movements. Carryover preserves unresolved obligations in GCash history without altering or masking shift cash counts.
 
 ### 4. Amount ceilings and balance checks

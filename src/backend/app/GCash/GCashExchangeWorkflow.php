@@ -178,9 +178,6 @@ final class GCashExchangeWorkflow
             $grossFee = $authoritativeFee;
             $completedAt = date('Y-m-d H:i:s');
         } else {
-            if ($notes === null || mb_strlen($notes) < 5) {
-                throw new DomainException('Enter an explanatory note of at least 5 characters for transactions held as Needs checking.');
-            }
             $refRaw = trim((string)($data['reference'] ?? $data['reference_number'] ?? ''));
             $reference = $refRaw !== '' ? GCashReference::normalize($refRaw, (int)($this->rules['min_length'] ?? 13), (int)($this->rules['max_length'] ?? 13)) : null;
             $serviceCashDelta = $confirmedCash ? $counterCollect : 0.00;
@@ -368,9 +365,6 @@ final class GCashExchangeWorkflow
             $grossFee = $authoritativeFee;
             $completedAt = date('Y-m-d H:i:s');
         } else {
-            if ($notes === null || mb_strlen($notes) < 5) {
-                throw new DomainException('Enter an explanatory note of at least 5 characters for transactions held as Needs checking.');
-            }
             $refRaw = trim((string)($data['reference'] ?? $data['reference_number'] ?? ''));
             $reference = $refRaw !== '' ? GCashReference::normalize($refRaw, (int)($this->rules['min_length'] ?? 13), (int)($this->rules['max_length'] ?? 13)) : null;
             if ($feeMethodNorm === 'Fee via GCash') {

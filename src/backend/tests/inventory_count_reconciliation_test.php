@@ -85,6 +85,7 @@ try {
         CREATE TABLE users (
             user_id INTEGER PRIMARY KEY,
             full_name TEXT NOT NULL DEFAULT 'User',
+            display_name TEXT NOT NULL DEFAULT 'User',
             username TEXT NULL,
             password_hash TEXT NULL,
             role_id INTEGER NULL,
@@ -622,6 +623,67 @@ try {
     $countService->approveCount($legacyCountId, 1);
     $invLegacy = (int)$pdo->query("SELECT quantity_on_hand FROM inventory WHERE product_id = 2")->fetchColumn();
     $assert($invLegacy === 10, 'Legacy count approval updated inventory to 10');
+
+    echo "Testing direct save, stale snapshots, complete batches, and old pending counts...\n";
+    $freshCoverage = $countService->getProductBatchCoverage(3);
+    $directData = [
+        'operation_token' => str_repeat('a', 48),
+        'product_id' => 3, 'stock_version' => $freshCoverage['stock_version'],
+        'discrepancy_reason' => 'Fresh shelf count',
+        'recheck_count_id' => $rollbackCountId,
+        'batches' => [
+            ['batch_id' => 301, 'physical_quantity' => 8],
+            ['batch_id' => 302, 'physical_quantity' => 5],
+            ['physical_quantity' => 2, 'batch_number' => 'FOUND-DIRECT'],
+        ],
+    ];
+    $submissionMigration = require __DIR__ . '/../database/migrations/202610250002_inventory_recovery.php';
+    $submissionMigration['up']($pdo);
+    $directId = $countService->saveCount($directData, 1);
+    $assert($countService->saveCount($directData, 1) === $directId, 'Retry returns the committed count without applying it twice');
+    $assert($pdo->query("SELECT status FROM inventory_counts WHERE count_id = {$directId}")->fetchColumn() === 'approved', 'Direct save finishes without a pending approval');
+    $assert((int)$pdo->query('SELECT remaining_quantity FROM product_batches WHERE batch_id = 301')->fetchColumn() === 8, 'Direct save reconciles individual batches');
+    $assert((int)$pdo->query("SELECT remaining_quantity FROM product_batches WHERE batch_number = 'FOUND-DIRECT'")->fetchColumn() === 2, 'Direct save retains found batches without invented dates');
+    $assert($pdo->query("SELECT status FROM inventory_counts WHERE count_id = {$rollbackCountId}")->fetchColumn() === 'rejected', 'Fresh count closes the old pending record');
+    $assert((int)$pdo->query("SELECT physical_quantity FROM inventory_counts WHERE count_id = {$rollbackCountId}")->fetchColumn() === 12, 'Recount preserves the old quantities');
+
+    $beforeCount = (int)$pdo->query('SELECT COUNT(*) FROM inventory_counts')->fetchColumn();
+    unset($directData['operation_token']);
+    try {
+        $countService->saveCount($directData, 1);
+        $assert(false, 'Stale direct count should be rejected even when the aggregate total is unchanged');
+    } catch (RuntimeException $e) {
+        $assert(str_contains($e->getMessage(), 'Stock has changed'), 'Snapshot catches changed batch allocation with unchanged total');
+    }
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM inventory_counts')->fetchColumn() === $beforeCount, 'Stale save leaves no extra count');
+    $directData['stock_version'] = $countService->getProductBatchCoverage(3)['stock_version'];
+    unset($directData['recheck_count_id']);
+    try {
+        $countService->saveCount($directData, 1);
+        $assert(false, 'Omitted active batches should be rejected');
+    } catch (RuntimeException $e) {
+        $assert(str_contains($e->getMessage(), 'every batch'), 'Missing batch is not silently treated as zero');
+    }
+
+    $completeData = ['product_id' => 3, 'stock_version' => $directData['stock_version'], 'discrepancy_reason' => 'Count all batches', 'batches' => []];
+    foreach ($countService->getProductBatchCoverage(3)['batches'] as $batch) {
+        $completeData['batches'][] = ['batch_id' => $batch['batch_id'], 'physical_quantity' => max(0, $batch['remaining_quantity'] - 1)];
+    }
+    $pdo->exec('ALTER TABLE stock_movements RENAME TO stock_movements_temp');
+    try {
+        $countService->saveCount($completeData, 1);
+        $assert(false, 'Failed direct correction must roll back');
+    } catch (Throwable $e) {
+        $assert((int)$pdo->query('SELECT COUNT(*) FROM inventory_counts')->fetchColumn() === $beforeCount, 'Failed stock write rolls back count insertion');
+        $assert((int)$pdo->query('SELECT remaining_quantity FROM product_batches WHERE batch_id = 301')->fetchColumn() === 8, 'Failed stock write rolls back batch changes');
+    }
+    $pdo->exec('ALTER TABLE stock_movements_temp RENAME TO stock_movements');
+
+    $assert($countService->countHistory('SKU-MATCHED') > 0, 'History search counts matching records');
+    $first = $countService->getRecentCounts(1, 0, 'SKU-MATCHED', 'counted', 'asc');
+    $second = $countService->getRecentCounts(1, 1, 'SKU-MATCHED', 'counted', 'asc');
+    $assert(count($first) === 1 && count($second) === 1 && $first[0]['count_id'] !== $second[0]['count_id'], 'History pagination returns distinct records');
+    $assert((int)$first[0]['physical_quantity'] <= (int)$second[0]['physical_quantity'], 'History sorting applies before pagination');
 
 } catch (Throwable $e) {
     $failures[] = "Unexpected exception: " . $e->getMessage() . "\n" . $e->getTraceAsString();

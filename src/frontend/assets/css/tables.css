@@ -92,10 +92,11 @@ span.tag-success, span.tag-warning, span.tag-danger { display: inline-flex; alig
 .table-wrap table thead th { position: sticky; top: 0; z-index: 2; }
 .auto-table-pagination { margin-bottom: 1rem; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 12px 12px; }
 
-/* Shared record footer: count, centered page size, page navigation. */
+/* Shared record footer: count and page navigation with an inline page size. */
 html body .main-content .rm-table-footer {
+  container-type: inline-size;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: .75rem 1.25rem;
   padding: .85rem 1.25rem;
@@ -106,10 +107,12 @@ html body .main-content .rm-table-footer {
   font-variant-numeric: tabular-nums;
 }
 html body .main-content .rm-table-footer[hidden] { display: none; }
+html body .main-content .rm-table-footer > * { min-width: 0; width: auto; }
 html body .main-content .rm-table-footer > :first-child { margin: 0; min-width: 0; white-space: normal; }
 html body .main-content .rm-table-footer .rm-page-size,
 html body .main-content .rm-table-footer .rm-page-size label {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   gap: .45rem;
@@ -139,7 +142,8 @@ html body .main-content .rm-table-footer > :last-child {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  max-width: 100%;
   gap: .3rem;
 }
 html body .main-content .rm-table-footer :is(button, a, .history-page-button) {
@@ -148,6 +152,8 @@ html body .main-content .rm-table-footer :is(button, a, .history-page-button) {
   justify-content: center;
   gap: .4rem;
   width: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
   min-width: 44px;
   min-height: 44px;
   height: auto;
@@ -174,10 +180,10 @@ html body .main-content .rm-table-footer :is(button, a):hover:not(:disabled):not
 html body .main-content .rm-table-footer :is(:disabled, [aria-disabled="true"]) { opacity: .45; cursor: default; pointer-events: none; }
 html body .main-content .rm-table-footer :is(button, a, select):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 html body .main-content .rm-table-footer [hidden] { display: none; }
-@media (max-width: 1180px) {
-  html body .main-content .rm-table-footer { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; }
-  html body .main-content .rm-table-footer > :last-child { justify-self: center; justify-content: center; }
-  html body .main-content .rm-table-footer :is(.rm-page-buttons, .history-page-buttons, .receipt-pagination, .queue-pagination) { justify-content: center; }
+@container (max-width: 36rem) {
+  html body .main-content .rm-table-footer > * { grid-column: 1 / -1; justify-self: center; text-align: center; }
+  html body .main-content .rm-table-footer :is(.rm-page-buttons, .history-page-buttons, .receipt-pagination, .queue-pagination),
+  html body .main-content .rm-table-footer > :last-child { flex-wrap: wrap; justify-content: center; }
 }
 @media (max-width: 640px) {
   html body .main-content .rm-table-footer { padding: .75rem; }

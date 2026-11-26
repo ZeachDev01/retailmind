@@ -4,6 +4,7 @@
     const rows = Array.from(root.querySelectorAll('[data-risk-row]'));
     const search = root.querySelector('#risk-search');
     const stockFilter = root.querySelector('#movement-stock');
+    const statusFilter = root.querySelector('#movement-status');
     const chartDataNode = root.querySelector('#movement-chart-data');
     const chartData = chartDataNode ? JSON.parse(chartDataNode.textContent) : null;
     const reportButton = root.querySelector('#movement-report');
@@ -55,24 +56,28 @@
         }
         chartFallback(false);
         const {primary, grid, muted} = colors();
-        const base = {responsive:true, maintainAspectRatio:false, animation:false, plugins:{legend:{display:false}}};
+        const base = {responsive:true, maintainAspectRatio:false, animation:false, plugins:{legend:{display:false},
+            tooltip:{callbacks:{label:item => numberFormat.format(item.raw) + (item.chart.config.type === 'doughnut'
+                ? (item.raw === 1 ? ' product' : ' products') : (item.raw === 1 ? ' unit sold' : ' units sold'))}}}};
         const axis = {beginAtZero:true, grid:{color:grid}, ticks:{font:{size:10}, precision:0}};
         try {
             pageCharts.push(new window.Chart(root.querySelector('#movement-chart-weekly'), {
                 type:'line',
                 data:{labels:chartData.weekly.labels, datasets:[{data:chartData.weekly.values, borderColor:primary,
                     backgroundColor:'rgba(37,99,235,.12)', fill:true, tension:.3, pointRadius:0, borderWidth:2}]},
-                options:{...base, scales:{x:{grid:{display:false}, ticks:{autoSkip:true, maxTicksLimit:7, font:{size:10}}}, y:axis}}
+                options:{...base, interaction:{mode:'index', intersect:false, axis:'x'},
+                    scales:{x:{grid:{display:false}, ticks:{autoSkip:true, maxTicksLimit:7, font:{size:10}}}, y:axis}}
             }));
             pageCharts.push(new window.Chart(root.querySelector('#movement-chart-top'), {
                 type:'bar',
                 data:{labels:chartData.top.labels, datasets:[{data:chartData.top.values, backgroundColor:primary, borderRadius:3, maxBarThickness:16}]},
-                options:{...base, indexAxis:'y', scales:{x:axis, y:{grid:{display:false}, ticks:{font:{size:10}}}}}
+                options:{...base, indexAxis:'y', interaction:{mode:'index', intersect:false, axis:'y'},
+                    scales:{x:axis, y:{grid:{display:false}, ticks:{font:{size:10}}}}}
             }));
             pageCharts.push(new window.Chart(root.querySelector('#movement-chart-coverage'), {
                 type:'doughnut',
                 data:{labels:chartData.coverage.labels, datasets:[{data:chartData.coverage.values,
-                    backgroundColor:[primary, '#f59e0b', muted, '#94a3b8'], borderWidth:0}]},
+                    backgroundColor:[primary, '#f59e0b'], borderWidth:0}]},
                 options:{...base, cutout:'66%'}
             }));
         } catch {
@@ -102,7 +107,9 @@
     }
     function matchingRows() {
         const query = search.value.trim().toLowerCase();
-        return rows.filter(row => (stockFilter.value === 'all' || Number(row.dataset.stock) > 0) && row.dataset.search.includes(query));
+        return rows.filter(row => (stockFilter.value === 'all' || Number(row.dataset.stock) > 0)
+            && (statusFilter.value === 'all' || row.dataset.movementStatus === statusFilter.value)
+            && row.dataset.search.includes(query));
     }
     function render() {
         const matching = matchingRows();
@@ -112,6 +119,8 @@
         rows.forEach(row => { row.hidden = true; });
         matching.slice((page - 1) * pageSize, page * pageSize).forEach(row => { row.hidden = false; });
         root.querySelector('#risk-empty').hidden = matching.length > 0;
+        root.querySelector('#risk-empty strong').textContent = statusFilter.value === 'all' ? 'No matching products'
+            : 'No ' + statusFilter.selectedOptions[0].textContent + ' products found';
         root.querySelector('#risk-page-summary').textContent = matching.length ? 'Showing ' + ((page - 1) * pageSize + 1) + '–' + Math.min(page * pageSize, matching.length) + ' of ' + matching.length + ' products' : 'No products to show';
         root.querySelector('#risk-page-status').textContent = 'Page ' + page + ' of ' + pages;
         const numbers = root.querySelector('#risk-page-numbers');
@@ -121,6 +130,7 @@
     }
     search.addEventListener('input', () => { page = 1; render(); });
     stockFilter.addEventListener('change', () => { page = 1; render(); });
+    statusFilter.addEventListener('change', () => { page = 1; render(); });
     root.addEventListener('retailmind:stockmovementopen', renderCharts);
     window.addEventListener('retailmind:themechange', () => { renderCharts(); if (drawer.open) renderDrawerChart(); });
     function outsideDrawer(event) {
@@ -223,13 +233,16 @@
         });
         const generated = new Intl.DateTimeFormat('en-PH', {dateStyle:'medium', timeStyle:'short', timeZone:'Asia/Manila'}).format(new Date()) + ' PHT';
         snapshot.querySelector('.sr-report-stamp strong').textContent = generated;
-        snapshot.querySelector('.sr-report-scope').textContent = stockFilter.selectedOptions[0].textContent + ' · Search: ' + (search.value.trim() || 'All') + ' · ' + matching.length + ' products · Quantities in base units';
+        const productCount = matching.length + (matching.length === 1 ? ' product' : ' products');
+        snapshot.querySelector('.sr-report-scope').textContent = [stockFilter.selectedOptions[0].textContent,
+            statusFilter.selectedOptions[0].textContent,
+            search.value.trim() ? 'Search: ' + search.value.trim() : '', productCount, 'Quantities in base units'].filter(Boolean).join(' · ');
         const footer = report.document.createElement('footer');
         footer.className = 'sr-report-footer';
         const store = report.document.createElement('span');
         store.textContent = snapshot.querySelector('.sr-report-brand strong').textContent + ' · RetailMind';
         const end = report.document.createElement('span');
-        end.textContent = 'End of report · ' + matching.length + ' products · ' + generated;
+        end.textContent = 'End of report · ' + productCount;
         footer.append(store, end);
         snapshot.append(footer);
         report.document.body.append(actions, snapshot);

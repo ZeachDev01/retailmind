@@ -102,6 +102,10 @@ class InventoryCountService
             'has_sales_pack' => $hasSalesPack,
             'batch_sealed_sum' => $batchSealedSum,
             'batch_loose_sum' => $batchLooseSum,
+            'stock_version' => hash('sha256', json_encode([$onHand, $packSize, array_map(
+                static fn(array $batch): array => [$batch['batch_id'], $batch['remaining_quantity'], $batch['sealed_quantity'], $batch['loose_quantity']],
+                $batches
+            )], JSON_THROW_ON_ERROR)),
         ];
     }
 
@@ -123,8 +127,18 @@ class InventoryCountService
 
     public function recordCount(array $data, int $userId): int
     {
+        return $this->storeCount($data, $userId, false);
+    }
+
+    public function saveCount(array $data, int $userId): int
+    {
+        return $this->storeCount($data, $userId, true);
+    }
+
+    private function storeCount(array $data, int $userId, bool $applyImmediately): int
+    {
         $this->assertRole($userId, 'inventory_manager');
-        $submission = new InventorySubmission($this->pdo, $userId, 'count', $data);
+        $submission = new InventorySubmission($this->pdo, $userId, $applyImmediately ? 'saveCount' : 'count', $data);
         if (($completed = $submission->completed()) !== null) return $completed;
         $productId = (int)($data['product_id'] ?? 0);
         $reason = trim((string)($data['discrepancy_reason'] ?? ''));
@@ -298,6 +312,18 @@ class InventoryCountService
             }
 
             $systemQty = (int)$inventory['quantity_on_hand'];
+            if ($applyImmediately) {
+                $coverage = $this->getProductBatchCoverage($productId);
+                if (!is_string($data['stock_version'] ?? null) || !hash_equals($coverage['stock_version'], $data['stock_version'])) {
+                    throw new RuntimeException('Stock has changed. Review the current batches and count again before saving.');
+                }
+                $submittedBatchIds = array_column($batchEntries, 'batch_id');
+                foreach ($coverage['batches'] as $batch) {
+                    if (!in_array($batch['batch_id'], $submittedBatchIds, true)) {
+                        throw new RuntimeException('Enter the actual count for every batch, including zero when none remain.');
+                    }
+                }
+            }
             $differenceQty = $physicalQty - $systemQty;
 
             // Compute system sealed and loose sums
@@ -457,8 +483,26 @@ class InventoryCountService
                 }
             }
 
+            if ($applyImmediately) {
+                $this->applyCount($countId, $userId);
+                $recheckId = (int)($data['recheck_count_id'] ?? 0);
+                if ($recheckId > 0) {
+                    $previous = $this->getCountForRecount($recheckId);
+                    if (!$previous || (int)$previous['product_id'] !== $productId) {
+                        throw new RuntimeException('This pending count is no longer available for a recount. Refresh the history.');
+                    }
+                    $this->pdo->prepare("UPDATE inventory_counts SET status = 'rejected', approved_by = ?, approved_at = CURRENT_TIMESTAMP WHERE count_id = ? AND status = 'pending'")
+                        ->execute([$userId, $recheckId]);
+                    log_activity($this->pdo, $userId, 'Pending count replaced by fresh count', 'Inventory Counts', $recheckId,
+                        ['status' => 'pending'], ['status' => 'rejected', 'replacement_count_id' => $countId]);
+                }
+            }
             $submission->remember($countId);
             $this->pdo->commit();
+            if ($applyImmediately) {
+                $this->notificationService->checkAndNotifyLowStock();
+                $this->notificationService->checkAndNotifyExpiringStock();
+            }
             return $countId;
         } catch (Throwable $e) {
             if ($this->pdo->inTransaction()) {
@@ -479,60 +523,7 @@ class InventoryCountService
 
         StoreWriteGate::begin($this->pdo);
         try {
-            [$scopeSql, $scopeParams] = $this->productScope();
-            $stmt = $this->pdo->prepare(
-                "SELECT ic.*
-                 FROM inventory_counts ic
-                 JOIN products p ON p.product_id = ic.product_id
-                 WHERE ic.count_id = ?{$scopeSql}{$this->forUpdate()}"
-            );
-            $stmt->execute(array_merge([$countId], $scopeParams));
-            $count = $stmt->fetch();
-
-            if (!$count) {
-                throw new RuntimeException('Inventory count not found.');
-            }
-            if ($count['status'] !== 'pending') {
-                throw new RuntimeException('Only pending counts can be approved.');
-            }
-
-            $this->fiscalPeriodGuard->assertOpenForDate($count['counted_at'], 'inventory_counts', 'inventory count');
-            $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'inventory adjustment');
-            $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
-
-            $productId = (int)$count['product_id'];
-            $differenceQty = (int)$count['difference_qty'];
-            $currentSystemQty = (int)$count['system_quantity'];
-            (new \App\Services\BatchInventoryLedger($this->pdo, $this->fiscalPeriodGuard))->reconcileCount($count, $userId);
-
-            $this->pdo->prepare(
-                "UPDATE inventory_counts
-                 SET status = 'approved', approved_by = ?, approved_at = CURRENT_TIMESTAMP
-                 WHERE count_id = ?"
-            )->execute([$userId, $countId]);
-
-            log_activity(
-                $this->pdo,
-                $userId,
-                'Stock adjustment approval',
-                'Inventory Counts',
-                $countId,
-                [
-                    'count_id' => $countId,
-                    'product_id' => $productId,
-                    'status' => 'pending',
-                    'quantity_on_hand' => $currentSystemQty,
-                ],
-                [
-                    'count_id' => $countId,
-                    'product_id' => $productId,
-                    'status' => 'approved',
-                    'quantity_on_hand' => (int)$count['physical_quantity'],
-                    'difference_qty' => $differenceQty,
-                    'reason' => $count['discrepancy_reason'],
-                ]
-            );
-
+            $this->applyCount($countId, $userId);
             $submission->remember(true);
             $this->pdo->commit();
             $this->notificationService->checkAndNotifyLowStock();
@@ -543,6 +534,64 @@ class InventoryCountService
             }
             throw $e;
         }
+    }
+
+    private function applyCount(int $countId, int $userId): void
+    {
+        [$scopeSql, $scopeParams] = $this->productScope();
+        $stmt = $this->pdo->prepare(
+            "SELECT ic.*
+             FROM inventory_counts ic
+             JOIN products p ON p.product_id = ic.product_id
+             WHERE ic.count_id = ?{$scopeSql}{$this->forUpdate()}"
+        );
+        $stmt->execute(array_merge([$countId], $scopeParams));
+        $count = $stmt->fetch();
+
+        if (!$count) {
+            throw new RuntimeException('Inventory count not found.');
+        }
+        if ($count['status'] !== 'pending') {
+            throw new RuntimeException('Only pending counts can be approved.');
+        }
+
+        $this->fiscalPeriodGuard->assertOpenForDate($count['counted_at'], 'inventory_counts', 'inventory count');
+        $this->fiscalPeriodGuard->assertOpenNow('inventory_adjustments', 'inventory adjustment');
+        $this->fiscalPeriodGuard->assertOpenNow('stock_movements', 'stock movement');
+
+        $productId = (int)$count['product_id'];
+        $differenceQty = (int)$count['difference_qty'];
+        $currentSystemQty = (int)$count['system_quantity'];
+        (new \App\Services\BatchInventoryLedger($this->pdo, $this->fiscalPeriodGuard))->reconcileCount($count, $userId);
+
+        $this->pdo->prepare(
+            "UPDATE inventory_counts
+             SET status = 'approved', approved_by = ?, approved_at = CURRENT_TIMESTAMP
+             WHERE count_id = ?"
+        )->execute([$userId, $countId]);
+
+        log_activity(
+            $this->pdo,
+            $userId,
+            'Stock count saved',
+            'Inventory Counts',
+            $countId,
+            [
+                'count_id' => $countId,
+                'product_id' => $productId,
+                'status' => 'pending',
+                'quantity_on_hand' => $currentSystemQty,
+            ],
+            [
+                'count_id' => $countId,
+                'product_id' => $productId,
+                'status' => 'approved',
+                'quantity_on_hand' => (int)$count['physical_quantity'],
+                'difference_qty' => $differenceQty,
+                'reason' => $count['discrepancy_reason'],
+            ]
+        );
+
     }
 
 
@@ -591,9 +640,31 @@ class InventoryCountService
         return $stmt->fetchAll();
     }
 
-    public function getRecentCounts(int $limit = 50): array
+    public function getCountForRecount(int $countId): ?array
     {
         [$scopeSql, $scopeParams] = $this->productScope();
+        $stmt = $this->pdo->prepare("SELECT ic.* FROM inventory_counts ic JOIN products p ON p.product_id = ic.product_id WHERE ic.count_id = ? AND ic.status = 'pending'{$scopeSql}");
+        $stmt->execute(array_merge([$countId], $scopeParams));
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    public function countHistory(string $search = ''): int
+    {
+        [$scopeSql, $scopeParams] = $this->productScope();
+        $searchSql = $search === '' ? '' : ' AND (p.product_name LIKE ? OR p.sku LIKE ?)';
+        if ($search !== '') array_push($scopeParams, '%' . $search . '%', '%' . $search . '%');
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM inventory_counts ic JOIN products p ON p.product_id = ic.product_id WHERE 1 = 1{$scopeSql}{$searchSql}");
+        $stmt->execute($scopeParams);
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function getRecentCounts(int $limit = 50, int $offset = 0, string $search = '', string $sort = 'date', string $direction = 'desc'): array
+    {
+        [$scopeSql, $scopeParams] = $this->productScope();
+        $searchSql = $search === '' ? '' : ' AND (p.product_name LIKE ? OR p.sku LIKE ?)';
+        if ($search !== '') array_push($scopeParams, '%' . $search . '%', '%' . $search . '%');
+        $sortColumn = ['date' => 'ic.counted_at', 'product' => 'p.product_name', 'system' => 'ic.system_quantity', 'counted' => 'ic.physical_quantity', 'difference' => 'ic.difference_qty', 'staff' => 'counted_user.display_name', 'status' => 'ic.status'][$sort] ?? 'ic.counted_at';
+        $direction = $direction === 'asc' ? 'ASC' : 'DESC';
         $hasPackCol = $this->hasColumn('products', 'pack_size');
         $packSelect = $hasPackCol ? ', p.pack_size AS product_pack_size' : '';
         $stmt = $this->pdo->prepare(
@@ -605,14 +676,15 @@ class InventoryCountService
              JOIN products p ON p.product_id = ic.product_id
              JOIN users counted_user ON counted_user.user_id = ic.counted_by
              LEFT JOIN users approved_user ON approved_user.user_id = ic.approved_by
-             WHERE 1 = 1{$scopeSql}
-             ORDER BY ic.counted_at DESC
-             LIMIT ?"
+             WHERE 1 = 1{$scopeSql}{$searchSql}
+             ORDER BY {$sortColumn} {$direction}, ic.count_id {$direction}
+             LIMIT ? OFFSET ?"
         );
         foreach ($scopeParams as $index => $value) {
-            $stmt->bindValue($index + 1, $value, PDO::PARAM_INT);
+            $stmt->bindValue($index + 1, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
         }
-        $stmt->bindValue(count($scopeParams) + 1, $limit, PDO::PARAM_INT);
+        $stmt->bindValue(count($scopeParams) + 1, max(1, min(100, $limit)), PDO::PARAM_INT);
+        $stmt->bindValue(count($scopeParams) + 2, max(0, $offset), PDO::PARAM_INT);
         $stmt->execute();
         return $stmt->fetchAll();
     }

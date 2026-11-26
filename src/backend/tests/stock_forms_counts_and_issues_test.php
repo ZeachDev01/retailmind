@@ -369,6 +369,8 @@ $pdo->exec("
     VALUES (201, 2, 'BATCH-PIECE-01', 20, 20, 0, 20, '2027-01-15');
 ");
 
+require_once __DIR__ . '/support/notification_schema.php';
+notification_test_schema($pdo);
 $countService = new InventoryCountService($pdo);
 $issueService = new StockIssueService($pdo, null, 'inventory_manager');
 

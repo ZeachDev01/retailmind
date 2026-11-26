@@ -9,6 +9,8 @@ const {chromium} = require('playwright');
     const browser = await chromium.launch({headless: true});
     try {
         const page = await browser.newPage();
+        await page.route('http://gcash.test/**', route => route.fulfill({body: '<html></html>', contentType: 'text/html'}));
+        await page.goto('http://gcash.test/');
         for (const hasOpenShift of [false, true]) {
             await page.setContent(`<body class="cashier-page">${markup}</body>`);
             for (const file of ['style.css', 'cashier.css', 'gcash.css']) {
@@ -22,6 +24,7 @@ const {chromium} = require('playwright');
                     has_open_shift: hasOpenShift, transactions: [], needs_checking: [], has_next: false
                 })});
             }, hasOpenShift);
+            await page.evaluate(() => localStorage.setItem('retailmind.gcash.walletNumber', '09171234567'));
             await page.addScriptTag({path: 'src/frontend/assets/js/gcash-reference.js'});
             await page.addScriptTag({path: 'src/frontend/assets/js/gcash.js'});
             await page.locator('#gcash-session-status').filter({hasText: 'Closed'}).waitFor();
@@ -34,6 +37,29 @@ const {chromium} = require('playwright');
             await button.evaluate(node => node.click());
             assert.equal(await page.locator('#gcash-open-dialog').isVisible(), hasOpenShift, 'Only an open Cashier Shift allows the opening dialog');
         }
+        assert.equal(await page.locator('#gcash-open-number').inputValue(), '09171234567', 'Opening restores remembered number');
+        assert.equal(await page.locator('#gcash-open-cash').inputValue(), '', 'Opening cash is not remembered');
+        assert.equal(await page.locator('#gcash-open-wallet').inputValue(), '', 'Opening wallet is not remembered');
+        await page.evaluate(() => { window.RetailMindUI = {toast: () => {}, renderPageButtons: () => {}}; });
+        await page.locator('#gcash-open-number').fill('09181234567');
+        await page.locator('#gcash-open-cash').fill('100');
+        await page.locator('#gcash-open-wallet').fill('200');
+        await page.locator('#gcash-open-submit').click();
+        await page.waitForFunction(() => !document.getElementById('gcash-open-dialog').open);
+        assert.equal(await page.evaluate(() => localStorage.getItem('retailmind.gcash.walletNumber')), '09181234567', 'Successful opening saves the number');
+        await page.goto('http://gcash.test/active');
+        await page.setContent(`<body class="cashier-page">${markup}</body>`);
+        await page.evaluate(() => {
+            document.getElementById('gcash-workspace').dataset.api = 'http://localhost/gcash_api.php';
+            window.RetailMindUI = {toast: () => {}, renderPageButtons: () => {}};
+            window.fetch = async () => ({ok: true, json: async () => ({success: true,
+                session: {opened_at: '2026-11-25 10:00:00', cashier_id: 99, cashier_name: 'Other Cashier', is_controlling_cashier: false},
+                has_open_shift: true, transactions: [], needs_checking: []})});
+        });
+        await page.addScriptTag({path: 'src/frontend/assets/js/gcash-reference.js'});
+        await page.addScriptTag({path: 'src/frontend/assets/js/gcash.js'});
+        await page.locator('#gcash-session-status').filter({hasText: 'Under control of Other Cashier'}).waitFor();
+        assert.equal(await page.locator('#gcash-session-status').evaluate(node => node.classList.contains('gcash-status-verified')), true, 'Open session notice is green');
         console.log('GCash open shift button: passed (muted, blocked without shift, enabled with shift)');
     } finally {
         await browser.close();

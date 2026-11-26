@@ -542,6 +542,9 @@ $GLOBALS['rm_navigation_cart'] = $cartWorkspaceContext;
 window.cartWorkspace = new CartWorkspace(<?= json_encode($cartWorkspaceContext, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
 cartWorkspace.bindNavigation();
 </script>
+<?php if ($role === 'cashier'): ?>
+<script src="<?= sidebar_e(app_url('assets/js/shift-reminder.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/shift-reminder.js')) ?>" data-endpoint="<?= sidebar_e(app_url('components/auth/shift_status.php')) ?>" data-close-url="<?= sidebar_e(app_url('components/cashier/shifts.php?tab=close')) ?>" data-cashier="<?= (int)$_SESSION['user_id'] ?>"></script>
+<?php endif; ?>
 
 <link rel="stylesheet" href="<?= sidebar_e(app_url('assets/css/backup.css')) ?>">
 <script>

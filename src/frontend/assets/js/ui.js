@@ -813,6 +813,9 @@
   }
 
   function initDialogAccessibility() {
+    document.addEventListener("close", (event) => {
+      if (event.target.matches("dialog")) RM.syncScrollLock();
+    }, true);
     document.addEventListener("keydown", (event) => {
       if (event.key !== "Escape" && event.key !== "Tab") return;
       const overlay = topOverlay();
@@ -966,12 +969,14 @@
     const select = document.createElement('select');
     select.setAttribute('aria-label', 'Entries per page');
     [10, 15, 25, 50, 100].forEach(value => select.add(new Option(value, value, false, value === size)));
-    label.append(select, ' entries per page');
+    label.append(select);
     footer.insertBefore(label, footer.lastElementChild);
     select.addEventListener('change', () => onChange(Number(select.value)));
   };
 
   RM.renderPageButtons = function (nav, page, pages, onPage, directions = true) {
+    const pageSize = nav.closest('.rm-table-footer')?.querySelector('.rm-page-size');
+    const sizeFocused = pageSize?.contains(document.activeElement);
     nav.replaceChildren();
     nav.classList.add('rm-page-buttons');
     const add = (label, target, disabled, direction) => {
@@ -995,8 +1000,12 @@
     };
     if (directions) add('Previous', page - 1, page === 1, 'prev');
     const first = Math.max(1, Math.min(page - 2, pages - 4));
-    for (let number = first; number <= Math.min(pages, first + 4); number++) add(String(number), number, false);
+    for (let number = first; number <= Math.min(pages, first + 4); number++) {
+      add(String(number), number, false);
+      if (number === first && pageSize) nav.append(pageSize);
+    }
     if (directions) add('Next', page + 1, page === pages, 'next');
+    if (sizeFocused) pageSize.querySelector('select')?.focus({preventScroll: true});
   };
 
   function initSmartTables() {
@@ -1043,7 +1052,7 @@
       const footer = document.createElement("div");
       footer.className = "table-pagination auto-table-pagination rm-table-footer";
       footer.innerHTML =
-        '<span class="auto-page-summary" role="status"></span><label class="rm-page-size"><select aria-label="Rows per page"><option>10</option><option selected>15</option><option>25</option><option>50</option><option>100</option></select> entries per page</label><nav class="pagination-buttons" aria-label="Table pages"></nav>';
+        '<span class="auto-page-summary" role="status"></span><label class="rm-page-size"><select aria-label="Rows per page"><option>10</option><option selected>15</option><option>25</option><option>50</option><option>100</option></select></label><nav class="pagination-buttons" aria-label="Table pages"></nav>';
       wrap.insertAdjacentElement("afterend", footer);
       const search = qs("input", toolbar);
       if (table.dataset.searchLabel) {

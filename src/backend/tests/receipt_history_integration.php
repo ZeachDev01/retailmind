@@ -58,9 +58,13 @@ try {
             'MySQL history category uses matching row and count filters');
     }
     foreach(['pending'=>[1],'approved'=>[6],'rejected'=>[4]] as $status=>$ids) $assert(array_column($service->fetch(['reversal_status'=>$status],1)['data'],'sale_id')===$ids,'Legacy Reversal filter '.$status.' stays distinct');
+    $pdo->exec("INSERT INTO cash_refunds(refund_id,sale_id,shift_id,cashier_id,refund_amount,payment_method,reason) VALUES(3,2,1,1,1,'cash','customer_return')");
+    $pdo->beginTransaction();
+    foreach ([1,3] as $refundId) (new ReceiptEngine($pdo))->preserveRefund($refundId);
+    $pdo->commit();
     $snapshot=static function() use($pdo): array {
         $result=[];
-        foreach(['sales','sale_items','cash_refunds','sale_reversals','cash_drawer_movements','stock_movements','activity_log','sale_receipt_details','checkout_attempts'] as $table) $result[$table]=$pdo->query("SELECT * FROM {$table}")->fetchAll(PDO::FETCH_ASSOC);
+        foreach(['sales','sale_items','cash_refunds','refund_receipt_details','sale_reversals','cash_drawer_movements','stock_movements','activity_log','sale_receipt_details','checkout_attempts'] as $table) $result[$table]=$pdo->query("SELECT * FROM {$table}")->fetchAll(PDO::FETCH_ASSOC);
         return $result;
     };
     $before=$snapshot();

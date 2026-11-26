@@ -294,7 +294,7 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 </div>
                 <div class="gcash-actions gcash-pagination rm-table-footer">
                     <span id="gcash-page-summary" role="status"></span>
-                    <label class="rm-page-size"><select id="gcash-page-size" aria-label="Entries per page"><option>10</option><option selected>15</option><option>25</option><option>50</option><option>100</option></select> entries per page</label>
+                    <label class="rm-page-size"><select id="gcash-page-size" aria-label="Entries per page"><option>10</option><option selected>15</option><option>25</option><option>50</option><option>100</option></select></label>
                     <div class="rm-page-buttons">
                     <button type="button" class="btn btn-secondary" id="gcash-prev" disabled><i class="bi bi-chevron-left" aria-hidden="true"></i>Previous</button>
                     <span hidden id="gcash-page">Page 1</span><span id="gcash-page-numbers" class="rm-page-buttons"></span>
@@ -525,6 +525,11 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
         <dialog id="gcash-handover-dialog" aria-labelledby="gcash-handover-title">
             <form id="gcash-handover-form">
                 <h2 id="gcash-handover-title">Hand over GCash</h2>
+                <section class="gcash-field" aria-labelledby="gcash-handover-held-title">
+                    <h3 id="gcash-handover-held-title">Held exchanges included</h3>
+                    <p class="gcash-help">The incoming staff member takes over checking these exchanges. Earlier shortages stay on their original record.</p>
+                    <div id="gcash-handover-held" aria-live="polite"></div>
+                </section>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-handover-incoming">Incoming staff member</label>
                     <select class="pos-input" id="gcash-handover-incoming" name="incoming_cashier_id" required>
@@ -592,8 +597,8 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                     <input class="pos-input" id="gcash-nc-number" name="customer_gcash_number" type="tel" maxlength="20" placeholder="09XXXXXXXXX" autocomplete="off">
                 </div>
                 <div class="gcash-field">
-                    <label class="pos-field-label" for="gcash-nc-notes">Reason for holding</label>
-                    <textarea class="pos-input" id="gcash-nc-notes" name="notes" minlength="5" maxlength="500" required rows="2" placeholder="e.g. Cash received, wallet transfer unconfirmed (min 5 chars)"></textarea>
+                    <label class="pos-field-label" for="gcash-nc-notes">Reason for holding (optional)</label>
+                    <textarea class="pos-input" id="gcash-nc-notes" name="notes" maxlength="500" rows="2" placeholder="e.g. Cash received, wallet transfer unconfirmed"></textarea>
                 </div>
                 <div class="gcash-field">
                     <label class="pos-field-label" for="gcash-nc-reference">Reference number</label>
@@ -680,7 +685,13 @@ $gcashRules = require __DIR__ . '/../../../backend/config/gcash.php';
                 </div>
                 <div class="gcash-field" id="gcash-resolve-ref-group">
                     <label class="pos-field-label" for="gcash-resolve-reference">Reference number</label>
-                    <input class="pos-input" id="gcash-resolve-reference" name="reference" type="text" maxlength="32" placeholder="Required if wallet was unconfirmed" autocomplete="off" spellcheck="false">
+                    <div class="gcash-resolve-reference-row">
+                        <input class="pos-input" id="gcash-resolve-reference" name="reference" type="text" maxlength="32" placeholder="Required if wallet was unconfirmed" autocomplete="off" spellcheck="false" inputmode="numeric">
+                        <div class="gcash-reference-tools">
+                            <button class="btn btn-secondary" type="button" id="gcash-resolve-camera-open" aria-label="Take photo" title="Take photo"><i class="bi bi-camera" aria-hidden="true"></i></button>
+                            <button class="btn btn-secondary" type="button" id="gcash-resolve-photo-open" aria-label="Choose photo" title="Choose photo"><i class="bi bi-image" aria-hidden="true"></i></button>
+                        </div>
+                    </div>
                 </div>
                 <div class="gcash-field" id="gcash-resolve-notes-group">
                     <label class="pos-field-label" for="gcash-resolve-notes">Resolution notes (optional)</label>

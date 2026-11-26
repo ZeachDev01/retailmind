@@ -13,7 +13,7 @@ require ${phpPath('../bootstrap/app.php')};
 $_ENV['SESSION_SAVE_PATH']=${JSON.stringify(temp.replaceAll('\\', '/') + '/sessions')};
 $_ENV['SESSION_LIFETIME']='3600'; $_ENV['SESSION_ABSOLUTE_LIFETIME']='43200';
 $_ENV['SESSION_SECURE_COOKIE']='false';
-$_SERVER['SCRIPT_NAME']='/components/auth/session_activity.php';
+$_SERVER['SCRIPT_NAME']=isset($_GET['shift']) ? '/components/auth/shift_status.php' : '/components/auth/session_activity.php';
 if (isset($_GET['seed'])) {
  App\\Core\\Session::start();
  $_SESSION=['user_id'=>1,'role'=>'cashier','session_version'=>1,'csrf_token'=>'fixture-csrf',
@@ -24,7 +24,7 @@ if (isset($_GET['seed'])) {
 if (isset($_GET['inspect'])) { App\\Core\\Session::start(); echo json_encode($_SESSION); exit; }
 $pdo=new PDO('sqlite::memory:');
 $pdo->exec("CREATE TABLE roles (role_id INTEGER, role_name TEXT); INSERT INTO roles VALUES(1,'cashier');
- CREATE TABLE users(user_id INTEGER,role_id INTEGER,status TEXT,session_version INTEGER,full_name TEXT,profile_image TEXT,must_change_password INTEGER,is_recovery_account INTEGER);
+ CREATE TABLE users(user_id INTEGER,role_id INTEGER,status TEXT,session_version INTEGER,display_name TEXT,profile_image TEXT,must_change_password INTEGER,is_recovery_account INTEGER);
  INSERT INTO users VALUES(1,1,'active',1,'Cashier',NULL,1,0);
  CREATE TABLE user_roles(user_id INTEGER,role_id INTEGER,is_primary INTEGER); INSERT INTO user_roles VALUES(1,1,1);");
 (new ReflectionProperty(App\\Core\\Database::class,'connection'))->setValue(null,$pdo);
@@ -45,6 +45,8 @@ require ${phpPath('../../frontend/components/auth/session_activity.php')};
         const initial = await seed.json();
         const request = (url = '/', options = {}) => fetch(origin + url, {redirect:'manual', ...options, headers:{Cookie:cookie,...options.headers}});
         assert.equal((await request()).status, 200, 'Forced password page can check its login');
+        const shiftPoll = await (await request('/?inspect=1&shift=1')).json();
+        assert.equal(shiftPoll._last_activity, initial._last_activity, 'Shift polling cannot extend login');
         assert.equal((await request('/', {method:'POST', body:'csrf_token=wrong', headers:{'Content-Type':'application/x-www-form-urlencoded'}})).status,403);
         const invalid = await (await request('/?inspect=1')).json();
         assert.equal(invalid._last_activity, initial._last_activity, 'Invalid CSRF cannot extend login');

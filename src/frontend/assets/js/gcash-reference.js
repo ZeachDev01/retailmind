@@ -11,7 +11,18 @@
         const add = value => { const candidate = normalize(value); if (valid(candidate, rules)) candidates.add(candidate); };
         // Require a label for receipt OCR: amounts, phone numbers, and dates are not references.
         const labels = /\b(?:reference\s*(?:number|no\.?)?|ref\.?\s*(?:number|no\.?))\s*[:#=\-]?\s*([0-9](?:[0-9 \t-]*[0-9])?)/gi;
-        for (const match of text.matchAll(labels)) add(match[1]);
+        for (const match of text.matchAll(labels)) {
+            let value = match[1];
+            let rest = text.slice(match.index + match[0].length);
+            // OCR can wrap grouped digits; only join whole numeric lines after the label.
+            while (normalize(value).length < rules.min) {
+                const next = /^(?:[ \t]*\r?\n)+[ \t]*([0-9](?:[0-9 \t-]*[0-9])?)[ \t]*(?=\r?\n|$)/.exec(rest);
+                if (!next) break;
+                value += next[1];
+                rest = rest.slice(next[0].length);
+            }
+            add(value);
+        }
         if (!labeledOnly) {
             try {
                 const data = JSON.parse(text);

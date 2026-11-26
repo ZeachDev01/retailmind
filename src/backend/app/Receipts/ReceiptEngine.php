@@ -577,8 +577,8 @@ final class ReceiptEngine
             return null;
         }
         $statement = $this->pdo->prepare("SELECT receipt_details_json FROM gcash_transactions
-            WHERE transaction_id = ? AND verification_status = 'Completed'" . ($actorRole === 'cashier' ? ' AND cashier_id = ?' : ''));
-        $statement->execute($actorRole === 'cashier' ? [$transactionId, $actorId] : [$transactionId]);
+            WHERE transaction_id = ? AND verification_status = 'Completed'" . ($actorRole === 'cashier' ? ' AND (cashier_id = ? OR responsible_user_id = ?)' : ''));
+        $statement->execute($actorRole === 'cashier' ? [$transactionId, $actorId, $actorId] : [$transactionId]);
         $json = $statement->fetchColumn();
         if (!$json) return null;
         $details = json_decode($json, true, 512, JSON_THROW_ON_ERROR);

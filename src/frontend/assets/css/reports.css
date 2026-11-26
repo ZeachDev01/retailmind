@@ -727,21 +727,21 @@ html[data-theme="dark"] .analytics-tab.is-active {
 .receiving-history-page .history-table-panel { border:1px solid var(--border); border-radius:14px; background:var(--card-bg); }
 .receiving-history-page .history-table-panel table { display:table; width:100%; margin:0; white-space:normal; }
 .receiving-history-page .history-list-table { min-width:48rem; }
-.receiving-history-page .history-table { min-width:88rem; }
+.receiving-history-page .history-table { min-width:48rem; font-size:inherit; }
 .receiving-history-page .history-table td { vertical-align:top; }
 .receiving-history-page .history-table :is(th, td):nth-child(1) { min-width:11rem; }
-.receiving-history-page .history-table :is(th, td):nth-child(2) { min-width:12rem; }
+.receiving-history-page .history-table :is(th, td):nth-child(2) { min-width:10rem; }
 .receiving-history-page .history-table td:nth-child(2) code { white-space:nowrap; }
-.receiving-history-page .history-table :is(th, td):nth-child(n+3):nth-child(-n+5) { min-width:5.5rem; }
-.receiving-history-page .history-table :is(th, td):nth-child(6) { min-width:12rem; }
-.receiving-history-page .history-table :is(th, td):nth-child(7) { min-width:15rem; }
-.receiving-history-page .history-table :is(th, td):nth-child(8) { min-width:9rem; }
-.receiving-history-page .history-table td:nth-child(8) small { white-space:nowrap; }
-.receiving-history-page .history-table :is(th, td):nth-child(9) { min-width:12rem; }
+.receiving-history-page .history-table :is(th, td):nth-child(3) { min-width:9rem; }
+.receiving-history-page .history-table :is(th, td):nth-child(4) { min-width:12rem; }
+.receiving-history-page .history-table :is(th, td):nth-child(5) { min-width:9rem; }
+.receiving-history-page .history-table td:nth-child(5) small { white-space:nowrap; }
 .receiving-history-page .history-table-panel th,
 .receiving-history-page .history-table-panel td { border-color:var(--border); overflow-wrap:anywhere; }
 .receiving-history-page .history-list-table th,
-.receiving-history-page .history-list-table td { padding:.625rem .75rem; }
+.receiving-history-page .history-list-table td,
+.receiving-history-page .history-table th,
+.receiving-history-page .history-table td { padding:.625rem .75rem; }
 .receiving-history-page .history-list-table th,
 .receiving-history-page .history-list-table td:nth-child(2) { white-space:nowrap; }
 .receiving-history-page .history-list-table td:nth-child(n+3):nth-child(-n+5) { max-width:12rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -752,8 +752,8 @@ html[data-theme="dark"] .analytics-tab.is-active {
 .receiving-history-page .history-sort-link::after { content:""; width:.4rem; height:.65rem; background:currentColor; clip-path:polygon(50% 0, 100% 38%, 0 38%, 0 62%, 100% 62%, 50% 100%, 0 62%, 0 38%); }
 .receiving-history-page [aria-sort="ascending"] .history-sort-link::after { clip-path:polygon(50% 12%, 100% 62%, 0 62%); }
 .receiving-history-page [aria-sort="descending"] .history-sort-link::after { clip-path:polygon(0 38%, 100% 38%, 50% 88%); }
-.receiving-history-page .history-table :is(td, th):nth-child(n+3):nth-child(-n+5),
-.receiving-history-page .history-table :is(td, th):nth-child(7),
+.receiving-history-page .history-table :is(td, th):nth-child(3),
+.receiving-history-page .history-table :is(td, th):nth-child(4),
 .receiving-history-page .history-list-table .history-quantity { text-align:right; font-variant-numeric:tabular-nums; }
 .receiving-history-page .history-quantity-note { color:var(--muted); font-size:.75rem; }
 .receiving-history-page .badge { display:inline-block; padding:.25rem .5rem; border-radius:6px; font-size:.875rem; }

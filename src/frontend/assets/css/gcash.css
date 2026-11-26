@@ -710,6 +710,18 @@ html[data-theme="dark"] .gcash-workspace-balances .gcash-icon-wallet {
 }
 
 /* Reference & OCR Tools */
+.gcash-resolve-reference-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.gcash-resolve-reference-row > .pos-input {
+    flex: 1 1 11rem;
+    min-width: 0;
+}
+
 .gcash-reference-tools {
     display: flex;
     gap: 0.5rem;
@@ -723,6 +735,18 @@ html[data-theme="dark"] .gcash-workspace-balances .gcash-icon-wallet {
     gap: 0.45rem;
     font-size: 0.95rem;
     padding: 0.45rem 0.85rem;
+}
+
+.gcash-resolve-reference-row .gcash-reference-tools {
+    flex-wrap: nowrap;
+    margin-top: 0;
+}
+
+.gcash-resolve-reference-row .gcash-reference-tools .btn {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    justify-content: center;
 }
 
 .gcash-camera {
@@ -1116,6 +1140,7 @@ html[data-theme="dark"] .gcash-records-empty p {
 }
 
 #panel-sessions .gcash-session-history { min-height: 0; }
+.gcash-session-history .gcash-session-date { white-space: nowrap; }
 #panel-sessions .gcash-table-wrap, #tab-sessions .gcash-table-wrap { min-height: 0; }
 
 html .gcash-session-history .gcash-table-wrap :is(th, td).gcash-session-amount {
@@ -1551,6 +1576,10 @@ html .gcash-session-history .gcash-table-wrap :is(th, td).gcash-session-amount {
 }
 
 /* Dialogs */
+#gcash-handover-held {
+    overflow-wrap: anywhere;
+}
+
 dialog[id^="gcash-"] {
     margin: auto;
     width: min(540px, calc(100% - 2rem));
@@ -1766,8 +1795,7 @@ dialog[id^="gcash-"]::backdrop {
     gap: 0.65rem;
 }
 
-#cashier-overview .gcash-overview-quick-actions .btn,
-#cashier-overview .gcash-overview-review-actions .btn {
+#cashier-overview .gcash-overview-quick-actions .btn {
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
@@ -1779,8 +1807,7 @@ dialog[id^="gcash-"]::backdrop {
     transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
-#cashier-overview .gcash-overview-quick-actions .btn:hover,
-#cashier-overview .gcash-overview-review-actions .btn:hover {
+#cashier-overview .gcash-overview-quick-actions .btn:hover {
     transform: translateY(-2px);
 }
 
@@ -2001,26 +2028,6 @@ dialog[id^="gcash-"]::backdrop {
     letter-spacing: -0.02em;
     color: var(--text);
     margin: 0;
-}
-
-/* Needs Checking & History Overview */
-#cashier-overview .gcash-overview-review {
-    grid-column: 1 / -1;
-}
-
-#cashier-overview .gcash-overview-review-actions {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-}
-
-#cashier-overview .gcash-overview-review .gcash-empty-msg {
-    padding: 1rem 0;
-}
-
-#cashier-overview .gcash-overview-review .gcash-nc-meta {
-    overflow-wrap: anywhere;
 }
 
 #cashier-overview .gcash-status-needs-checking {

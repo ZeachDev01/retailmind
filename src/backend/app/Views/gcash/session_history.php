@@ -84,15 +84,18 @@ use App\Support\OperatorAlert;
                         <th scope="col" class="gcash-session-amount">Closing wallet</th>
                     </tr></thead>
                     <tbody>
-                        <?php foreach ($rows as $row): ?>
+                        <?php foreach ($rows as $row):
+                            $opened = explode(' · ', PhilippineTime::format($row['opened_at']));
+                            $closed = explode(' · ', PhilippineTime::format($row['closed_at']));
+                        ?>
                             <tr data-session-id="<?= (int)$row['session_id'] ?>">
                                 <th scope="row">#<?= (int)$row['session_id'] ?><small><?= $row['status'] === 'open' ? 'Open' : 'Closed' ?></small></th>
                                 <?php if ($admin): ?><td><?= $escape($row['cashier_name']) ?></td><?php endif; ?>
                                 <td><?= $escape($row['wallet_number'] ?: 'Not recorded') ?></td>
-                                <td><?= $escape(PhilippineTime::format($row['opened_at'])) ?></td>
+                                <td><span class="gcash-session-date"><?= $escape($opened[0]) ?></span><?php if (isset($opened[1])): ?><small><?= $escape($opened[1]) ?></small><?php endif; ?></td>
                                 <td class="gcash-session-amount"><?= $money($row['opening_service_cash']) ?></td>
                                 <td class="gcash-session-amount"><?= $money($row['opening_wallet_balance']) ?></td>
-                                <td><?= $escape(PhilippineTime::format($row['closed_at'])) ?>
+                                <td><span class="gcash-session-date"><?= $escape($closed[0]) ?></span><?php if (isset($closed[1])): ?><small><?= $escape($closed[1]) ?></small><?php endif; ?>
                                     <?php if ($admin && $row['closed_by_name'] !== null): ?><small><?= $escape($row['closed_by_name']) ?></small><?php endif; ?>
                                 </td>
                                 <td class="gcash-session-amount"><?= $money($row['closing_service_cash']) ?></td>

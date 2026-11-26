@@ -4,24 +4,32 @@ const {spawn, spawnSync} = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const net = require('node:net');
+const {randomBytes} = require('node:crypto');
 const {chromium} = require('playwright');
 
 if (process.env.RUN_DB_TESTS !== '1') throw new Error('Set RUN_DB_TESTS=1 for disposable database fixtures.');
 const root = path.resolve(__dirname, '../../..');
 const token = 'rh' + Date.now().toString(36);
-const fixturePath = path.join(__dirname, 'support/scan_workflow_fixture.php');
+const database = 'retailmind_theme_test_' + randomBytes(6).toString('hex');
 const artifacts = path.join(root, 'output/playwright/receiving-history');
 const history = '/components/report/receiving_history.php';
 const entryRows = '.receiving-history-container tbody tr';
 const itemRows = '.history-table tbody tr';
 function fixture(action) {
-    const run = spawnSync(process.env.PHP_BINARY || 'php', [fixturePath, action, '--token', token], {cwd:root, encoding:'utf8'});
+    const bootstrap = "require 'src/backend/bootstrap/app.php'; $_ENV['DB_NAME'] = $_SERVER['DB_NAME'] = getenv('RM_THEME_TEST_DATABASE'); require 'src/backend/tests/support/scan_workflow_fixture.php';";
+    const run = spawnSync(process.env.PHP_BINARY || 'php', ['-r', bootstrap, '--', action, '--token', token],
+        {cwd:root, encoding:'utf8', env:{...process.env, RM_THEME_TEST_DATABASE:database}});
     assert.equal(run.status, 0, run.stderr);
     return JSON.parse(run.stdout.trim().split('\n').at(-1));
+}
+function databaseFixture(action) {
+    const run = spawnSync(process.env.PHP_BINARY || 'php', ['src/backend/tests/support/theme_fixture.php', action, database], {cwd:root, encoding:'utf8'});
+    assert.equal(run.status, 0, run.stderr || run.stdout);
 }
 async function main() {
     let server, browser, data;
     try {
+        databaseFixture('create');
         data = fixture('--create');
         fixture('--seed-batches');
         const port = await new Promise(resolve => {
@@ -31,7 +39,8 @@ async function main() {
             });
         });
         const baseURL = 'http://127.0.0.1:' + port;
-        server = spawn(process.env.PHP_BINARY || 'php', ['-S', '127.0.0.1:' + port, '-t', path.join(root, 'src/frontend')], {cwd:root, stdio:'ignore'});
+        server = spawn(process.env.PHP_BINARY || 'php', ['-S', '127.0.0.1:' + port, '-t', path.join(root, 'src/frontend'), 'src/backend/tests/support/theme_router.php'],
+            {cwd:root, stdio:'ignore', env:{...process.env, RM_THEME_TEST_DATABASE:database}});
         for (let i = 0; i < 100; i++) {
             try { if ((await fetch(baseURL)).ok) break; } catch {}
             await new Promise(resolve => setTimeout(resolve, 100));
@@ -39,8 +48,9 @@ async function main() {
         browser = await chromium.launch({headless:true});
         const context = await browser.newContext({baseURL, hasTouch:true, isMobile:true});
         const page = await context.newPage();
+        page.setDefaultTimeout(10000);
         await page.goto('/?login=1');
-        await page.waitForFunction(() => document.activeElement?.id === 'landing-login-username');
+        await page.locator('#landing-login-username').waitFor({state:'visible'});
         await page.fill('#landing-login-username', data.staff.manager.username);
         await page.fill('#landing-login-password', data.staff.manager.password);
         await Promise.all([page.waitForURL('**/inventory_management/**'), page.getByRole('button', {name:'Log in', exact:true}).click()]);
@@ -58,6 +68,8 @@ async function main() {
             name: /^(Record bought stock|Check stock|Review recommendations)$/
         }).count(), 0, 'receiving history header has no stock workflow shortcuts');
         assert.equal(await page.locator(entryRows).count(), 1, 'fixture contains one legacy receipt');
+        assert.deepEqual(await page.locator('.history-list-table thead th').allTextContents(),
+            ['Entry', 'Date & Time', 'Store', 'Receipt', 'Recorded by', 'Products', 'Receive']);
         for (let i = 0; i < 22; i++) {
             await page.goto('/components/report/stock_receiving.php', {waitUntil:'domcontentloaded'});
             const form = {
@@ -74,6 +86,8 @@ async function main() {
             const response = await context.request.post('/components/report/stock_receiving.php', {form});
             assert((await response.text()).includes('Receiving entry saved.'), 'receipt persisted');
         }
+        const quantities = spawnSync(process.env.PHP_BINARY || 'php', ['src/backend/tests/support/receiving_history_quantities.php', database, token], {cwd:root, encoding:'utf8'});
+        assert.equal(quantities.status, 0, quantities.stderr);
         const large = fixture('--seed-large-history');
         const filteredHistory = history + '?length=10&q=' + token;
         fs.mkdirSync(artifacts, {recursive:true});
@@ -95,12 +109,18 @@ async function main() {
         await page.waitForURL(url => url.searchParams.get('entry') === large.entry);
         assert.equal(await page.locator(itemRows).count(), 15, 'the detail starts at 15 items');
         assert.equal(await page.locator('.history-table th[aria-sort="ascending"]').innerText(), 'Product');
-        await follow(page.getByRole('link', {name:'Delivered', exact:true}));
-        assert.equal((await page.locator(itemRows).first().locator('td').nth(2).innerText()).trim(), '1');
-        await follow(page.getByRole('link', {name:'Delivered', exact:true}));
-        assert.equal((await page.locator(itemRows).first().locator('td').nth(2).innerText()).trim(), '100', 'sort includes rows from later pages');
+        assert.deepEqual((await page.locator('.history-table thead th').allTextContents()).map(text => text.replace(/\s+/g, ' ').trim()),
+            ['Product', 'SKU', 'Receive', 'Purchase cost', 'Batch / Expiry']);
+        assert(await page.locator('.history-table').evaluate(table => {
+            const panel = table.closest('.u-table-scroll');
+            return table.getBoundingClientRect().width <= panel.getBoundingClientRect().width + 1;
+        }), 'five columns fit the desktop panel');
+        await follow(page.getByRole('link', {name:'Receive', exact:true}));
+        assert.equal((await page.locator(itemRows).first().locator('td').nth(2).innerText()).trim(), '1 unit');
+        await follow(page.getByRole('link', {name:'Receive', exact:true}));
+        assert.equal((await page.locator(itemRows).first().locator('td').nth(2).innerText()).trim(), '100 units', 'sort includes rows from later pages');
         await follow(page.getByRole('link', {name:'Next', exact:true}));
-        assert.equal((await page.locator(itemRows).first().locator('td').nth(2).innerText()).trim(), '85');
+        assert.equal((await page.locator(itemRows).first().locator('td').nth(2).innerText()).trim(), '85 units');
         await Promise.all([
             page.waitForURL(url => url.searchParams.get('item_length') === '50'),
             page.getByLabel('Entries per page', {exact:true}).selectOption('50')
@@ -115,7 +135,7 @@ async function main() {
         assert.match(await page.locator(itemRows).first().innerText(), /2030-01-01/);
         await follow(page.getByRole('link', {name:'Expiry', exact:true}));
         assert.match(await page.locator(itemRows).first().innerText(), /2030-01-02/);
-        assert.match(await page.locator(itemRows).last().locator('td').nth(7).innerText(), /Not recorded/);
+        assert.match(await page.locator(itemRows).last().locator('td').nth(4).innerText(), /Not recorded/);
         await follow(page.getByRole('link', {name:'Back to History'}));
 
         await follow(page.getByRole('link', {name:/^Next/}));
@@ -137,6 +157,8 @@ async function main() {
         assert.match(thirdIds.at(-1), /^entry_r_/, 'legacy lines are still listed');
         await follow(page.locator(entryRows).last().getByRole('link'));
         assert.equal(await page.locator(itemRows).count(), 1, 'legacy entries still open');
+        assert.match(await page.locator(itemRows).first().locator('td').nth(2).innerText(), /14 units\s+2 packs × 6 \+ 2 loose/,
+            'sales pack conversion uses good units, excluding historical damage');
         assert.equal(await page.getByRole('link', {name:'Next Entry'}).count(), 0);
 
         await page.goto(history + '?q=' + token + '-21');
@@ -144,7 +166,9 @@ async function main() {
         await follow(page.locator(entryRows).getByRole('link'));
         assert.equal(await page.locator(itemRows).count(), 2);
         assert.match(await page.locator(itemRows).first().locator('td').first().innerText(), /Shopping Cases/);
-        assert.match(await page.locator(itemRows).last().locator('td').nth(6).innerText(), /₱7\.50/);
+        assert.match(await page.locator(itemRows).first().locator('td').nth(2).innerText(), /47 units\s+1 package × 24 \+ 23 loose/,
+            'package conversion agrees with Receive when part of a historical carton was damaged');
+        assert.match(await page.locator(itemRows).last().locator('td').nth(3).innerText(), /₱7\.50/);
         assert.equal(await page.getByRole('link', {name:'Next Entry'}).count(), 0, 'entry links respect the search');
         assert.equal((await context.request.get(history + '?q=absent-' + token + '&entry=' + large.entry)).status(), 404);
         assert(await page.evaluate(() => {
@@ -185,7 +209,7 @@ async function main() {
                 assert(await page.evaluate(() => {
                     const main = document.querySelector('main').getBoundingClientRect();
                     return document.documentElement.scrollWidth <= innerWidth && main.right <= innerWidth
-                        && [...document.querySelectorAll('main .btn, #history_search')].every(el => {
+                        && [...document.querySelectorAll('main .btn, #history_search')].filter(el => el.getClientRects().length).every(el => {
                             const b = el.getBoundingClientRect();
                             return b.height >= 44 && b.left >= 0 && b.right <= innerWidth;
                         });
@@ -233,6 +257,7 @@ async function main() {
         if (browser) await browser.close();
         if (server) server.kill();
         if (data) fixture('--cleanup');
+        databaseFixture('cleanup');
     }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
