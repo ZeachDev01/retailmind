@@ -44,6 +44,8 @@ Closing is allowed only once the end date has arrived, every Cashier Shift is cl
 28. As an Administrator, I want a future period to stay scheduled until it is opened, so that its dates are reserved without accepting transactions.
 29. As an Administrator, I want to turn Automatic Rollover on or off, so that the system closes and opens periods for me only when I choose.
 30. As an Administrator, I want a blocked Automatic Rollover to stop and explain the unfinished work, so that reconciliation is never bypassed.
+31. As an affected Cashier or Inventory Manager, I want a notification bell notice and SweetAlert one day before a Fiscal Period ends, so that I can finish my outstanding work before trading is blocked.
+32. As a returning staff member, I want unfinished closing work to remain visible after the end date, so that I can reconcile old sessions even while new transactions must wait for an open period.
 
 ## Implementation Decisions
 
@@ -68,6 +70,8 @@ Closing is allowed only once the end date has arrived, every Cashier Shift is cl
 - Update affected test fixtures and seed/setup paths to establish valid periods instead of depending on missing-period permission. Do not give ordinary application writes an implicit setup bypass.
 - Before activation on existing data, inspect missing coverage, overlapping ranges, multiple open periods, and unfinished closure work. Preserve transactions and historical dates, and require reviewed resolution of conflicts before strict activation. Do not invent synthetic transactions, silently reassign history, edit closed dates, or treat this specification as authorization for a production-data repair.
 - Show actionable, accessible operation and closure messages using existing components. Keep technical diagnostics in existing logs, following Store alert conventions. No broad fiscal-page redesign is required.
+- Fiscal Period Closing Reminders start one Philippine calendar day before the end date and remain active while associated work remains unfinished. Cashiers see their own open shifts and GCash sessions; Inventory Managers see pending period counts; Administrators receive period oversight. Bell notices resolve when the work completes, and SweetAlert displays once per day per user/Workspace in the browser, including on a first return after expiry. Defer popups during payment, locked shifts or other dialogs. Use existing notification persistence and SweetAlert; no email delivery or automatic session/count closure is added.
+- Late shift/session closure records actual closing time, counted balances, differences and audit without changing original money or stock movements. Pending sales, GCash settlement/returns and stock-affecting count approvals retain fiscal posting checks. Legacy open sessions may record late reconciliation after their period was finalized; historical views may then show that reconciliation, while original transactions remain unchanged.
 
 ## Testing Decisions
 
@@ -82,6 +86,7 @@ Closing is allowed only once the end date has arrived, every Cashier Shift is cl
 - Verify reports, shift closure, and GCash reconciliation/closure remain reachable with posting blocked, without allowing a new money or stock movement into an uncovered or finalized date.
 - Use the actual supported database for concurrency checks: simultaneous opens, period closure against money/stock posting, and closure against new shifts/sessions or pending count submission. Assert preserved invariants and no partial effects.
 - Exercise transition diagnostics on conflicting historical fixtures and confirm there are no silent transaction/date rewrites. Verify existing workflow fixtures pass with explicit valid fiscal setup.
+- Verify reminder timing at Philippine midnight, relevant assigned-role recipients, ownership isolation, no duplicate unchanged bell notices or queued emails, daily popup dismissal, late return, lock/dialog deferral and resolution. Exercise real GCash closing with today's successor scheduled; ensure new money movements still fail, authorization remains enforced, and original transaction records remain unchanged.
 
 ## Out of Scope
 
@@ -101,6 +106,8 @@ Revision 2026-11-10: Scheduled Periods and opt-in Automatic Rollover were agreed
 Revision 2026-11-10 (second): the Administrator may now generate a contiguous Period Schedule (monthly or quarterly, calendar-aligned, 1–24 periods, optional name prefix) in one all-or-nothing action, and rollover outcomes are notified. This is an explicit Administrator action, not automatic period invention; the Out of Scope line about "automatic creation or skipping of period ranges" still applies to system-initiated scheduling. See the amendment in [ADR-0029](../adr/0029-scheduled-fiscal-periods-and-opt-in-rollover.md).
 
 Revision 2026-11-12: generation now divides one Fiscal Year into the supported number of periods instead of choosing monthly/quarterly cadence and a 1–24 count. Fiscal-year-relative Q/P numbering replaces calendar-quarter labels for new schedules; historical dates and names remain unchanged. See the 2026-11-12 amendment in ADR-0029.
+
+Revision 2026-11-26: implemented reconciliation-only GCash closing without today's posting guard and one-day-before Fiscal Period Closing Reminders through the bell and daily SweetAlert. The confirmed scope is recorded in [the closing reminder discussion](../discussions/fiscal-period-closing-reminders.md). Original money/stock movements remain protected; no live session or period was automatically closed.
 
 Current code exploration found missing-period permission, ambiguous overlap selection, insufficient lifecycle transition checks, absent closure prerequisites, and missing fiscal checks in GCash and drawer cash workflows. Existing Inventory Count approval checks both the original count date and the adjustment date, which is why pending counts must be resolved before finalization.
 

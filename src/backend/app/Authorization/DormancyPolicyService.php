@@ -44,7 +44,7 @@ final class DormancyPolicyService
     /**
      * Persist Dormancy Policy thresholds for the Super Administrator only.
      *
-     * @param array{disable_days?: mixed, warn_days?: mixed} $settings
+     * @param array{disable_days?: mixed, warn_before_days?: mixed} $settings
      */
     public function update(string $actorRole, array $settings, int $actorUserId): void
     {
@@ -53,10 +53,12 @@ final class DormancyPolicyService
         }
 
         $disableDays = $this->parseDays($settings, 'disable_days', 'Disable after');
-        $warnDays = $this->parseDays($settings, 'warn_days', 'Warn after');
-        if ($warnDays >= $disableDays) {
-            throw new InvalidArgumentException('Warn after must be fewer days than Disable after.');
+        $warnBeforeDays = $this->parseDays($settings, 'warn_before_days', 'Warn before disable');
+        if ($warnBeforeDays < 1 || $warnBeforeDays >= $disableDays) {
+            throw new InvalidArgumentException('Warn before disable must be at least 1 day and fewer days than Disable after.');
         }
+        // Keep stored thresholds as elapsed inactivity days for existing policies and the runner.
+        $warnDays = $disableDays - $warnBeforeDays;
 
         $ownsTransaction = !$this->pdo->inTransaction();
         if ($ownsTransaction) {

@@ -940,7 +940,8 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
             adminPage.locator('#btn-reset-filters').click()
         ]);
 
-        await adminPage.getByRole('tab', {name: 'Closing checks'}).click();
+        await adminPage.getByRole('tab', {name: 'Sessions', exact: true}).click();
+        await adminPage.locator('#gcash-tab-reconciliation').click();
         // Reconciliation Differences Section
         const diffTable = adminPage.locator('#gcash-admin-diff-table');
         await diffTable.waitFor();
@@ -948,12 +949,15 @@ const fixture = action => run('src/backend/tests/support/cashier_ui_fixture.php'
         const diffText = await diffTable.textContent();
         assert.equal(diffText.includes('Waived') || diffText.includes('Variance') || diffText.includes('Session'), true, 'Reconciliation table contains session differences');
 
-        await adminPage.getByRole('tab', {name: 'Unresolved exchanges'}).click();
+        await adminPage.locator('#tab-reconciliation [data-close-dialog]').click();
+        await adminPage.getByRole('tab', {name: 'Transactions', exact: true}).click();
+        await adminPage.locator('#gcash-tab-unresolved').click();
         // Unresolved Activities Section
         const ncTable = adminPage.locator('#gcash-admin-nc-table');
         await ncTable.waitFor();
         assert.equal(await ncTable.isVisible(), true, 'Unresolved activities section is displayed');
 
+        await adminPage.locator('#tab-unresolved [data-close-dialog]').click();
         await adminPage.getByRole('tab', {name: 'Transactions'}).click();
         // Store-wide Transaction History Table & Legacy reference distinction
         const historyTable = adminPage.locator('#gcash-admin-history-table');

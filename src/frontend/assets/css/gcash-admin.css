@@ -172,7 +172,7 @@
 #gcash-admin-workspace .gcash-history-help[open] { padding-bottom: .75rem; }
 #gcash-admin-workspace .gcash-history-help summary { display: list-item; min-height: 44px; box-sizing: border-box; cursor: pointer; padding: .625rem 0; color: var(--primary); font-weight: 600; }
 #gcash-admin-workspace .gcash-history-help p { margin: 0; }
-#gcash-admin-workspace .gcash-empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .625rem; min-height: 200px; box-sizing: border-box; margin: 0; padding: 2rem 1rem; border: 0; border-radius: 0; background: transparent; box-shadow: none; text-align: center; }
+#gcash-admin-workspace .gcash-empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5rem; min-height: 0; box-sizing: border-box; margin: 0; padding: 1.25rem 1rem; border: 0; border-radius: 0; background: transparent; box-shadow: none; text-align: center; }
 #gcash-admin-workspace .gcash-empty-state > i { color: var(--muted); font-size: 1.75rem; line-height: 1; margin-bottom: .25rem; }
 #gcash-admin-workspace .gcash-empty-state h3 { margin: 0; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.4; text-wrap: balance; }
 #gcash-admin-workspace .gcash-empty-state p { max-width: 38ch; margin: 0; color: var(--muted); font-size: .9375rem; line-height: 1.5; text-wrap: pretty; }
@@ -180,17 +180,7 @@
 #gcash-admin-workspace .gcash-table-wrap td.gcash-empty-cell { width: auto; padding: 0; white-space: normal; text-align: center; font-style: normal; color: var(--muted); }
 #gcash-admin-workspace :is(#gcash-admin-history-table, #gcash-admin-diff-table, #gcash-admin-nc-table):has(.gcash-empty-cell) { display: table; min-width: 0; table-layout: fixed; }
 #gcash-admin-workspace table:has(.gcash-empty-cell) thead { display: none; }
-#gcash-admin-workspace > [role="tabpanel"]:has(.gcash-empty-state) { display: flex; flex-direction: column; flex: 1; }
-#gcash-admin-workspace .gcash-activity-row:has(.gcash-activity-empty:not([hidden])),
-#gcash-admin-workspace #gcash-completed-activity:has(.gcash-activity-empty:not([hidden])),
-#gcash-admin-workspace [role="tabpanel"] > section:has(td.gcash-empty-cell),
-#gcash-admin-workspace #tab-money > section:has(> .gcash-empty-state) { display: flex; flex-direction: column; flex: 1; }
-#gcash-admin-workspace .gcash-table-wrap:has(.gcash-empty-cell) { display: flex; max-height: none; }
-#gcash-admin-workspace :is(#gcash-admin-history-table, #gcash-admin-diff-table, #gcash-admin-nc-table):has(.gcash-empty-cell),
-#gcash-admin-workspace table:has(.gcash-empty-cell) :is(tbody, tr, td) { display: flex; flex-direction: column; flex: 1; }
-#gcash-admin-workspace .gcash-table-wrap .gcash-empty-state,
-#gcash-admin-workspace .gcash-activity-empty,
-#gcash-admin-workspace #tab-money > section > .gcash-empty-state { flex: 1; }
+#gcash-admin-workspace .gcash-table-wrap:has(.gcash-empty-cell) { max-height: none; }
 #gcash-admin-workspace .info-tooltip-trigger { display: inline-flex; align-items: center; gap: .5rem; min-height: 44px; padding: .5rem; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: .875rem; cursor: pointer; }
 #gcash-admin-workspace .info-tooltip-trigger:hover { color: var(--primary); }
 #gcash-admin-workspace .tooltip-box { display: none; position: fixed; z-index: 1200; width: min(280px, calc(100vw - 16px)); padding: .75rem; border: 1px solid var(--border); border-radius: 8px; background: var(--card-bg, #fff); color: var(--text); box-shadow: 0 8px 24px rgb(15 23 42 / .07); font-size: .875rem; line-height: 1.5; text-align: left; }
@@ -314,4 +304,35 @@
         transform: none !important;
         animation: none !important;
     }
+}
+
+/* Compact navigation keeps reviews and supporting evidence within their work area. */
+#gcash-admin-workspace .gcash-section-nav { margin-bottom: .75rem; }
+#gcash-admin-workspace .gcash-overview-section { padding: .875rem 1rem; }
+#gcash-admin-workspace .pos-panel-header { margin-bottom: .625rem; }
+#gcash-admin-workspace .gcash-overview-section:has(.gcash-table-wrap) { padding: 0; }
+#gcash-admin-workspace .gcash-overview-section:has(.gcash-table-wrap) > .pos-panel-header { padding: .625rem 1rem; }
+#gcash-admin-workspace :is(.gcash-transaction-filters, #gcash-transaction-filters),
+#gcash-admin-workspace .gcash-overview-section:has(.gcash-table-wrap) > .gcash-money-filters { padding: .625rem 1rem; }
+#gcash-admin-workspace .gcash-compact-filter-bar { grid-template-columns: minmax(130px, 1fr) minmax(150px, 1fr) auto; }
+#gcash-admin-workspace #gcash-transaction-filters #gcash-reporting-scope > .pos-panel-header { display: none; }
+#gcash-admin-workspace .gcash-session-actions:empty { display: none; }
+#gcash-admin-workspace dialog.gcash-review-drawer,
+#gcash-admin-workspace dialog.gcash-filter-drawer { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(1120px, 100%); max-width: 100%; height: 100dvh; max-height: 100dvh; padding: 1rem; border-radius: 14px 0 0 14px; }
+#gcash-admin-workspace dialog.gcash-filter-drawer { width: min(420px, 100%); }
+#gcash-admin-workspace .gcash-review-drawer > .gcash-overview-section { border: 0; border-radius: 0; }
+#gcash-admin-workspace .gcash-review-drawer .pos-panel-header { padding-right: 5rem !important; }
+#gcash-admin-workspace .gcash-drawer-close { position: absolute; top: 1rem; right: 1rem; min-width: 44px; }
+#gcash-admin-workspace .gcash-review-scope { color: var(--muted); font-size: .875rem; margin: 3.25rem 0 .5rem; }
+#gcash-admin-workspace #gcash-session-filter-dialog .gcash-field + .gcash-field { margin-top: .75rem; }
+#gcash-admin-workspace #gcash-record-details-body { overflow-wrap: anywhere; }
+#gcash-admin-workspace #gcash-record-details-body dt { color: var(--muted); margin-top: .75rem; }
+#gcash-admin-workspace #gcash-record-details-body dd { margin: .25rem 0; }
+@media (max-width: 900px) {
+    #gcash-admin-workspace .gcash-compact-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #gcash-admin-workspace .gcash-compact-filter-bar .gcash-filter-actions { grid-column: 1 / -1; }
+}
+@media (max-width: 480px) {
+    #gcash-admin-workspace .gcash-compact-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #gcash-admin-workspace dialog.gcash-review-drawer { padding: .75rem; border-radius: 0; }
 }

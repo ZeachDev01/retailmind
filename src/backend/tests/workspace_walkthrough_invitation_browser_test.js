@@ -77,6 +77,11 @@ const fixture = (action, extra, extra2) => {
         assert.equal(await invitation.isVisible(), true, 'Invitation is displayed in Administrator Workspace after mandatory password change');
         assert.match(await invitation.innerText(), /Welcome to the Administrator Workspace|Get oriented/i);
 
+        await page.goto(origin + '/components/administrator/store_calendar.php');
+        assert.equal(await invitation.count(), 0, 'New Administrator invitation is absent from Store Calendar');
+        await page.goto(origin + '/components/administrator/dashboard.php');
+        await invitation.waitFor();
+
         const startBtn = invitation.locator('#btn-invitation-start, button[name="invitation_choice"][value="start"]');
         const notNowBtn = invitation.locator('#btn-invitation-dismiss, button[name="invitation_choice"][value="dismiss"], button[name="invitation_choice"][value="not_now"]');
         assert.equal(await startBtn.count(), 1, 'Start guidance button is present');

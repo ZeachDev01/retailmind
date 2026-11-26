@@ -52,7 +52,7 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         };
         await login(page, 'admin');
         await page.goto(origin + '/components/administrator/gcash_overview.php?tab=money');
-        assert.equal(await page.getByRole('tab', {name: 'Service Fund Movements', exact: true}).getAttribute('aria-selected'), 'true');
+        assert.equal(await page.getByRole('tab', {name: 'Fund movements', exact: true}).getAttribute('aria-selected'), 'true');
         assert.equal(await page.locator('#gcash-money-table tbody tr:not(.table-ghost-row)').count(), 2, 'Administrator sees fund movements by every recorder');
         await page.getByLabel('Records', {exact: true}).selectOption('all');
         await Promise.all([page.waitForURL(url => url.searchParams.get('movement_scope') === 'all'), page.getByRole('button', {name: 'Load movements', exact: true}).click()]);
@@ -100,10 +100,10 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         await cashierPage.getByRole('tab', {name: 'Service Fund Movements', exact: true}).click();
         await cashierPage.waitForFunction(() => document.querySelectorAll('#gcash-funds-body tr').length === 2);
         await cashierContext.close();
-        await page.getByRole('tab', {name: 'Service Fund Movements', exact: true}).click();
+        await page.getByRole('tab', {name: 'Fund movements', exact: true}).click();
         await page.waitForFunction(() => document.querySelectorAll('#gcash-money-table tbody tr:not(.table-ghost-row)').length === 3);
         await page.goto(origin + '/components/administrator/gcash_overview.php?tab=overview&session_id=999');
-        await page.getByRole('tab', {name: 'Service Fund Movements', exact: true}).click();
+        await page.getByRole('tab', {name: 'Fund movements', exact: true}).click();
         await page.waitForURL(url => url.searchParams.get('tab') === 'money' && !url.searchParams.has('session_id'));
         assert.equal(await page.locator('#gcash-money-table tbody tr:not(.table-ghost-row)').count(), 3, 'Opening fund movements clears stale session restrictions');
         for (const width of [1440, 768, 390]) {

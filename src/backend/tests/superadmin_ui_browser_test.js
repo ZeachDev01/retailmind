@@ -104,7 +104,7 @@ const fixture = action => {
             const [route, query] = screen.split('?');
             if (screen === 'system_administrator/audit_logs' && !admin && !inventory) {
                 fixture('audit');
-                console.log(fixture('audit_contract').trim());
+                if (!process.argv.includes('--interactions-only')) console.log(fixture('audit_contract').trim());
                 const payload = JSON.parse(fixture('audit_payload'));
                 assert.equal(payload[25].rows, 25);
                 assert.ok(payload[25].bytes < payload[1000].bytes / 20, 'One-page record payload is substantially smaller than the former 1000-row load');
@@ -118,7 +118,17 @@ const fixture = action => {
             }
             const stylesheet = await page.locator('link[href*="assets/css/style.css"]').first().getAttribute('href');
             if (!new URL(stylesheet, origin).searchParams.has('v')) checks.push({screen, issues: ['Stylesheet missing cache version']});
-            for (const theme of ['light', 'dark']) {
+            if (screen === 'super_administrator/dashboard') {
+                assert.equal(await page.getByRole('heading', {name: 'Platform Control Center', exact: true}).isVisible(), true);
+                assert.equal(await page.getByRole('heading', {name: 'Store continuity', exact: true}).count(), 0, 'Control Center must not show Store continuity');
+                assert.equal(await page.getByText(/Store continuity nominal|continuity gaps|Store not started/).count(), 0, 'Platform status must not show the removed continuity summary');
+                assert.equal(await page.getByRole('heading', {name: 'Platform attention queue', exact: true}).isVisible(), true);
+                assert.equal(await page.getByRole('heading', {name: 'Platform status', exact: true}).isVisible(), true);
+                for (const name of ['Platform health', 'Demand Forecast', 'Latest backup']) {
+                    assert.equal(await page.getByRole('region', {name: 'Platform status', exact: true}).getByRole('link').filter({hasText: name}).isVisible(), true, name + ' remains available');
+                }
+            }
+            for (const theme of (process.argv.includes('--interactions-only') ? [] : ['light', 'dark'])) {
                 await page.evaluate(theme => { document.documentElement.dataset.theme = theme; document.documentElement.style.colorScheme = theme; }, theme);
                 for (const [width, height] of sizes) {
                     await page.setViewportSize({width, height});
@@ -244,11 +254,12 @@ const fixture = action => {
                     assert.equal(await page.locator('main h1').count(), 1, 'Issue opens its control page on touch');
                 }
                 if (screen === 'system_administrator/audit_logs' && !admin && !inventory) {
-                    await page.waitForFunction(() => !document.querySelector('#auditLogExportForm button').disabled);
+                    assert.equal(await page.getByRole('button', {name: 'Export CSV', exact: true}).count(), 0, 'Protected Audit Records do not offer CSV export');
+                    await page.waitForFunction(() => document.querySelectorAll('#auditLogsTable tbody tr').length === 15);
                     assert.ok(Number(await page.locator('#matchingRecordsCount').textContent()) > 1000, 'Counts include history beyond the old cap');
-                    assert.equal(await page.locator('#auditLogsTable tbody tr').count(), 25, 'Only one page of details is rendered');
+                    assert.equal(await page.locator('#auditLogsTable tbody tr').count(), 15, 'Only one page of details is rendered');
                     const statTops = await page.locator('.audit-log-stats .stat-card').evaluateAll(cards => cards.map(card => card.getBoundingClientRect().top));
-                    assert.equal(new Set(statTops).size, 1, 'Mobile audit counts stay in one compact row');
+                    if (!process.argv.includes('--interactions-only')) assert.equal(new Set(statTops).size, 1, 'Mobile audit counts stay in one compact row');
                     const search = page.locator('.dt-search input');
                     await search.fill('Audit layout fixture 01');
                     await page.waitForFunction(() => document.getElementById('matchingRecordsCount').textContent === '1');
@@ -266,34 +277,22 @@ const fixture = action => {
                     await detailsDrawer.locator('[data-close-drawer]').click();
                     assert.equal(await detailsDrawer.getAttribute('aria-hidden'), 'true', 'Record details drawer closes');
                     await search.fill('theme_super_admin "Audit layout fixture 01"');
-                    await page.waitForFunction(() => document.getElementById('matchingRecordsCount').textContent === '1' && !document.querySelector('#auditLogExportForm button').disabled && JSON.parse(document.getElementById('exportTableRequest').value).search.value.includes('theme_super_admin'));
-                    assert.match(await page.locator('#exportTableRequest').inputValue(), /theme_super_admin/, 'Export waits for the latest applied search');
-                    const [matchedDownload] = await Promise.all([
-                        page.waitForEvent('download'), page.getByRole('button', {name: 'Export CSV', exact: true}).click()
-                    ]);
-                    const matchedCsv = fs.readFileSync(await matchedDownload.path(), 'utf8');
-                    assert.ok(matchedCsv.includes('Audit layout fixture 01'), 'Cross-column multi-word search exports the matching record');
-                    assert.ok(!matchedCsv.includes('Audit layout fixture 02'), 'Export excludes records outside the applied search');
+                    await page.waitForFunction(() => document.getElementById('matchingRecordsCount').textContent === '1');
+                    assert.ok((await page.locator('#auditLogsTable tbody').textContent()).includes('Audit layout fixture 01'), 'Cross-column search keeps the matching record');
                     await search.fill('no-matching-audit-record-7921');
                     await page.waitForFunction(() => document.getElementById('matchingRecordsCount').textContent === '0');
-                    const [download] = await Promise.all([
-                        page.waitForEvent('download'), page.getByRole('button', {name: 'Export CSV', exact: true}).click()
-                    ]);
-                    const csv = fs.readFileSync(await download.path(), 'utf8');
-                    assert.equal(csv.trim().split(/\r?\n/).length, 1, 'Export with no matches contains only headers');
-                    assert.equal(JSON.parse(await page.locator('#exportTableRequest').inputValue()).search.value, 'no-matching-audit-record-7921', 'Export preserves the empty search');
+                    assert.equal(await page.locator('#auditLogsTable tbody .audit-details-trigger').count(), 0, 'Empty search shows no matching records');
                     await search.fill('');
-                    await page.waitForFunction(() => Number(document.getElementById('matchingRecordsCount').textContent) > 1000 && !document.querySelector('#auditLogExportForm button').disabled);
+                    await page.waitForFunction(() => Number(document.getElementById('matchingRecordsCount').textContent) > 1000);
                     await page.locator('#auditLogsTable thead th').nth(2).locator('button').last().click();
                     await page.locator('.dtcc-searchText input:visible').fill('Audit layout fixture 01');
-                    await page.waitForFunction(() => document.getElementById('matchingRecordsCount').textContent === '1' && !document.querySelector('#auditLogExportForm button').disabled);
-                    const columnRequest = JSON.parse(await page.locator('#exportTableRequest').inputValue());
-                    assert.equal(columnRequest.columns[2].columnControl.search.value, 'Audit layout fixture 01', 'Column popup sends its full-history filter to export');
+                    await page.waitForFunction(() => document.getElementById('matchingRecordsCount').textContent === '1');
+                    assert.ok((await page.locator('#auditLogsTable tbody').textContent()).includes('Audit layout fixture 01'), 'Column filter keeps the matching record');
                     await page.keyboard.press('Escape');
                     await page.route('**/audit_logs.php?*', route => new URL(route.request().url()).searchParams.get('table') === '1' ? route.abort() : route.continue());
                     await search.fill('force-request-failure');
                     await page.locator('#audit-table-error').waitFor({state: 'visible'});
-                    assert.equal(await page.getByRole('button', {name: 'Export CSV', exact: true}).isDisabled(), true, 'Failed searches cannot export stale results');
+                    assert.equal(await page.locator('#matchingRecordsCount').textContent(), '-', 'Failed searches do not show stale counts');
                     await page.unroute('**/audit_logs.php?*');
                 }
                 if (screen === 'user_manager/user_manager') {

@@ -13,7 +13,7 @@ require ${phpPath('../bootstrap/app.php')};
 $_ENV['SESSION_SAVE_PATH']=${JSON.stringify(temp.replaceAll('\\', '/') + '/sessions')};
 $_ENV['SESSION_LIFETIME']='3600'; $_ENV['SESSION_ABSOLUTE_LIFETIME']='43200';
 $_ENV['SESSION_SECURE_COOKIE']='false';
-$_SERVER['SCRIPT_NAME']=isset($_GET['shift']) ? '/components/auth/shift_status.php' : '/components/auth/session_activity.php';
+$_SERVER['SCRIPT_NAME']=isset($_GET['fiscal']) ? '/components/auth/fiscal_closing_status.php' : (isset($_GET['shift']) ? '/components/auth/shift_status.php' : '/components/auth/session_activity.php');
 if (isset($_GET['seed'])) {
  App\\Core\\Session::start();
  $_SESSION=['user_id'=>1,'role'=>'cashier','session_version'=>1,'csrf_token'=>'fixture-csrf',
@@ -47,6 +47,8 @@ require ${phpPath('../../frontend/components/auth/session_activity.php')};
         assert.equal((await request()).status, 200, 'Forced password page can check its login');
         const shiftPoll = await (await request('/?inspect=1&shift=1')).json();
         assert.equal(shiftPoll._last_activity, initial._last_activity, 'Shift polling cannot extend login');
+        const fiscalPoll = await (await request('/?inspect=1&fiscal=1')).json();
+        assert.equal(fiscalPoll._last_activity, initial._last_activity, 'Fiscal reminder polling cannot extend login');
         assert.equal((await request('/', {method:'POST', body:'csrf_token=wrong', headers:{'Content-Type':'application/x-www-form-urlencoded'}})).status,403);
         const invalid = await (await request('/?inspect=1')).json();
         assert.equal(invalid._last_activity, initial._last_activity, 'Invalid CSRF cannot extend login');

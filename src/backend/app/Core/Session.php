@@ -117,6 +117,7 @@ final class Session
             || str_ends_with($script, '/components/backup/backup_status.php')
             || str_ends_with($script, '/components/auth/session_activity.php')
             || str_ends_with($script, '/components/auth/shift_status.php')
+            || str_ends_with($script, '/components/auth/fiscal_closing_status.php')
             || (str_ends_with($script, '/components/barcodeScanner/apiScanner/pairing.php')
                 && in_array($_GET['action'] ?? $_POST['action'] ?? '', ['poll', 'status'], true));
         if (!$background) {

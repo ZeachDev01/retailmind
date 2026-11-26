@@ -28,8 +28,12 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
 
         $guidanceProgress = \App\Guidance\WorkspaceWalkthroughService::getProgress($pdo, (int)$_SESSION['user_id'], current_role());
         $isInvitedAdmin = (current_role() === 'admin' && ($guidanceProgress['invitation_status'] ?? null) === 'invited');
+        $isWorkspaceOverview = str_ends_with(
+            str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? ''),
+            '/' . \App\Authorization\RoleWorkspaceRouter::pathFor(current_role())
+        );
 
-        if ($isInvitedAdmin) {
+        if ($isInvitedAdmin && $isWorkspaceOverview) {
             ob_start();
             ?>
             <section id="workspace-invitation" class="workspace-guidance workspace-invitation" aria-labelledby="workspace-invitation-title">
@@ -72,7 +76,7 @@ if (in_array(current_role(), ['admin', 'inventory_manager'], true)
             });
             </script>
             <?php
-        } elseif (!$allTasksComplete && empty($guidanceProgress['invitation_status']) && empty($guidanceProgress['status'])) {
+        } elseif ($isWorkspaceOverview && !$allTasksComplete && empty($guidanceProgress['invitation_status']) && empty($guidanceProgress['status'])) {
             ob_start();
             $guidanceIsHelp = false;
             ?>

@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../../backend/app/Services/NotificationService.php';
 
 require_role(['super_admin', 'admin', 'inventory_manager', 'cashier']);
 $user_id = (int)$_SESSION['user_id'];
+(new \App\Services\FiscalPeriodClosingReminder($pdo))->synchronize($user_id, current_role());
 check_and_notify_low_stock($pdo);
 reconcile_notification_stock($pdo, $user_id);
 $category_labels = [
@@ -295,6 +296,14 @@ if (($_SERVER['HTTP_X_RETAILMIND_BACKGROUND'] ?? '') !== '1') {
                             : 'Historical alert. The referenced batch is no longer available.';
                     }
                     $destinations = $notification_destinations($notif);
+                    $open_label = $notif['reference_type'] === 'stock_issue' ? 'Open Stock Issue' : 'Review Condition';
+                    if ($notif['type'] === 'fiscal_period') {
+                        $open_label = match ($role) {
+                            'inventory_manager' => 'Review Inventory Counts',
+                            'cashier' => str_contains($destinations['open_notification'] ?? '', '/gcash.php') ? 'Reconcile GCash' : 'Close shift',
+                            default => 'Review Fiscal Period',
+                        };
+                    }
                     $open_action = $destinations['open_product'] !== null ? 'open_product'
                         : ($destinations['open_notification'] !== null ? 'open_notification' : null);
                     $form_id = 'notification-action-' . (int)$notif['notification_id'];
@@ -329,7 +338,7 @@ if (($_SERVER['HTTP_X_RETAILMIND_BACKGROUND'] ?? '') !== '1') {
                                     <div class="notification-description p-5 sm:p-6">
                                         <p><?= htmlspecialchars($notif['message']) ?></p>
                                         <?php if ($destinations['open_notification'] !== null): ?>
-                                            <button type="submit" class="btn btn-quiet btn-small mt-2 notification-open-action" form="<?= $form_id ?>" name="action" value="open_notification"><?= $notif['reference_type'] === 'stock_issue' ? 'Open Stock Issue' : 'Review Condition' ?></button>
+                                            <button type="submit" class="btn btn-quiet btn-small mt-2 notification-open-action" form="<?= $form_id ?>" name="action" value="open_notification"><?= $open_label ?></button>
                                         <?php endif; ?>
                                     </div>
                                 </div>

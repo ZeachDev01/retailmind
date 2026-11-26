@@ -26,6 +26,12 @@ require_once dirname(__DIR__) . '/app/Services/NotificationService.php';
 $notifications = new NotificationService($pdo, $clock);
 $notifications->checkAndNotifyLowStock();
 $notifications->checkAndNotifyExpiringStock();
+$closingReminders = new App\Services\FiscalPeriodClosingReminder($pdo, $clock);
+foreach (['admin', 'cashier', 'inventory_manager'] as $workspace) {
+    foreach ($notifications->recipients($workspace) as $recipient) {
+        $closingReminders->synchronize((int)$recipient['user_id'], $workspace);
+    }
+}
 
 require_once dirname(__DIR__) . '/app/Services/SystemHealthService.php';
 $healthChecks = (new SystemHealthService($pdo, dirname(__DIR__)))->checks();

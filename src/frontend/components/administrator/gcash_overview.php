@@ -67,6 +67,12 @@ $startDate = $report->startDate;
 $endDate = $report->endDate;
 $cashierId = $report->cashierId;
 $activeTab = $report->activeTab;
+$reviewTab = in_array($activeTab, ['unresolved', 'reconciliation'], true) ? $activeTab : '';
+$activeTab = match ($activeTab) {
+    'unresolved' => 'transactions',
+    'reconciliation' => 'sessions',
+    default => $activeTab,
+};
 $overviewFace = $report->overviewFace;
 $isFilteredActivity = $report->isFilteredActivity;
 ?>
@@ -112,13 +118,11 @@ $isFilteredActivity = $report->isFilteredActivity;
         </details>
         <?php endif; ?>
         <nav class="gcash-section-nav gcash-tablist" role="tablist" aria-label="GCash overview sections">
-            <?php foreach (['overview' => 'Overview', 'transactions' => 'Transactions', 'reconciliation' => 'Closing checks', 'sessions' => 'GCash Sessions', 'unresolved' => 'Unresolved exchanges', 'money' => 'Service Fund Movements'] as $key => $label): ?>
+            <?php foreach (['overview' => 'Overview', 'transactions' => 'Transactions', 'sessions' => 'Sessions', 'money' => 'Fund movements'] as $key => $label): ?>
                 <button type="button" role="tab" class="gcash-tab <?= $key === $activeTab ? 'active' : '' ?>" id="gcash-tab-<?= $key ?>" aria-controls="tab-<?= $key ?>" aria-selected="<?= $key === $activeTab ? 'true' : 'false' ?>" tabindex="<?= $key === $activeTab ? '0' : '-1' ?>">
                     <i class="bi <?= ['overview' => 'bi-wallet2', 'transactions' => 'bi-arrow-left-right', 'reconciliation' => 'bi-journal-check', 'sessions' => 'bi-clock-history', 'unresolved' => 'bi-clock-history', 'money' => 'bi-journal-text'][$key] ?>" aria-hidden="true"></i>
                     <?= $label ?>
                     <?php if ($key === 'transactions'): ?><span class="gcash-badge" data-fragment="transactions-badge"><?= $overview === null ? 'Unavailable' : (int)$overview['matching_record_count'] ?></span><?php endif; ?>
-                    <?php if ($key === 'reconciliation'): ?><span class="gcash-badge" data-fragment="reconciliation-badge"><?= $overview === null ? 'Unavailable' : (int)$overview['differences_count'] . ' pending' ?></span><?php endif; ?>
-                    <?php if ($key === 'unresolved'): ?><span class="gcash-badge <?= !empty($overview['unresolved_count']) ? 'gcash-status-needs-checking' : '' ?>" data-fragment="unresolved-badge"><?= $overview === null ? 'Unavailable' : (int)$overview['unresolved_count'] ?></span><?php endif; ?>
                 </button>
             <?php endforeach; ?>
         </nav>
@@ -139,27 +143,18 @@ $isFilteredActivity = $report->isFilteredActivity;
                     </div>
                 </div>
             </div>
-            <form method="GET" action="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php')) ?>" id="gcash-admin-filter-form" class="gcash-filter-bar">
-                <input type="hidden" name="tab" value="<?= gcash_admin_e($activeTab) ?>">
+            <div class="gcash-filter-bar gcash-compact-filter-bar">
                 <div class="gcash-field">
                     <label for="gcash-reporting-period" class="gcash-filter-label"><i class="bi bi-clock-history" aria-hidden="true"></i> Reporting period</label>
-                    <select id="gcash-reporting-period" name="period" class="form-control" autocomplete="off">
+                    <select id="gcash-reporting-period" name="period" form="gcash-admin-filter-form" class="form-control" autocomplete="off">
                         <?php foreach (['today' => 'Today', 'month_to_date' => 'Month-to-date', 'custom' => 'Custom dates'] as $value => $label): ?>
                             <option value="<?= $value ?>" <?= $period === $value ? 'selected' : '' ?>><?= $label ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="gcash-field gcash-filter-date">
-                    <label for="filter-start-date" class="gcash-filter-label"><i class="bi bi-calendar-event" aria-hidden="true"></i> Start date</label>
-                    <input type="date" id="filter-start-date" required name="start_date" class="form-control" autocomplete="off" value="<?= gcash_admin_e($startDate) ?>">
-                </div>
-                <div class="gcash-field gcash-filter-date">
-                    <label for="filter-end-date" class="gcash-filter-label"><i class="bi bi-calendar-event" aria-hidden="true"></i> End date</label>
-                    <input type="date" id="filter-end-date" required name="end_date" class="form-control" autocomplete="off" value="<?= gcash_admin_e($endDate) ?>">
-                </div>
                 <div class="gcash-field gcash-filter-cashier">
                     <label for="filter-cashier-id" class="gcash-filter-label"><i class="bi bi-person-badge" aria-hidden="true"></i> Cashier</label>
-                    <select id="filter-cashier-id" name="cashier_id" class="form-control" autocomplete="off">
+                    <select id="filter-cashier-id" name="cashier_id" form="gcash-admin-filter-form" class="form-control" autocomplete="off">
                         <option value="">All Cashiers</option>
                         <?php foreach ($overview['cashiers'] ?? [] as $c): ?>
                             <option value="<?= gcash_admin_e($c['user_id']) ?>" <?= $cashierId === (int)$c['user_id'] ? 'selected' : '' ?>>
@@ -169,14 +164,15 @@ $isFilteredActivity = $report->isFilteredActivity;
                     </select>
                 </div>
                 <div class="gcash-actions gcash-filter-actions">
-                    <button type="submit" class="btn btn-primary" id="btn-apply-filters">
+                    <button type="button" class="btn btn-secondary" data-open-dialog="gcash-filter-dialog" aria-haspopup="dialog">Filters</button>
+                    <button type="submit" form="gcash-admin-filter-form" class="btn btn-primary" id="btn-apply-filters">
                         <i class="bi bi-funnel-fill" aria-hidden="true"></i>Apply filters
                     </button>
                     <a href="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php?tab=' . $activeTab)) ?>" class="btn btn-secondary" id="btn-reset-filters">
                         Reset filters
                     </a>
                 </div>
-            </form>
+            </div>
             <p id="gcash-filter-status" role="status" aria-live="polite"></p>
         </div>
         <?php require __DIR__ . '/../../../backend/app/Views/gcash/activity_metrics.php'; ?>
@@ -194,6 +190,7 @@ $isFilteredActivity = $report->isFilteredActivity;
                     </div>
                 </div>
                 <?php require __DIR__ . '/../../../backend/app/Views/gcash/transactions_summary.php'; ?>
+                <button type="button" id="gcash-tab-unresolved" class="btn btn-secondary" data-review-tab="unresolved" aria-haspopup="dialog" aria-controls="tab-unresolved">Unresolved exchanges <span class="gcash-badge" data-fragment="unresolved-badge"><?= $overview === null ? 'Unavailable' : (int)$overview['unresolved_count'] ?></span></button>
             </div>
             <div class="gcash-transaction-filters" id="gcash-transaction-filters">
                 <div class="gcash-transaction-local-filters">
@@ -228,13 +225,15 @@ $isFilteredActivity = $report->isFilteredActivity;
 
         </div>
 
-        <div id="tab-reconciliation" role="tabpanel" aria-labelledby="gcash-tab-reconciliation" tabindex="0" <?= $activeTab !== 'reconciliation' ? 'hidden' : '' ?>>
+        <dialog id="tab-reconciliation" class="gcash-review-drawer" aria-labelledby="gcash-admin-diff-title" data-initial-open="<?= $reviewTab === 'reconciliation' ? 'true' : 'false' ?>">
+        <button type="button" class="btn btn-secondary gcash-drawer-close" data-close-dialog>Close</button>
         <!-- SECTION 4: Reconciliation Differences -->
         <?php require __DIR__ . '/../../../backend/app/Views/gcash/reconciliation_panel.php'; ?>
 
-        </div>
+        </dialog>
 
         <div id="tab-sessions" role="tabpanel" aria-labelledby="gcash-tab-sessions" tabindex="0" <?= $activeTab !== 'sessions' ? 'hidden' : '' ?>>
+            <div class="gcash-session-actions"><button type="button" id="gcash-tab-reconciliation" class="btn btn-secondary" data-review-tab="reconciliation" aria-haspopup="dialog" aria-controls="tab-reconciliation">Closing checks <span class="gcash-badge" data-fragment="reconciliation-badge"><?= $overview === null ? 'Unavailable' : (int)$overview['differences_count'] . ' pending' ?></span></button></div>
             <?php if ($activeTab === 'sessions') {
                 $sessionHistoryCashierId = null;
                 $sessionHistoryPath = app_url('components/administrator/gcash_overview.php');
@@ -242,11 +241,27 @@ $isFilteredActivity = $report->isFilteredActivity;
             } ?>
         </div>
 
-        <div id="tab-unresolved" role="tabpanel" aria-labelledby="gcash-tab-unresolved" tabindex="0" <?= $activeTab !== 'unresolved' ? 'hidden' : '' ?>>
+        <dialog id="tab-unresolved" class="gcash-review-drawer" aria-labelledby="gcash-admin-nc-title" data-initial-open="<?= $reviewTab === 'unresolved' ? 'true' : 'false' ?>">
+        <button type="button" class="btn btn-secondary gcash-drawer-close" data-close-dialog>Close</button>
+        <p class="gcash-review-scope">All pending exchanges · independent of report filters</p>
         <!-- SECTION 5: Unresolved Exchanges (Needs Checking) -->
         <?php require __DIR__ . '/../../../backend/app/Views/gcash/unresolved_panel.php'; ?>
 
-        </div>
+        </dialog>
+
+        <dialog id="gcash-filter-dialog" class="gcash-filter-drawer" aria-labelledby="gcash-filter-title">
+            <div class="pos-panel-header"><h2 id="gcash-filter-title">Report filters</h2><button type="button" class="btn btn-secondary" data-close-dialog>Close</button></div>
+            <form method="get" action="<?= gcash_admin_e(app_url('components/administrator/gcash_overview.php')) ?>" id="gcash-admin-filter-form">
+                <input type="hidden" name="tab" value="<?= gcash_admin_e($activeTab) ?>">
+                <div class="gcash-field"><label for="filter-start-date">Start date</label><input type="date" id="filter-start-date" required name="start_date" class="form-control" autocomplete="off" value="<?= gcash_admin_e($startDate) ?>"></div>
+                <div class="gcash-field"><label for="filter-end-date">End date</label><input type="date" id="filter-end-date" required name="end_date" class="form-control" autocomplete="off" value="<?= gcash_admin_e($endDate) ?>"></div>
+                <div class="gcash-actions"><button type="submit" class="btn btn-primary">Apply filters</button></div>
+            </form>
+        </dialog>
+        <dialog id="gcash-record-details" class="gcash-filter-drawer" aria-labelledby="gcash-record-details-title">
+            <div class="pos-panel-header"><h2 id="gcash-record-details-title">Record details</h2><button type="button" class="btn btn-secondary" data-close-dialog>Close</button></div>
+            <div id="gcash-record-details-body"></div>
+        </dialog>
 
         <dialog id="gcash-verify-dialog" aria-labelledby="gcash-verify-title">
             <h2 id="gcash-verify-title">Verify &amp; Clear Exchange</h2>

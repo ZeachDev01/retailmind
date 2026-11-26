@@ -259,6 +259,10 @@ _Avoid_: Cashier Shift, work session, branch fiscal period
 A Fiscal Period whose dates are reserved in advance but which accepts no transactions until its start date is reached and it is opened, manually or by Automatic Rollover.
 _Avoid_: Draft period, upcoming period, pending period
 
+**Fiscal Period Closing Reminder**:
+A notice to affected staff that a Fiscal Period is nearing its end and unfinished work, including open Cashier Shifts and GCash Service Sessions, needs attention before period closure. The notice does not close the period or complete reconciliation.
+_Avoid_: Automatic Rollover, shift closing reminder
+
 **Period Schedule**:
 A contiguous set of Fiscal Periods spanning one Fiscal Year, generated together from the day after the latest period ends or from today when no periods exist. Generating a set is a single all-or-nothing Administrator action.
 _Avoid_: Recurring period, auto-generated periods, fiscal calendar

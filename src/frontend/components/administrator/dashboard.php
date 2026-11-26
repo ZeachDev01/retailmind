@@ -169,11 +169,6 @@ $attentionCount = count($dashboard['exceptions'] ?? []) + ($hasGcash ? 1 : 0);
                 <?php endif; ?>
             </section>
 
-            <section class="dashboard-section" id="open-cashier-shifts" aria-labelledby="open-shifts-heading" data-shift-status-url="<?= $escape(app_url('components/auth/shift_status.php')) ?>">
-                <?php require __DIR__ . '/../../../backend/app/Views/open_cashier_shifts.php'; ?>
-            </section>
-            <script src="<?= $escape(theme_url('assets/js/open-cashier-shifts.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/open-cashier-shifts.js')) ?>"></script>
-
             <?php if ($dashboard['headline'] !== []): ?>
                 <section class="store-status-section" id="store-status-section" aria-labelledby="store-status-title">
                     <div class="section-header control-center-section-header">
@@ -194,6 +189,11 @@ $attentionCount = count($dashboard['exceptions'] ?? []) + ($hasGcash ? 1 : 0);
                     </div>
                 </section>
             <?php endif; ?>
+
+            <section class="dashboard-section" id="open-cashier-shifts" aria-labelledby="open-shifts-heading" data-shift-status-url="<?= $escape(app_url('components/auth/shift_status.php')) ?>">
+                <?php require __DIR__ . '/../../../backend/app/Views/open_cashier_shifts.php'; ?>
+            </section>
+            <script src="<?= $escape(theme_url('assets/js/open-cashier-shifts.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/open-cashier-shifts.js')) ?>"></script>
 
             <section class="dashboard-section net-sales-section <?= !$hasNetSales || !($activePeriodData['has_activity'] ?? false) ? 'is-empty' : '' ?>" id="sales-profit-section" aria-labelledby="financial-title">
                 <div class="section-header">

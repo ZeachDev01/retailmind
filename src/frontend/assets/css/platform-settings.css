@@ -38,6 +38,14 @@
 .platform-settings-page .platform-settings-nav a i { flex: 0 0 22px; font-size: 1.05rem; text-align: center; }
 .platform-settings-page .platform-settings-nav a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .platform-settings-page .platform-settings-content { grid-column: 2; min-width: 0; }
+.platform-settings-page .dormancy-field-label { display: flex; align-items: center; min-height: 44px; }
+.platform-settings-page .dormancy-field-label label { margin: 0; }
+.platform-settings-page .info-tooltip { display: inline-flex; flex-shrink: 0; vertical-align: middle; }
+.platform-settings-page .info-tooltip-trigger { display: inline-flex; align-items: center; justify-content: center; width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.platform-settings-page .info-tooltip-trigger:hover,
+.platform-settings-page .info-tooltip-trigger:focus-visible { color: var(--primary); }
+.platform-settings-page .tooltip-box { display: none; position: fixed; width: min(280px, 78vw); padding: .65rem .8rem; background: var(--card-bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(15,23,42,.07); font-size: .85rem; font-weight: 400; line-height: 1.5; white-space: normal; text-align: left; z-index: 1200; }
+.platform-settings-page .info-tooltip:not([data-dismissed]):is(:hover, :focus-within) .tooltip-box { display: block; }
 .platform-settings-page [data-platform-section][hidden] { display: none !important; }
 body.platform-settings-page.sidebar-collapsed .sidebar { width: var(--sidebar-collapsed-width); flex-basis: var(--sidebar-collapsed-width); }
 

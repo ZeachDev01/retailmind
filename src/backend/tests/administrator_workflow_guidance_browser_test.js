@@ -87,41 +87,37 @@ const fixture = action => {
         }
         await page.setViewportSize({width: 1440, height: 900});
 
-        // 2. Contextual guidance in individual Administrator workflows before skipping
+        // 2. Automatic guidance stays on Store Overview before skipping
         // 2a. Store Calendar (Store setup)
         await page.goto(origin + '/components/administrator/store_calendar.php');
         await page.waitForLoadState('domcontentloaded');
         const calGuidance = page.locator('#workspace-guidance');
-        await calGuidance.waitFor();
-        assert.match(await calGuidance.locator('h2').innerText(), /Store setup & calendar/);
-        // Calendar setup confirmation button is active for Admin
-        assert.equal(await calGuidance.getByRole('button', {name: 'Confirm calendar review'}).count(), 1);
+        assert.equal(await calGuidance.count(), 0, 'Welcome guidance is absent from Store Calendar');
 
         // 2b. Staff Management
         await page.goto(origin + '/components/user_manager/user_manager.php');
         await page.waitForLoadState('domcontentloaded');
         const userGuidance = page.locator('#workspace-guidance');
-        await userGuidance.waitFor();
-        assert.match(await userGuidance.locator('h2').innerText(), /Staff management/);
+        assert.equal(await userGuidance.count(), 0, 'Welcome guidance is absent from Staff Management');
 
         // 2c. Store Reports
         await page.goto(origin + '/components/report/report_generation.php');
         await page.waitForLoadState('domcontentloaded');
         const reportGuidance = page.locator('#workspace-guidance');
-        await reportGuidance.waitFor();
-        assert.match(await reportGuidance.locator('h2').innerText(), /Store reports/);
+        assert.equal(await reportGuidance.count(), 0, 'Welcome guidance is absent from Store Reports');
 
         // 2d. Forecasting Oversight
         await page.goto(origin + '/components/report/forecast_exceptions.php');
         await page.waitForLoadState('domcontentloaded');
         const forecastGuidance = page.locator('#workspace-guidance');
-        await forecastGuidance.waitFor();
-        assert.match(await forecastGuidance.locator('h2').innerText(), /Forecasting oversight/);
+        assert.equal(await forecastGuidance.count(), 0, 'Welcome guidance is absent from Forecasting Oversight');
         // Check that page does not advertise a nonfunctional approval button
         assert.equal(await page.locator('button:has-text("Approve Model"), a:has-text("Approve Model")').count(), 0);
 
         // 3. Skip guidance and verify persisted preferences
-        const skipBtn = forecastGuidance.getByRole('button', {name: 'Skip guidance', exact: true});
+        await page.goto(origin + '/components/administrator/dashboard.php');
+        await guidanceBanner.waitFor();
+        const skipBtn = guidanceBanner.getByRole('button', {name: 'Skip guidance', exact: true});
         await skipBtn.focus();
         assert.equal(await skipBtn.evaluate(el => document.activeElement === el), true);
         assert.notEqual(await skipBtn.evaluate(el => getComputedStyle(el).outlineStyle), 'none');

@@ -47,6 +47,8 @@ $pdo->exec("INSERT INTO store_setup_confirmations VALUES ('products', 1, 'invent
 $assert(!\App\Store\StoreSetupConfirmations::isComplete($pdo), 'Global Store setup still requires calendar confirmation.');
 
 $role = 'admin';
+$_SERVER['SCRIPT_NAME'] = '/components/administrator/dashboard.php';
+$_SERVER['REQUEST_URI'] = $_SERVER['SCRIPT_NAME'];
 $admin = $render();
 $assert(str_contains($admin, 'Store calendar review') && str_contains($admin, 'Confirm calendar review'), 'Administrator retains calendar review.');
 $assert(str_contains($admin, '1 of 2 tasks confirmed') && str_contains($admin, 'Finish overview'), 'Administrator retains global progress and overview controls.');

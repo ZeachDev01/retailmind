@@ -1,12 +1,12 @@
 (() => {
         const issueForm = document.getElementById('stock-issue-form');
         const productsApiUrl = issueForm.dataset.productsApi;
-        const barcodeInput = document.getElementById('barcode-input');
         const searchInput = document.getElementById('product-search');
         const resultsBox = document.getElementById('product-results');
         const productIdField = document.getElementById('product_id');
         const selectedCard = document.getElementById('selected-product');
         let searchTimer = null;
+        let searchTerm = '';
         const productSuggestions = document.getElementById('stock-issue-products');
         let matchingProducts = [];
         let selectedProductId = '';
@@ -27,6 +27,7 @@
 
         function selectProduct(product, scannedCode = '') {
             RetailMindUI.closeSearchDropdown(searchInput);
+            searchInput.value = '';
             productIdField.value = product.product_id;
             selectedProductId = String(product.product_id);
             document.getElementById('selected-product-name').textContent = product.name || product.product_name;
@@ -73,7 +74,7 @@
             const index = Array.from(productSuggestions.options).findIndex(option => option.value === searchInput.value);
             if (index < 0) return;
             clearTimeout(searchTimer);
-            selectProduct(matchingProducts[index]);
+            selectProduct(matchingProducts[index], searchTerm);
         });
 
         let lookupAbortController = null;
@@ -83,7 +84,11 @@
             try {
                 const response = await fetch(url, { signal: lookupAbortController.signal });
                 const data = await response.json();
-                const products = response.ok && data.success ? (data.products || []) : [];
+                let products = response.ok && data.success ? (data.products || []) : [];
+                if (selectMatch) {
+                    const exact = products.filter(product => [product.barcode, product.sku, product.case_barcode, product.pack_barcode].includes(scannedCode));
+                    if (exact.length) products = exact;
+                }
                 if (selectMatch && products.length === 1) selectProduct(products[0], scannedCode);
                 else renderResults(products, products.length > 1 ? 'More than one product matches. Select the correct product.' : emptyMessage);
             } catch (error) {
@@ -93,20 +98,24 @@
         }
 
         function scanStockIssueCode(code) {
-            if (barcodeInput.disabled || !code) return;
+            if (searchInput.disabled || !code) return;
             clearTimeout(searchTimer);
+            searchTerm = code;
             searchInput.value = '';
             productIdField.value = '';
             selectedCard.hidden = true;
             return lookup(productsApiUrl + '&code=' + encodeURIComponent(code) + '&limit=5', 'No active product with recorded stock matches that barcode.', true, code);
         }
-        barcodeInput.addEventListener('keydown', event => {
-            if (event.key !== 'Enter' || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+        searchInput.addEventListener('keydown', event => {
+            if (event.defaultPrevented || event.key !== 'Enter' || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
             event.preventDefault();
             if (event.repeat) return;
-            const code = barcodeInput.value.trim();
-            barcodeInput.value = '';
-            scanStockIssueCode(code);
+            clearTimeout(searchTimer);
+            const term = searchInput.value.trim();
+            if (!term) return;
+            productIdField.value = '';
+            selectedCard.hidden = true;
+            lookup(productsApiUrl + '&q=' + encodeURIComponent(term) + '&limit=12', 'No matching active product was found.', true, term);
         });
 
         let stockIssueBarcode = '';
@@ -116,7 +125,7 @@
             stockIssueBarcodeAt = 0;
         }
         document.addEventListener('keydown', event => {
-            if (barcodeInput.disabled || event.defaultPrevented || event.isComposing || event.repeat
+            if (searchInput.disabled || event.defaultPrevented || event.isComposing || event.repeat
                 || event.ctrlKey || event.metaKey || event.altKey || document.hidden
                 || event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]')
                 || document.querySelector('dialog[open], [aria-modal="true"].open, .rm-modal-overlay.open, .command-overlay.open, .swal2-container')) {
@@ -144,6 +153,7 @@
 
         searchInput.addEventListener('input', event => {
             if (event.detail === 'search-dropdown') return;
+            searchTerm = searchInput.value.trim();
             clearTimeout(searchTimer);
             if (lookupAbortController) lookupAbortController.abort();
             productSuggestions.replaceChildren();

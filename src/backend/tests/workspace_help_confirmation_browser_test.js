@@ -48,12 +48,32 @@ const fixture = action => {
             await page.locator('#landing-login-username').fill('theme_' + role);
             await page.locator('#landing-login-password').fill(data.password);
             await Promise.all([page.waitForURL(u => !u.search.includes('login=1')), page.getByRole('button', {name: 'Log in', exact: true}).click()]);
+            const overviewUrl = page.url();
+            await page.locator('#workspace-guidance').waitFor();
+            const workflowPages = role === 'admin' ? [
+                'administrator/store_calendar.php', 'user_manager/user_manager.php',
+                'report/report_generation.php', 'report/forecast_exceptions.php',
+            ] : [
+                'inventory_management/products.php', 'inventory_management/replenishment_queue.php',
+                'report/stock_receiving.php', 'inventory_management/inventory_counts.php',
+                'inventory_management/stock_issues.php',
+            ];
+            for (const workflow of workflowPages) {
+                await page.goto(origin + '/components/' + workflow);
+                assert.equal(await page.locator('#workspace-guidance, #workspace-invitation').count(), 0, role + ' welcome is absent from ' + workflow);
+            }
+            await page.goto(overviewUrl);
+            await page.locator('#workspace-guidance').waitFor();
             if (role === 'inventory_manager') {
                 await page.getByRole('link', {name: 'View guidance'}).click();
                 await page.waitForURL('**/auth/help.php');
             } else {
-                await page.goto(origin + '/components/administrator/dashboard.php');
+                await page.goto(origin + '/components/auth/help.php');
             }
+            await page.locator('.walkthrough-topic-card a').first().click();
+            await page.locator('#guidance-dock').waitFor();
+            assert.equal(await page.locator('#workspace-guidance, #workspace-invitation').count(), 0, role + ' explicit walkthrough works without the welcome banner');
+            await page.goto(role === 'admin' ? overviewUrl : origin + '/components/auth/help.php');
             const taskItem = page.locator('.setup-task-item').filter({has: page.getByRole('button', {name: label, exact: true})});
             await taskItem.getByRole('button', {name: label, exact: true}).click();
             await page.locator('.setup-task-item', {hasText: role === 'admin' ? 'Store calendar review' : 'Products and opening stock'})

@@ -112,8 +112,7 @@ const fixture = action => {
         await page.goto(origin + '/components/inventory_management/products.php');
         await page.waitForLoadState('domcontentloaded');
         const prodGuidance = page.locator('#workspace-guidance');
-        await prodGuidance.waitFor();
-        assert.match(await prodGuidance.locator('h2').innerText(), /Welcome to the Inventory Manager Workspace/);
+        assert.equal(await prodGuidance.count(), 0, 'Welcome guidance is absent from Products before deferring');
         assert.equal(await page.locator('#add-product-btn').count(), 1, 'Existing Add Product button is present');
 
         // 3. Replenishment Recommendations workflow (replenishment_queue.php)
@@ -121,8 +120,7 @@ const fixture = action => {
         await page.goto(origin + '/components/inventory_management/replenishment_queue.php');
         await page.waitForLoadState('domcontentloaded');
         const replGuidance = page.locator('#workspace-guidance');
-        await replGuidance.waitFor();
-        assert.match(await replGuidance.locator('h2').innerText(), /Welcome to the Inventory Manager Workspace/);
+        assert.equal(await replGuidance.count(), 0, 'Welcome guidance is absent from Replenishment Recommendations');
 
         // Inspect buying advice in the table
         const table = page.locator('.queue-list table');
@@ -147,8 +145,7 @@ const fixture = action => {
         await page.goto(origin + '/components/report/stock_receiving.php');
         await page.waitForLoadState('domcontentloaded');
         const rcvGuidance = page.locator('#workspace-guidance');
-        await rcvGuidance.waitFor();
-        assert.match(await rcvGuidance.locator('h2').innerText(), /Welcome to the Inventory Manager Workspace/);
+        assert.equal(await rcvGuidance.count(), 0, 'Welcome guidance is absent from Stock Receiving');
 
         // Record actual goods arrival through Stock Receiving
         const csrfToken = await page.locator('#receiving_form input[name="csrf_token"]').inputValue();
@@ -186,18 +183,18 @@ const fixture = action => {
         await page.goto(origin + '/components/inventory_management/inventory_counts.php');
         await page.waitForLoadState('domcontentloaded');
         const countsGuidance = page.locator('#workspace-guidance');
-        await countsGuidance.waitFor();
-        assert.match(await countsGuidance.locator('h2').innerText(), /Welcome to the Inventory Manager Workspace/);
+        assert.equal(await countsGuidance.count(), 0, 'Welcome guidance is absent from Inventory Counts');
 
         // 6. Stock Issue review workflow (stock_issues.php)
         await page.goto(origin + '/components/inventory_management/stock_issues.php');
         await page.waitForLoadState('domcontentloaded');
         const issuesGuidance = page.locator('#workspace-guidance');
-        await issuesGuidance.waitFor();
-        assert.match(await issuesGuidance.locator('h2').innerText(), /Welcome to the Inventory Manager Workspace/);
+        assert.equal(await issuesGuidance.count(), 0, 'Welcome guidance is absent from Stock Issues');
 
         // 7. Defer guidance and verify persisted state
-        const skipBtn = issuesGuidance.getByRole('button', {name: 'Not now', exact: true});
+        await page.goto(origin + '/components/inventory_management/inventory_overview.php');
+        await guidanceBanner.waitFor();
+        const skipBtn = guidanceBanner.getByRole('button', {name: 'Not now', exact: true});
         await skipBtn.focus();
         assert.equal(await skipBtn.evaluate(el => document.activeElement === el), true);
         assert.notEqual(await skipBtn.evaluate(el => getComputedStyle(el).outlineStyle), 'none');

@@ -7,6 +7,12 @@ related_targets: ["src/frontend/components/administrator/gcash_overview_fragment
 
 # Administrator GCash Overview
 
+## Current compact direction — 2026-11-26
+
+Confirmed four main tabs: Overview, Transactions, Sessions, Fund movements. Unresolved exchanges is a global review drawer under Transactions; Closing checks is a review drawer under Sessions. Preserve legacy review URLs, pending counts, all evidence/actions, and queue independence from report filters. Period/Cashier controls remain visible and are shared between Overview and Transactions; custom dates and supporting record details open in drawers. Empty content uses its natural height instead of viewport stretching. Earlier five-tab and viewport-filling decisions below are historical.
+
+Verification: `npm run check`, four GCash contracts, the complete tab regression, session-history and fund-movements integration browser tests passed. Light/dark captures at 320–1440px include populated/empty states and failed-loading recovery; desktop/mobile captures were visually inspected. A disposable-data action check verified clearing an exchange, its saved receipt and focus restoration, and closing review. TestSprite run `8e5101b6-de90-4ab2-9bf5-dc32d694f66d` passed 22/22 steps at its default viewport. The broader financial overview suite still fails on its existing `users.full_name` fixture; physical devices and Safari remain untested. No new dependencies, global tokens or financial calculations.
+
 Mode: Operate. Confirmed on 2026-11-11: the entire Administrator overview follows the cashier GCash page's tabs, tables, and layout. This is a local consistency change within RetailMind's existing visual system.
 
 ## Direction

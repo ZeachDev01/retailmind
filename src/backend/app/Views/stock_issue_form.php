@@ -18,19 +18,12 @@ $issueValue = static fn(string $key): string => htmlspecialchars(is_scalar($issu
                         <div class="stock-step-header">
                             <h3>Product</h3>
                         </div>
-                        <div class="form-grid stock-inputs-grid">
+                        <div>
                             <div class="form-group">
-                                <label for="barcode-input"><i class="bi bi-upc-scan" aria-hidden="true"></i> Barcode</label>
-                                <div class="input-with-icon">
-                                    <i class="bi bi-upc-scan input-icon" aria-hidden="true"></i>
-                                    <input type="text" id="barcode-input" placeholder="Scan or enter barcode" autocomplete="off" <?= $stockIssueCanRecord ? '' : 'disabled' ?>>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="product-search"><i class="bi bi-search" aria-hidden="true"></i> Search</label>
+                                <label for="product-search"><i class="bi bi-upc-scan" aria-hidden="true"></i> Scan or search</label>
                                 <div class="input-with-icon">
                                     <i class="bi bi-search input-icon" aria-hidden="true"></i>
-                                    <input type="search" id="product-search" list="stock-issue-products" placeholder="Name, barcode, or SKU" autocomplete="off" <?= $stockIssueCanRecord ? '' : 'disabled' ?>>
+                                    <input type="search" id="product-search" list="stock-issue-products" placeholder="Scan barcode or search by name, barcode, or SKU" autocomplete="off" <?= $stockIssueCanRecord ? '' : 'disabled' ?>>
                                 </div>
                                 <datalist id="stock-issue-products"></datalist>
                             </div>

@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../bootstrap/app.php';
 require_once __DIR__ . '/../includes/functions.php';
+set_exception_handler(static function (Throwable $error): void { fwrite(STDERR, (string)$error . PHP_EOL); exit(1); });
 
 use App\Services\GCashTransactionService;
 use App\Services\CashierShiftService;
@@ -305,7 +306,18 @@ $assert($cleared['verification_status'] === 'Completed', 'tx2 completed after as
 
 // 8. Closing differences across closures and handovers:
 // Create a session closure with cash shortage variance
+$pdo->exec("UPDATE fiscal_periods SET status = 'scheduled'");
+$transactionsBeforeClose = $pdo->query('SELECT * FROM gcash_transactions ORDER BY transaction_id')->fetchAll(PDO::FETCH_ASSOC);
+$postingBlocked = false;
+try {
+    $gcashService->save(4, '222333444555', '100.00', 'Cash-In');
+} catch (RuntimeException $e) {
+    $postingBlocked = str_contains($e->getMessage(), 'scheduled');
+}
+$assert($postingBlocked, 'A scheduled fiscal period still blocks new money movements');
 $closeDiff = $gcashService->closeSession(4, 1900.00, 5000.00, 'Closed with 100 shortage', 0, 4);
+$assert($pdo->query('SELECT * FROM gcash_transactions ORDER BY transaction_id')->fetchAll(PDO::FETCH_ASSOC) === $transactionsBeforeClose, 'Reconciliation closes without changing money movements');
+$pdo->exec("UPDATE fiscal_periods SET status = 'open'");
 $newSessId = (int)$closeDiff['session_id'];
 $sessRow = $pdo->query("SELECT * FROM gcash_service_sessions WHERE session_id = {$newSessId}")->fetch(PDO::FETCH_ASSOC);
 $assert((int)$sessRow['cashier_id'] === 4, 'Session cashier is Dave');
@@ -336,5 +348,21 @@ $assert($diffRow['responsible_role'] === 'admin', 'Session difference responsibl
 $gcashService->waiveDiscrepancy(1, 'admin', $newSessId, 'Count audited and verified by Admin Bob', ['cash_checked' => true, 'wallet_checked' => true, 'cash_explanation' => 'Physical cash counted separately', 'wallet_explanation' => 'Wallet balance checked in GCash app']);
 $waivedRow = $pdo->query("SELECT * FROM gcash_service_sessions WHERE session_id = {$newSessId}")->fetch(PDO::FETCH_ASSOC);
 $assert($waivedRow['waived_at'] !== null, 'Closing discrepancy waived successfully');
+
+foreach (['closed', 'locked', 'missing'] as $periodState) {
+    $pdo->exec("UPDATE fiscal_periods SET status = '" . ($periodState === 'missing' ? 'open' : $periodState) . "'");
+    if ($periodState === 'missing') $pdo->exec("UPDATE fiscal_periods SET end_date = '2020-01-02'");
+    $pdo->exec("UPDATE gcash_service_sessions SET status = 'open' WHERE session_id = {$newSessId}");
+    $unauthorized = false;
+    try {
+        $gcashService->closeSession(5, 1900, 5000, 'Unauthorized close');
+    } catch (DomainException $e) {
+        $unauthorized = $e->getCode() === 403;
+    }
+    $assert($unauthorized, 'Closing without an open period still enforces cashier ownership');
+    $gcashService->closeSession(4, 1900, 5000, 'Late reconciliation');
+    $assert($pdo->query("SELECT status FROM gcash_service_sessions WHERE session_id = {$newSessId}")->fetchColumn() === 'closed', 'Reconciliation works with period state ' . $periodState);
+}
+$assert($pdo->query('SELECT * FROM gcash_transactions ORDER BY transaction_id')->fetchAll(PDO::FETCH_ASSOC) === $transactionsBeforeClose, 'Late reconciliations leave all original money records unchanged');
 
 echo "GCash follow-up responsibility contract: passed\n";

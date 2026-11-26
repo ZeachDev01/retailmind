@@ -41,13 +41,27 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         await context.route('https://**/*', route => route.fulfill({status: 200, body: '', contentType: route.request().resourceType() === 'stylesheet' ? 'text/css' : 'text/javascript'}));
         const page = await context.newPage();
         const errors = [];
-        page.on('pageerror', error => errors.push(error.message));
+        page.on('pageerror', error => { errors.push(error.message); console.error(error.stack); });
+        const clickPageLink = async link => Promise.all([
+            page.evaluate(() => new Promise(resolve => window.addEventListener('retailmind:pagechange', () => resolve(), {once: true}))),
+            link.click(),
+        ]);
         page.setDefaultTimeout(10000);
         const login = async (target, role) => {
             await target.goto(origin + '/?login=1');
             await target.locator('#landing-login-username').fill('theme_' + role);
             await target.locator('#landing-login-password').fill(data.password);
             await Promise.all([target.waitForURL(url => !url.search.includes('login=1')), target.getByRole('button', {name: 'Log in', exact: true}).click()]).catch(async error => { throw new Error(error.message + '\n' + await target.locator('body').innerText() + '\n' + logs.slice(-3000)); });
+        };
+        const openPanel = async panel => {
+            for (const drawer of await page.locator('.gcash-review-drawer[open]').all()) await drawer.getByRole('button', {name: 'Close', exact: true}).click();
+            const parent = {unresolved: 'transactions', reconciliation: 'sessions'}[panel] || panel;
+            if (parent === 'sessions') {
+                await page.locator('#gcash-tab-sessions').click();
+                await page.locator('.gcash-session-history').waitFor();
+            } else await page.locator('#gcash-tab-' + parent).click();
+            if (parent !== panel) await page.locator('#gcash-tab-' + panel).click();
+            await page.locator('#tab-' + panel).waitFor({state: 'visible'});
         };
         await login(page, 'admin');
         await page.evaluate(async () => {
@@ -61,6 +75,7 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         });
         await page.goto(origin + '/components/administrator/gcash_overview.php');
         assert.equal(await page.evaluate(() => window.scrollY), 0, 'Opening overview keeps the page title visible');
+        assert.equal(await page.locator('.gcash-section-nav [role="tab"]').count(), 4);
         assert.equal(await page.locator('#gcash-coin-flip-trigger').count(), 0, 'Overview view toggle needs no separate flip control');
         assert.equal(await page.locator('[data-coin-switch]').count(), 0, 'Overview needs no duplicate view-switch shortcut');
         assert.equal(await page.locator('[data-coin-face]').count(), 0, 'Overview has one navigation level');
@@ -94,12 +109,13 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         assert.equal(await page.locator('#gcash-completed-activity').isVisible(), true, 'Filtered totals remain visible beside the report controls');
         assert.equal(await page.locator('#admin-expected-cash').textContent(), serviceCash, 'Report dates do not change service funds');
         assert.equal(await page.locator('#admin-cash-checked').isVisible(), true, 'Balance provenance remains visible after filtering');
-        await page.getByRole('link', {name: 'Reset filters', exact: true}).click();
+        await clickPageLink(page.getByRole('link', {name: 'Reset filters', exact: true}));
         await page.waitForURL(url => url.searchParams.get('tab') === 'overview' && !url.searchParams.has('period'));
         assert.equal(await page.getByLabel('Reporting period', {exact: true}).inputValue(), 'today', 'Reset restores Today without leaving Overview');
+        await page.locator('[data-open-dialog="gcash-filter-dialog"]').click();
         await page.getByLabel('Start date', {exact: true}).fill('2099-01-01');
         await page.getByLabel('End date', {exact: true}).fill('2099-01-01');
-        await page.locator('#btn-apply-filters').click();
+        await page.locator('#gcash-filter-dialog [type="submit"]').click();
         await page.waitForURL(url => url.searchParams.get('start_date') === '2099-01-01');
         assert.equal(await page.locator('.gcash-activity-empty').isVisible(), true, 'No completed exchanges shows the report empty state');
         assert.equal(await page.locator('.gcash-metrics-grid').isVisible(), false, 'Empty report omits zero metrics');
@@ -122,7 +138,7 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         assert.equal(await page.locator('.gcash-activity-empty').isVisible(), false, 'Failed loading is not an empty report');
         assert.equal(await page.locator('.gcash-metrics-grid').isVisible(), true, 'Failed report exposes unavailable totals');
         await page.unroute('**/gcash_overview_fragments.php*');
-        await page.locator('#btn-reset-filters').click();
+        await clickPageLink(page.locator('#btn-reset-filters'));
         await page.waitForURL(url => !url.searchParams.has('period'));
         assert.equal(await page.locator('.gcash-activity-empty').isVisible(), false, 'Reset restores the populated report');
         assert.equal(await page.locator('.gcash-metrics-grid').isVisible(), true);
@@ -131,7 +147,7 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
             await page.setViewportSize({width, height: 900});
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'No page overflow at ' + width + 'px');
             for (const [name, panel] of [['Closing checks', 'reconciliation'], ['Unresolved exchanges', 'unresolved'], ['Overview', 'overview'], ['Transactions', 'transactions']]) {
-                await page.getByRole('tab', {name}).click();
+                await openPanel(panel);
                 assert.equal(await page.locator('#tab-' + panel).isVisible(), true, name + ' opens at ' + width + 'px');
             }
             await page.keyboard.press('Home');
@@ -161,7 +177,7 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         for (const width of [1440, 768, 390, 320]) {
             await page.setViewportSize({width, height: 900});
             for (const [name, panel] of [['Overview', 'overview'], ['Transactions', 'transactions'], ['Closing checks', 'reconciliation'], ['Unresolved exchanges', 'unresolved'], ['Service Fund Movements', 'money']]) {
-                await page.getByRole('tab', {name}).click();
+                await openPanel(panel);
                 await page.locator('#tab-' + panel).waitFor({state: 'visible'});
                 assert.equal(await page.locator('#tab-' + panel + ' .table-ghost-row').count(), 0, 'Reports show only actual rows');
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, panel + ' fits ' + width);
@@ -203,15 +219,30 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
                 await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
             }
         }
+        for (const [review, parent] of [['unresolved', 'transactions'], ['reconciliation', 'sessions']]) {
+            await page.goto(origin + '/components/administrator/gcash_overview.php?tab=' + review + '&start_date=2099-01-01&end_date=2099-01-01');
+            assert.equal(await page.locator('#tab-' + review).isVisible(), true, 'Legacy review link opens its drawer');
+            assert.equal(await page.locator('#gcash-tab-' + parent).getAttribute('aria-selected'), 'true');
+            if (review === 'unresolved') {
+                assert.ok(await page.locator('#gcash-admin-nc-body tr').count() > 0, 'Pending queue survives dates with no matching transactions');
+                await page.locator('.gcash-verify').first().click();
+                assert.equal(await page.locator('#gcash-verify-dialog').isVisible(), true);
+                await page.keyboard.press('Escape');
+                assert.equal(await page.locator('#tab-unresolved').isVisible(), true, 'Evidence dialog returns to pending queue');
+            }
+            await page.keyboard.press('Escape');
+            await page.waitForURL(url => url.searchParams.get('tab') === parent);
+            assert.equal(new URL(page.url()).searchParams.get('tab'), parent);
+        }
         fixture('cleanup');
-        run('src/backend/tests/support/cashier_ui_fixture.php', ['create', database]);
+        run('src/backend/tests/support/theme_fixture.php', ['create', database]);
         await page.goto(origin + '/components/administrator/gcash_overview.php');
         assert.equal(await page.locator('.gcash-funds-panel .gcash-empty-state').isVisible(), true);
         fs.mkdirSync('output/playwright/gcash-empty-states', {recursive: true});
         for (const width of [1440, 1024, 768, 390, 320]) {
             await page.setViewportSize({width, height: 900});
             for (const [name, panel] of [['Overview', 'overview'], ['Transactions', 'transactions'], ['Closing checks', 'reconciliation'], ['Unresolved exchanges', 'unresolved'], ['Service Fund Movements', 'money']]) {
-                await page.locator('#gcash-tab-' + panel).click();
+                await openPanel(panel);
                 await page.locator('#tab-' + panel).waitFor({state: 'visible'});
                 if (panel === 'money') {
                     await page.waitForLoadState('networkidle');
@@ -250,7 +281,7 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         }
         await page.setViewportSize({width: 1440, height: 1800});
         for (const panel of ['transactions', 'reconciliation', 'unresolved', 'money']) {
-            await page.locator('#gcash-tab-' + panel).click();
+            await openPanel(panel);
             await page.locator('#tab-' + panel).waitFor({state: 'visible'});
             if (panel === 'money') await page.waitForLoadState('networkidle');
             await page.evaluate(() => window.scrollTo(0, 0));
@@ -258,11 +289,11 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
                 const workspace = document.getElementById('gcash-admin-workspace');
                 return innerHeight - element.getBoundingClientRect().bottom - parseFloat(getComputedStyle(workspace).paddingBottom);
             });
-            assert.ok(Math.abs(gap) < 2, panel + ' fills available viewport height; gap=' + gap);
+            assert.ok(gap > 500, panel + ' keeps empty content compact; gap=' + gap);
             await page.locator('#tab-' + panel).screenshot({path: 'output/playwright/gcash-empty-states/viewport-' + panel + '-1440.png'});
         }
-        await page.locator('#gcash-tab-transactions').click();
-        await page.locator('#gcash-admin-history-body').getByRole('link', {name: 'Reset filters'}).click();
+        await openPanel('transactions');
+        await clickPageLink(page.locator('#gcash-admin-history-body').getByRole('link', {name: 'Reset filters'}));
         await page.waitForURL(url => url.searchParams.get('tab') === 'transactions' && !url.searchParams.has('period'));
         await page.waitForLoadState('networkidle');
         assert.equal(await page.locator('#tab-transactions .gcash-empty-state').isVisible(), true, 'Reset preserves the Transactions tab');
@@ -272,7 +303,7 @@ const fixture = action => run('src/backend/tests/support/gcash_admin_layout_fixt
         await page.locator('#btn-apply-filters').click();
         await page.waitForFunction(() => document.querySelector('#gcash-filter-status').textContent.includes('unavailable'));
         assert.equal(await page.locator('.gcash-funds-panel .gcash-empty-state').isVisible(), false, 'Failed loading hides the missing-balance state');
-        assert.equal(await page.locator('#gcash-outstanding-reviews [role="alert"]').isVisible(), true, 'Failed loading replaces the all-clear state');
+        await page.locator('#gcash-outstanding-reviews [role="alert"]').waitFor({state: 'visible'});
         await page.unroute('**/gcash_overview_fragments.php*');
         await page.locator('#btn-apply-filters').click();
         await page.locator('.gcash-funds-panel .gcash-empty-state').waitFor({state: 'visible'});

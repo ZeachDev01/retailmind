@@ -47,6 +47,12 @@ const csvRows = bytes => {
         const context = await browser.newContext({viewport: {width: 1440, height: 900}});
         await context.route('https://**/*', route => route.fulfill({status: 200, body: '', contentType: route.request().resourceType() === 'stylesheet' ? 'text/css' : 'text/javascript'}));
         const page = await context.newPage();
+        const openPanel = async key => {
+            for (const drawer of await page.locator('.gcash-review-drawer[open]').all()) await drawer.locator('[data-close-dialog]').click();
+            const url = new URL(page.url());
+            url.searchParams.set('tab', key);
+            await page.goto(url.toString());
+        };
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
         page.setDefaultTimeout(10000);
@@ -101,7 +107,7 @@ const csvRows = bytes => {
         assert.equal(await page.locator('#filter-start-date').inputValue(), today, 'Initial report defaults to Philippine Today');
         assert.equal(run('src/backend/tests/gcash_transaction_integration.php', [database]).trim(), 'GCash MySQL integration: passed');
         await page.reload();
-        await page.getByRole('tab', {name: 'Transactions'}).click();
+        await openPanel('transactions');
         const savedReceiptRow = page.locator('#gcash-admin-history-body tr', {hasText: '00000000000000000000000000123456'});
         const receiptAction = savedReceiptRow.getByRole('button', {name: 'Receipt', exact: true});
         const beforeReprint = await (await context.request.get(origin + '/components/administrator/gcash_overview_api.php')).json();
@@ -119,7 +125,7 @@ const csvRows = bytes => {
         await page.keyboard.press('Escape');
         assert.equal(await receiptAction.evaluate(button => button === document.activeElement), true, 'Closing returns to originating Overview receipt action');
         assert.deepEqual(await (await context.request.get(origin + '/components/administrator/gcash_overview_api.php')).json(), beforeReprint, 'Receipt retrieval and printing leave Store-wide financial state unchanged');
-        await page.getByRole('tab', {name: 'Overview', exact: true}).click();
+        await openPanel('overview');
         if (await page.locator('#coin-tab-activity').count() > 0 && !await page.locator('#filter-start-date').isVisible()) {
             await page.locator('#coin-tab-activity').click();
         }
@@ -172,7 +178,7 @@ const csvRows = bytes => {
         assert.equal(await page.locator('#admin-cash-checked').isVisible(), true, 'Cashier and last actual check are visible without expanding details');
         assert.equal(await page.locator('.page-subtitle, #tab-overview .gcash-card-sub, #tab-overview .pos-panel-title p').count(), 0, 'Overview omits explanatory subtext');
         const recordedCash = await page.locator('#admin-expected-cash').textContent();
-        assert.equal(await page.getByRole('tab').count(), 5, 'All five task tabs remain available');
+        assert.equal(await page.getByRole('tab').count(), 4, 'Four task tabs retain all work areas');
         const balances = page.getByRole('tab', {name: 'Overview'});
         assert.equal(await balances.getAttribute('aria-selected'), 'true');
         assert.equal(await page.locator('#tab-transactions').isVisible(), false);
@@ -199,7 +205,7 @@ const csvRows = bytes => {
         assert.equal(Number(await page.locator('#admin-nc-count').textContent()), initialReviewCount, 'Historic reporting and every list filter preserve Store-wide review count');
         assert.ok((await page.locator('#gcash-admin-nc-table').textContent()).includes('Other cashier held item'), 'Historical other-Cashier unresolved record remains visible');
         await page.goto(origin + '/components/administrator/gcash_overview.php');
-        await page.getByRole('tab', {name: 'Transactions'}).click();
+        await openPanel('transactions');
         const search = page.getByRole('searchbox', {name: 'Search transactions'});
         await search.fill('no-such-gcash-reference');
         await page.getByText('No transactions match these filters.').waitFor();
@@ -219,12 +225,12 @@ const csvRows = bytes => {
         const requestStarted = page.waitForRequest(request => request.url().includes('search=no-such-gcash-reference'));
         await search.fill('no-such-gcash-reference');
         await requestStarted;
-        await page.getByRole('tab', {name: 'Overview'}).click();
+        await openPanel('overview');
         releaseFilter();
         await page.locator('#gcash-filter-status').filter({hasText: '0 matching transactions'}).waitFor({state: 'attached'});
         assert.equal(new URL(page.url()).searchParams.get('tab'), 'overview');
         await page.unroute('**/gcash_overview_fragments.php?**');
-        await page.getByRole('tab', {name: 'Transactions'}).click();
+        await openPanel('transactions');
         await search.fill('');
         await page.locator('#gcash-admin-history-body tr[data-transaction]').first().waitFor();
         // A superseded report must not replace the newer selection's rows or totals.
@@ -423,7 +429,7 @@ const csvRows = bytes => {
         assert.equal((await context.request.post(adminApi, {headers: {'X-CSRF-Token': token}, data: {action: 'resolve_exchange', transaction_id: 1, confirmed_wallet: false, confirmed_cash: true}})).status(), 400, 'Resolution requires both confirmations');
         await search.fill('no-such-gcash-reference');
         await page.getByRole('status').filter({hasText: '0 matching transactions'}).waitFor();
-        await page.getByRole('tab', {name: 'Closing checks'}).click();
+        await openPanel('reconciliation');
         const discrepancyBefore = Number((await page.locator('#gcash-tab-reconciliation .gcash-badge').textContent()).match(/\d+/)[0]);
         const waive = page.locator('.admin-btn-waive').first();
         await waive.click();
@@ -435,7 +441,7 @@ const csvRows = bytes => {
         await page.waitForFunction(previous => document.querySelector('#gcash-tab-reconciliation .gcash-badge').textContent === `Pending (${previous - 1})`, discrepancyBefore);
         assert.ok((await page.locator('#gcash-admin-diff-body').textContent()).includes('Waived'));
         assert.equal(await page.locator('#gcash-search').inputValue(), 'no-such-gcash-reference', 'Waiver refresh preserves local filter');
-        await page.getByRole('tab', {name: 'Unresolved exchanges'}).click();
+        await openPanel('unresolved');
         const verify = page.getByRole('button', {name: 'Verify & Clear', exact: true}).first();
         await verify.click();
         const resolve = page.getByRole('dialog', {name: 'Verify & Clear Exchange'});
@@ -469,9 +475,9 @@ const csvRows = bytes => {
         assert.equal(await page.evaluate(() => window.receiptPrints), 2, 'Later resolution permits manual print retry');
         assert.deepEqual(await (await context.request.get(adminApi)).json(), afterResolution, 'Retrying print never repeats resolution or money posting');
         await page.getByRole('button', {name: 'Close GCash Service Receipt'}).click();
-        await page.waitForFunction(() => document.getElementById('gcash-tab-unresolved') === document.activeElement);
+        await page.waitForFunction(() => document.querySelector('#tab-unresolved [data-close-dialog]') === document.activeElement);
         assert.equal(await page.locator('#gcash-search').inputValue(), 'no-such-gcash-reference', 'Verification refresh preserves local filter');
-        await page.getByRole('tab', {name: 'Transactions'}).click();
+        await openPanel('transactions');
         await page.getByLabel('Reporting period', {exact: true}).selectOption('custom');
         await page.locator('#filter-start-date').fill('2020-01-01');
         await search.fill('9999999999988');
@@ -483,14 +489,14 @@ const csvRows = bytes => {
         await page.getByRole('button', {name: 'Close GCash Service Receipt'}).click();
         await search.fill('no-such-gcash-reference');
         await page.getByRole('status').filter({hasText: '0 matching transactions'}).waitFor();
-        await page.getByRole('tab', {name: 'Unresolved exchanges'}).click();
+        await openPanel('unresolved');
         const remainingVerify = page.getByRole('button', {name: 'Verify & Clear', exact: true}).first();
         await remainingVerify.click();
         await resolve.waitFor();
         assert.equal(await resolve.getByLabel('Print receipt automatically', {exact: true}).count(), 0, 'Automatic print option removed');
         await page.keyboard.press('Escape');
         await page.route('**/gcash_overview_fragments.php?**', route => route.fulfill({status: 503, body: 'Unavailable'}));
-        await page.getByRole('tab', {name: 'Transactions'}).click();
+        await openPanel('transactions');
         await search.fill('failed-load');
         await page.locator('#gcash-filter-status').filter({hasText: 'Unable to load transactions'}).waitFor();
         assert.equal(await page.locator('#gcash-tab-unresolved .gcash-badge').textContent(), 'Unavailable');
@@ -498,7 +504,7 @@ const csvRows = bytes => {
         await page.unroute('**/gcash_overview_fragments.php?**');
         await search.fill('');
         await page.getByRole('status').filter({hasText: /matching transactions/}).waitFor();
-        await page.getByRole('tab', {name: 'Overview'}).click();
+        await openPanel('overview');
         await page.emulateMedia({reducedMotion: 'reduce'});
         const capture = async name => {
             await page.evaluate(async () => {
@@ -523,20 +529,20 @@ const csvRows = bytes => {
             assert.equal(await page.locator('#gcash-export, #gcash-record, #gcash-record-dialog').count(), 0, name + ' overview has no recording or export actions');
             await capture(name);
             for (const [tabName, suffix] of [['Transactions', 'transactions'], ['Closing checks', 'reconciliation'], ['Unresolved exchanges', 'unresolved']]) {
-                await page.getByRole('tab', {name: tabName}).click();
+                await openPanel(suffix);
                 const panel = page.locator('#tab-' + suffix);
                 assert.equal(await panel.locator('thead th').count(), suffix === 'reconciliation' ? 8 : 9, name + ' ' + suffix + ' groups related record fields');
                 if (suffix !== 'transactions') {
-                    assert.equal(await panel.getByText('All dates · All Cashiers', {exact: true}).isVisible(), true, name + ' review scope remains visible');
+                    assert.equal(await panel.evaluate(element => element instanceof HTMLDialogElement && element.open), true, name + ' review drawer remains open');
                     const details = panel.locator('.gcash-row-details').first();
                     assert.equal(await details.getAttribute('open'), null, 'Secondary record details start collapsed');
                     await details.locator('summary').click();
-                    assert.equal(await details.evaluate(element => element.open), true, 'Record details remain accessible');
-                    assert.ok((await details.innerText()).trim().length > (await details.locator('summary').innerText()).trim().length, 'Expanded details retain record content');
-                    await details.locator('summary').click();
+                    assert.equal(await page.locator('#gcash-record-details').isVisible(), true, 'Record details remain accessible');
+                    assert.ok((await page.locator('#gcash-record-details-body').innerText()).trim().length > 0, 'Details drawer retains record content');
+                    await page.locator('#gcash-record-details [data-close-dialog]').click();
                     await panel.locator('.gcash-table-wrap').evaluate(element => element.scrollLeft = 0);
                 }
-                assert.equal(await page.getByRole('tab', {name: tabName}).evaluate(element => {
+                assert.equal(await page.locator('#gcash-tab-' + suffix).evaluate(element => {
                     const tab = element.getBoundingClientRect();
                     const nav = element.parentElement.getBoundingClientRect();
                     return tab.left >= nav.left && tab.right <= nav.right;
@@ -544,12 +550,12 @@ const csvRows = bytes => {
                 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, name + ' ' + suffix + ' has no page overflow');
                 await capture(name + '-' + suffix);
             }
-            await page.getByRole('tab', {name: 'Service Fund Movements'}).click();
+            await openPanel('money');
             await page.locator('#tab-money').waitFor({state: 'visible'});
             assert.equal(await page.getByLabel('Session ID', {exact: true}).isVisible(), true);
             assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, name + ' money history has no page overflow');
             await capture(name + '-money');
-            await page.getByRole('tab', {name: 'Overview'}).click();
+            await openPanel('overview');
         }
         assert.deepEqual(errors, []);
         const privilegedContext = await browser.newContext();

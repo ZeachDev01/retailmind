@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'save_dormancy') {
             $updates = [
                 'disable_days' => trim((string)($_POST['disable_days'] ?? '')),
-                'warn_days' => trim((string)($_POST['warn_days'] ?? '')),
+                'warn_before_days' => trim((string)($_POST['warn_before_days'] ?? '')),
             ];
             $dormancyPolicyService->update((string)current_role(), $updates, (int)$_SESSION['user_id']);
             log_activity($pdo, (int)$_SESSION['user_id'], 'Dormancy Policy thresholds updated', 'Platform Settings', null, null, $updates);
@@ -325,12 +325,14 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
                 <input type="hidden" name="action" value="save_dormancy">
                 <div class="form-grid">
                     <div class="form-group">
-                        <label for="disable_days">
-                            Disable after (days)
-                            <span class="required-mark" aria-hidden="true">*</span>
-                        </label>
+                        <div class="dormancy-field-label">
+                            <label for="disable_days">
+                                Disable after (days)
+                                <span class="required-mark" aria-hidden="true">*</span>
+                            </label>
+                        </div>
                         <input type="number"
-                               min="1"
+                               min="2"
                                step="1"
                                id="disable_days"
                                name="disable_days"
@@ -341,19 +343,26 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
                                required>
                     </div>
                     <div class="form-group">
-                        <label for="warn_days">
-                            Warn after (days)
-                            <span class="required-mark" aria-hidden="true">*</span>
-                        </label>
+                        <div class="dormancy-field-label">
+                            <label for="warn_before_days">
+                                Warn before disable (days)
+                                <span class="required-mark" aria-hidden="true">*</span>
+                            </label>
+                            <span class="info-tooltip">
+                                <button class="info-tooltip-trigger" type="button" aria-label="About warning before disable" aria-describedby="dormancy-warning-help"><i class="bi bi-info-circle" aria-hidden="true"></i></button>
+                                <span id="dormancy-warning-help" class="tooltip-box" role="tooltip">Email the account holder this many days before disabling. Example: disable after 30 days, warn 3 days before = email after 27 days without a login.</span>
+                            </span>
+                        </div>
                         <input type="number"
-                               min="0"
+                               min="1"
                                step="1"
-                               id="warn_days"
-                               name="warn_days"
+                               id="warn_before_days"
+                               name="warn_before_days"
                                inputmode="numeric"
-                               value="<?= htmlspecialchars((string)$dormancyThresholds['warn_days']) ?>"
+                               value="<?= htmlspecialchars((string)($dormancyThresholds['disable_days'] - $dormancyThresholds['warn_days'])) ?>"
                                autocomplete="off"
                                aria-required="true"
+                               aria-describedby="dormancy-warning-help"
                                required>
                     </div>
                 </div>
@@ -631,6 +640,17 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
 </div>
 <script>
 (() => {
+    const disable = document.getElementById('disable_days');
+    const warning = document.getElementById('warn_before_days');
+    const updateWarningLimit = () => {
+        if (disable.validity.valid) warning.max = String(disable.valueAsNumber - 1);
+    };
+    disable.addEventListener('input', updateWarningLimit);
+    updateWarningLimit();
+})();
+</script>
+<script>
+(() => {
     document.addEventListener('DOMContentLoaded', () => {
         if (window.innerWidth > 900 && !document.body.classList.contains('sidebar-collapsed')) {
             document.getElementById('sidebarBrandToggle')?.click();
@@ -684,5 +704,6 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
     'state' => $remoteTunnelState,
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES) ?></script>
 <script src="<?= htmlspecialchars(theme_url('assets/js/remote-access-toggle.js')) ?>"></script>
+<script src="<?= htmlspecialchars(theme_url('assets/js/info-tooltip.js')) ?>"></script>
 </body>
 </html>

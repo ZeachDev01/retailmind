@@ -146,6 +146,10 @@ _Avoid_: Second login field, email-only login
 The Platform Setting that disables Dormant Accounts after a configured number of days, warns Administrators beforehand, and never leaves the Store without an active Administrator. Disabling retains historical attribution, revokes sessions, and emails the holder when an address is on file.
 _Avoid_: Auto-disable rule, inactivity timeout, session timeout
 
+**Dormancy Warning Lead Time**:
+The number of days before a Dormant Account is due to be disabled when its holder should receive a warning email, if an Email Address is on file. A 3-day lead time with a 30-day disable period means warning after 27 days without a successful login.
+_Avoid_: Warn after (when referring to days before disable)
+
 **Inventory Manager**:
 The Store operator responsible for routine inventory execution, including stock monitoring, replenishment, receiving, and inventory control. It does not own Store-wide staff, compliance, or access oversight.
 _Avoid_: Administrator, stock administrator

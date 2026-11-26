@@ -13,6 +13,12 @@
             item.tabIndex = selected ? 0 : -1;
             document.getElementById(item.getAttribute('aria-controls')).hidden = !selected;
         });
+        const reportScope = document.getElementById('gcash-reporting-scope');
+        if (target === 'tab-transactions') {
+            document.getElementById('gcash-transaction-filters').append(reportScope);
+        } else if (target === 'tab-overview') {
+            workspace.querySelector('.gcash-activity-row').prepend(reportScope);
+        }
         tab.parentElement.scrollLeft += tab.getBoundingClientRect().left - tab.parentElement.getBoundingClientRect().left;
         const url = new URL(location.href);
         url.searchParams.set('tab', tab.getAttribute('aria-controls').replace('tab-', ''));
@@ -53,9 +59,47 @@
     window.addEventListener('pageshow', alignSelectedTab);
     window.addEventListener('resize', alignSelectedTab);
 
+    function openReview(key) {
+        if (key !== 'unresolved' && key !== 'reconciliation') {
+            selectTab(document.getElementById('gcash-tab-' + key), true);
+            return;
+        }
+        const parent = key === 'unresolved' ? 'transactions' : 'sessions';
+        if (parent === 'sessions' && !workspace.querySelector('.gcash-session-history')) {
+            const url = new URL(location.href);
+            url.searchParams.set('tab', key);
+            window.location.assign(url);
+            return;
+        }
+        selectTab(document.getElementById('gcash-tab-' + parent));
+        document.getElementById('tab-' + key).showModal();
+        const url = new URL(location.href);
+        url.searchParams.set('tab', key);
+        history.replaceState(null, '', url);
+    }
+    workspace.querySelectorAll('.gcash-review-drawer').forEach(dialog => {
+        dialog.addEventListener('close', () => {
+            const url = new URL(location.href);
+            url.searchParams.set('tab', dialog.id === 'tab-unresolved' ? 'transactions' : 'sessions');
+            history.replaceState(null, '', url);
+            document.getElementById('gcash-' + dialog.id).focus({preventScroll: true});
+        });
+    });
+    const sessionHeader = workspace.querySelector('.gcash-session-history .pos-panel-header');
+    if (sessionHeader) sessionHeader.append(document.getElementById('gcash-tab-reconciliation'));
     workspace.addEventListener('click', event => {
         const review = event.target.closest('[data-review-tab]');
-        if (review) selectTab(document.getElementById('gcash-tab-' + review.dataset.reviewTab), true);
+        if (review) openReview(review.dataset.reviewTab);
+        const opener = event.target.closest('[data-open-dialog]');
+        if (opener) document.getElementById(opener.dataset.openDialog).showModal();
+        const summary = event.target.closest('.gcash-row-details > summary');
+        if (summary) {
+            event.preventDefault();
+            document.getElementById('gcash-record-details-title').textContent = summary.textContent;
+            const body = document.getElementById('gcash-record-details-body');
+            body.replaceChildren(...[...summary.parentElement.children].filter(child => child !== summary).map(child => child.cloneNode(true)));
+            document.getElementById('gcash-record-details').showModal();
+        }
     });
 
     function swapFragments(html) {
@@ -106,6 +150,10 @@
     }
 
     const filterForm = document.getElementById('gcash-admin-filter-form');
+    filterForm.addEventListener('invalid', () => {
+        const dialog = document.getElementById('gcash-filter-dialog');
+        if (!dialog.open) dialog.showModal();
+    }, true);
     const search = document.getElementById('gcash-search');
     const typeInput = document.getElementById('gcash-type-filter');
     const periodInput = document.getElementById('gcash-reporting-period');
@@ -116,6 +164,8 @@
         if (periodInput.value !== 'custom') {
             startInput.value = periodInput.value === 'month_to_date' ? today.slice(0, 7) + '-01' : today;
             endInput.value = today;
+        } else {
+            document.getElementById('gcash-filter-dialog').showModal();
         }
     });
     [startInput, endInput].forEach(input => input.addEventListener('change', () => { periodInput.value = 'custom'; }));
@@ -147,9 +197,11 @@
             swapFragments(html);
             if (focusedType !== undefined) workspace.querySelector(`[data-type="${focusedType}"]`)?.focus({preventScroll: true});
             const count = document.getElementById('gcash-matching-record-count').textContent;
-            pageUrl.searchParams.set('tab', workspace.querySelector('[role="tab"][aria-selected="true"]').getAttribute('aria-controls').replace('tab-', ''));
+            const review = workspace.querySelector('.gcash-review-drawer[open]');
+            pageUrl.searchParams.set('tab', review ? review.id.replace('tab-', '') : workspace.querySelector('.gcash-section-nav [role="tab"][aria-selected="true"]').getAttribute('aria-controls').replace('tab-', ''));
             history.replaceState(null, '', pageUrl);
             status.textContent = `${count} matching transactions`;
+            document.getElementById('gcash-filter-dialog').close();
             return true;
         } catch (error) {
             if (error.name !== 'AbortError' && filterRequest === controller) {
@@ -313,7 +365,7 @@
             if (!response.ok || result.error) throw new Error(result.error || 'Unable to verify the exchange. Try again.');
             verifyDialog.close();
             await filterTransactions();
-            if (result.receipt_id) await window.viewReceipt(result.receipt_id, document.getElementById('gcash-tab-unresolved'));
+            if (result.receipt_id) await window.viewReceipt(result.receipt_id, document.querySelector('#tab-unresolved [data-close-dialog]'));
             button.disabled = false;
             button.textContent = originalBtnText;
         } catch (error) {
@@ -416,4 +468,6 @@
             }
         });
     }
+    const initialReview = workspace.querySelector('.gcash-review-drawer[data-initial-open="true"]');
+    if (initialReview) openReview(initialReview.id.replace('tab-', ''));
 })();

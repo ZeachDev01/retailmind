@@ -196,7 +196,7 @@ final class GCashLiveCustodySession
         }
         try {
             StoreWriteGate::begin($this->pdo);
-            $this->fiscalPeriodGuard()->assertOpenNow('gcash_service_sessions', 'GCash session closing');
+            // Closing records reconciliation only; new money movements retain their fiscal guards.
             $lock = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
             $stmt = $this->pdo->prepare("SELECT * FROM gcash_service_sessions WHERE status = 'open'" . $lock);
             $stmt->execute();

@@ -3,7 +3,7 @@
 //
 // Proves at the public service seam: defaults 45/30 resolve with integer
 // cast-at-read; Super Administrator-only updates; non-numeric and
-// warn>=disable rejections carry plain operator messages; accepted values
+// invalid warning lead-time rejections carry plain operator messages; accepted values
 // persist in the platform key-value store; and the Platform Settings UI
 // plus migration/schema seed the same keys.
 require_once __DIR__ . '/../bootstrap/app.php';
@@ -48,7 +48,7 @@ try {
     // --- Non–Super Administrator roles cannot change the thresholds ---
     foreach (['admin', 'inventory_manager', 'cashier', null] as $role) {
         $throws(
-            static fn() => $service->update((string)$role, ['disable_days' => 45, 'warn_days' => 30], 7),
+            static fn() => $service->update((string)$role, ['disable_days' => 45, 'warn_before_days' => 30], 7),
             DomainException::class,
             'Role ' . var_export($role, true) . ' must not change Dormancy Policy thresholds'
         );
@@ -56,13 +56,13 @@ try {
 
     // --- Non-numeric values are rejected with a plain operator message ---
     $nonNumericCases = [
-        ['disable_days' => 'abc', 'warn_days' => 30],
-        ['disable_days' => 45, 'warn_days' => 'abc'],
-        ['disable_days' => '', 'warn_days' => 30],
-        ['disable_days' => 45, 'warn_days' => ''],
-        ['disable_days' => null, 'warn_days' => 30],
-        ['disable_days' => 45, 'warn_days' => null],
-        ['warn_days' => 30],
+        ['disable_days' => 'abc', 'warn_before_days' => 30],
+        ['disable_days' => 45, 'warn_before_days' => 'abc'],
+        ['disable_days' => '', 'warn_before_days' => 30],
+        ['disable_days' => 45, 'warn_before_days' => ''],
+        ['disable_days' => null, 'warn_before_days' => 30],
+        ['disable_days' => 45, 'warn_before_days' => null],
+        ['warn_before_days' => 30],
         ['disable_days' => 45],
     ];
     foreach ($nonNumericCases as $index => $payload) {
@@ -81,11 +81,11 @@ try {
         }
     }
 
-    // --- Warn-days greater than or equal to disable-days is rejected ---
-    foreach ([[30, 30], [20, 30], [0, 0], [44, 45]] as [$disable, $warn]) {
+    // --- Warning lead time must be a whole number from 1 to disable-days minus 1 ---
+    foreach ([[30, 30], [20, 30], [0, 0], [44, 45], [30, 0], [30, -1], [30, 1.5], [1, 1]] as [$disable, $warn]) {
         $caught = null;
         try {
-            $service->update('super_admin', ['disable_days' => $disable, 'warn_days' => $warn], 1);
+            $service->update('super_admin', ['disable_days' => $disable, 'warn_before_days' => $warn], 1);
         } catch (Throwable $exception) {
             $caught = $exception;
         }
@@ -99,7 +99,7 @@ try {
     }
 
     // --- Validation acceptance: valid values persist ---
-    $service->update('super_admin', ['disable_days' => 60, 'warn_days' => 14], 1);
+    $service->update('super_admin', ['disable_days' => 60, 'warn_before_days' => 46], 1);
     $saved = $service->thresholds();
     $assert($saved['disable_days'] === 60, 'Accepted disable-days should persist as 60');
     $assert($saved['warn_days'] === 14, 'Accepted warn-days should persist as 14');
@@ -117,8 +117,15 @@ try {
     $updatedBy = $pdo->query("SELECT updated_by FROM platform_settings WHERE setting_key = 'dormancy_disable_days'")->fetchColumn();
     $assert((int)$updatedBy === 1, 'Persisted thresholds should record the saving actor');
 
+    // Lead-time inputs convert to elapsed inactivity thresholds used by the runner.
+    foreach ([1 => 29, 3 => 27, 29 => 1] as $lead => $elapsed) {
+        $service->update('super_admin', ['disable_days' => '30', 'warn_before_days' => (string)$lead], 1);
+        $assert($service->thresholds() === ['disable_days' => 30, 'warn_days' => $elapsed],
+            "A {$lead}-day lead time must warn after {$elapsed} inactive days");
+    }
+
     // A later valid save replaces the previous values.
-    $service->update('super_admin', ['disable_days' => 45, 'warn_days' => 30], 1);
+    $service->update('super_admin', ['disable_days' => 45, 'warn_before_days' => 15], 1);
     $replaced = $service->thresholds();
     $assert($replaced['disable_days'] === 45 && $replaced['warn_days'] === 30, 'A later valid save should replace prior thresholds');
 
@@ -153,7 +160,7 @@ try {
         "action === 'save_dormancy'",
         'DormancyPolicyService',
         'name="disable_days"',
-        'name="warn_days"',
+        'name="warn_before_days"',
         'Dormancy Policy',
         'OperatorAlert::message',
         'log_activity',

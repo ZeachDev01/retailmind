@@ -108,19 +108,20 @@ const fixture = action => execFileSync(php, ['src/backend/tests/support/theme_fi
 
         const admin = await login('admin');
         await admin.goto(origin + '/components/administrator/gcash_overview.php');
-        await admin.getByRole('tab', {name: 'GCash Sessions', exact: true}).click();
+        await admin.getByRole('tab', {name: 'Sessions', exact: true}).click();
         const sessions = admin.locator('#tab-sessions');
         await sessions.getByRole('heading', {name: 'GCash Sessions'}).waitFor();
         assert.match(await sessions.locator('.rm-table-footer').innerText(), /of 13 entries/);
         await sessions.getByLabel('Status').selectOption('open');
-        await sessions.getByRole('button', {name: 'Apply filters'}).click();
+        await sessions.locator('.gcash-filter-actions [type="submit"]').click();
         await admin.waitForURL(url => url.searchParams.get('session_status') === 'open');
         assert.equal(await sessions.locator('tr[data-session-id]').count(), 1);
         await sessions.getByLabel('Status').selectOption('closed');
         await sessions.getByLabel('Cashier', {exact: true}).selectOption('2');
+        await sessions.locator('[data-open-dialog="gcash-session-filter-dialog"]').click();
         await sessions.getByLabel('Start date').fill('2026-10-22');
         await sessions.getByLabel('End date').fill('2026-10-22');
-        await sessions.getByRole('button', {name: 'Apply filters'}).click();
+        await sessions.locator('#gcash-session-filter-dialog [type="submit"]').click();
         await admin.waitForURL(url => url.searchParams.get('session_from') === '2026-10-22');
         assert.equal(await sessions.locator('tr[data-session-id]').count(), 1);
         assert.match(await sessions.locator('[data-session-id="1"]').innerText(), /₱100.00/);

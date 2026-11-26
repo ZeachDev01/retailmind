@@ -366,6 +366,7 @@ if ($hasStoreConfigurationNav) {
                 <div class="page-heading-title">
                     <h1><?= htmlspecialchars($pageTitle) ?></h1>
                 </div>
+                <?php if (!$canViewPlatformAudit): ?>
                 <form method="POST" class="audit-log-export-form" id="auditLogExportForm">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="export_csv">
@@ -379,6 +380,7 @@ if ($hasStoreConfigurationNav) {
                     <input type="hidden" name="table_request" id="exportTableRequest" value="{}">
                     <button type="submit" class="btn btn-quiet"><i class="bi bi-download" aria-hidden="true"></i> Export CSV</button>
                 </form>
+                <?php endif; ?>
             </header>
 
             <?php if ($activeFilters !== []): ?>
@@ -515,7 +517,7 @@ if ($hasStoreConfigurationNav) {
                     <a class="btn btn-quiet" href="<?= htmlspecialchars(app_url('components/system_administrator/audit_logs.php')) ?>">Clear</a>
                 </form>
                 <p id="audit-table-error" class="alert tag-danger" role="alert" hidden></p>
-                <noscript><p>Enable JavaScript to search and browse record history. Export CSV remains available.</p></noscript>
+                <noscript><p>Enable JavaScript to search and browse record history.<?php if (!$canViewPlatformAudit): ?> Export CSV remains available.<?php endif; ?></p></noscript>
                 <div class="table-wrap audit-log-table-wrap audit-history-wrap">
                     <table id="auditLogsTable" class="audit-log-table display" data-no-smart-table aria-label="Audit logs">
                         <caption class="visually-hidden">System audit log history with event details and timestamps</caption>
@@ -576,7 +578,7 @@ if ($hasStoreConfigurationNav) {
 
             if (typeof DataTable === 'undefined') {
                 var unavailable = document.getElementById('audit-table-error');
-                unavailable.textContent = 'Record history could not be loaded. Reload the page and try again. Export CSV remains available.';
+                unavailable.textContent = <?= json_encode('Record history could not be loaded. Reload the page and try again.' . ($canViewPlatformAudit ? '' : ' Export CSV remains available.')) ?>;
                 unavailable.hidden = false;
                 return;
             }
@@ -585,15 +587,15 @@ if ($hasStoreConfigurationNav) {
             var exportForm = document.getElementById('auditLogExportForm');
             var exportRequest = document.getElementById('exportTableRequest');
             var tableError = document.getElementById('audit-table-error');
-            var exportButton = exportForm.querySelector('button');
+            var exportButton = exportForm ? exportForm.querySelector('button') : null;
             var lastRequest = {};
             var tableReady = false;
-            exportButton.disabled = true;
+            if (exportButton) exportButton.disabled = true;
 
             function showAuditLoadError() {
                 table.processing(false);
                 tableReady = false;
-                exportButton.disabled = true;
+                if (exportButton) exportButton.disabled = true;
                 matchingRecords.textContent = '-';
                 tableError.textContent = 'Records could not be loaded. Reload the page and try again.';
                 tableError.hidden = false;
@@ -687,11 +689,11 @@ if ($hasStoreConfigurationNav) {
 
             document.querySelector('#auditLogsTable_wrapper .dt-search input').addEventListener('input', function() {
                 tableReady = false;
-                exportButton.disabled = true;
+                if (exportButton) exportButton.disabled = true;
             });
             table.on('preXhr', function() {
                 tableReady = false;
-                exportButton.disabled = true;
+                if (exportButton) exportButton.disabled = true;
                 tableError.hidden = true;
             });
             table.on('draw', function() {
@@ -699,11 +701,11 @@ if ($hasStoreConfigurationNav) {
                 if (!result || result.error) return;
                 matchingRecords.textContent = result.recordsFiltered;
                 lastRequest = table.ajax.params();
-                exportRequest.value = JSON.stringify(lastRequest);
+                if (exportRequest) exportRequest.value = JSON.stringify(lastRequest);
                 tableReady = true;
-                exportButton.disabled = false;
+                if (exportButton) exportButton.disabled = false;
             });
-            exportForm.addEventListener('submit', function(event) {
+            if (exportForm) exportForm.addEventListener('submit', function(event) {
                 if (!tableReady || table.search() !== lastRequest.search.value) {
                     event.preventDefault();
                     tableError.textContent = 'Wait for the search results before exporting.';

@@ -88,6 +88,7 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Open cashier shifts: uncached `components/auth/shift_status.php`, `open-cashier-shifts.js`, and `app/Views/open_cashier_shifts.php`; refreshes every 30 seconds independently of sales periods.
 - **GCash Admin Overview**: `components/administrator/gcash_overview.php` (API: `gcash_overview_api.php`, fragments: `gcash_overview_fragments.php`)
   - Backing JS: `gcash-admin-overview.js`
+  - Main tabs: Overview, Transactions, Sessions, Fund movements. Transactions opens the global Unresolved exchanges drawer; Sessions opens Closing checks. Legacy review tab URLs remain supported. Report/session custom dates and secondary record details use drawers. Scope and verification: `docs/discussions/gcash-compact-navigation.md`, `gcash_admin_tabs_browser_test.js`, `gcash_session_history_browser_test.js`, `gcash_fund_movements_integration_browser_test.js`.
   - Backend Services: `App\Services\GCashTransactionService`, `App\GCash\AdminOverviewReport`
 - **Store Management**:
   - Register Counters: `components/administrator/registers.php` (`App\Services\RegisterService`)

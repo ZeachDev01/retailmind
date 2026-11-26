@@ -35,7 +35,7 @@ use App\Support\OperatorAlert;
                 $paginationFilters += ['session_cashier' => $cashierId, 'session_status' => $status, 'session_from' => $from, 'session_to' => $to];
         ?>
             <div class="gcash-transaction-filters">
-            <form method="get" action="<?= $escape($path) ?>" class="gcash-filter-bar">
+            <form method="get" action="<?= $escape($path) ?>" class="gcash-filter-bar gcash-compact-filter-bar">
                 <input type="hidden" name="tab" value="sessions">
                 <input type="hidden" name="session_length" value="<?= $pageSize ?>">
                 <div class="gcash-field">
@@ -47,6 +47,8 @@ use App\Support\OperatorAlert;
                         <?php endforeach; ?>
                     </select>
                 </div>
+                <dialog id="gcash-session-filter-dialog" class="gcash-filter-drawer" aria-labelledby="gcash-session-filter-title">
+                <div class="pos-panel-header"><h2 id="gcash-session-filter-title">Session dates</h2><button type="button" class="btn btn-secondary" data-close-dialog>Close</button></div>
                 <div class="gcash-field">
                     <label class="gcash-filter-label" for="gcash-session-from">Start date</label>
                     <input class="form-control" type="date" id="gcash-session-from" name="session_from" value="<?= $escape($from) ?>">
@@ -55,6 +57,8 @@ use App\Support\OperatorAlert;
                     <label class="gcash-filter-label" for="gcash-session-to">End date</label>
                     <input class="form-control" type="date" id="gcash-session-to" name="session_to" value="<?= $escape($to) ?>">
                 </div>
+                <div class="gcash-actions"><button type="submit" class="btn btn-primary">Apply filters</button></div>
+                </dialog>
                 <div class="gcash-field">
                     <label class="gcash-filter-label" for="gcash-session-state">Status</label>
                     <select class="form-control" id="gcash-session-state" name="session_status">
@@ -64,6 +68,7 @@ use App\Support\OperatorAlert;
                     </select>
                 </div>
                 <div class="gcash-actions gcash-filter-actions">
+                    <button type="button" class="btn btn-secondary" data-open-dialog="gcash-session-filter-dialog" aria-haspopup="dialog">Filters<?= $from !== '' || $to !== '' ? ' · Dates selected' : '' ?></button>
                     <button type="submit" class="btn btn-primary">Apply filters</button>
                     <a class="btn btn-secondary" href="<?= $escape($path . '?tab=sessions&session_length=' . $pageSize) ?>">Reset filters</a>
                 </div>

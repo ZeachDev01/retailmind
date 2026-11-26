@@ -48,7 +48,7 @@ try {
     $pdo->exec('CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER, is_primary INTEGER)');
     $pdo->exec("CREATE TABLE users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        full_name TEXT NOT NULL,
+        display_name TEXT NOT NULL,
         username TEXT NOT NULL UNIQUE,
         email TEXT NULL UNIQUE,
         password_hash TEXT NOT NULL,
@@ -96,7 +96,7 @@ try {
             ->format('Y-m-d H:i:s');
 
     $insert = $pdo->prepare(
-        'INSERT INTO users (user_id, full_name, username, email, password_hash, role_id, status,
+        'INSERT INTO users (user_id, display_name, username, email, password_hash, role_id, status,
                             is_recovery_account, last_login_at, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );

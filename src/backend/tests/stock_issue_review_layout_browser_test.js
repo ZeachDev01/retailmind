@@ -97,8 +97,8 @@ const sql = code => {
         await page.getByRole('link', {name:/Record Stock Issue/}).click();
         const choose = async () => {
             const barcode = sql("echo $pdo->query('SELECT barcode FROM products WHERE product_id=1')->fetchColumn();");
-            await page.locator('#barcode-input').fill(barcode);
-            await page.locator('#barcode-input').press('Enter');
+            await page.locator('#product-search').fill(barcode);
+            await page.locator('#product-search').press('Enter');
             await page.locator('#selected-product').waitFor({state:'visible'});
             assert.equal(await page.locator('#product_id').inputValue(), '1');
         };
@@ -232,8 +232,8 @@ const sql = code => {
         // Direct sealed packs use the same atomic batch conversion.
         sql("$pdo->exec(\"UPDATE products SET pack_size=6,pack_barcode='DIRECT-PACK',pack_price=30 WHERE product_id=1\"); $pdo->exec('UPDATE inventory SET quantity_on_hand=60 WHERE product_id=1'); $pdo->exec('UPDATE product_batches SET quantity=60,remaining_quantity=60,sealed_quantity=10,loose_quantity=0 WHERE product_id=1');");
         await page.goto(origin+'/components/inventory_management/stock_issues.php?issue_view=record');
-        await page.locator('#barcode-input').fill('DIRECT-PACK');
-        await page.locator('#barcode-input').press('Enter');
+        await page.locator('#product-search').fill('DIRECT-PACK');
+        await page.locator('#product-search').press('Enter');
         await page.locator('#selected-product').waitFor({state:'visible'});
         assert.equal(await page.locator('#form').inputValue(),'pack');
         await page.locator('#category').selectOption('damaged');
@@ -298,8 +298,8 @@ const sql = code => {
         assert.equal(await cashier.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
         await cashier.screenshot({path:path.join(output,'cashier-390.png'),fullPage:true});
         const stockBeforeReport = sql("echo $pdo->query('SELECT quantity_on_hand FROM inventory WHERE product_id=1')->fetchColumn();");
-        await cashier.locator('#barcode-input').fill('DIRECT-PACK');
-        await cashier.locator('#barcode-input').press('Enter');
+        await cashier.locator('#product-search').fill('DIRECT-PACK');
+        await cashier.locator('#product-search').press('Enter');
         await cashier.locator('#selected-product').waitFor({state:'visible'});
         await cashier.locator('#category').selectOption('damaged');
         await cashier.locator('#quantity').fill('2');
@@ -365,8 +365,8 @@ const sql = code => {
         await shortcut.focus();
         await Promise.all([cashier.waitForURL(managerIssuesUrl + '?issue_view=record'), cashier.keyboard.press('Enter')]);
         await cashier.getByRole('button', {name: 'Record & deduct stock', exact: true}).waitFor();
-        await cashier.locator('#barcode-input').fill('DIRECT-PACK');
-        await cashier.locator('#barcode-input').press('Enter');
+        await cashier.locator('#product-search').fill('DIRECT-PACK');
+        await cashier.locator('#product-search').press('Enter');
         await cashier.locator('#selected-product').waitFor({state: 'visible'});
         await cashier.locator('#category').selectOption('damaged');
         await cashier.locator('#quantity').fill('1');

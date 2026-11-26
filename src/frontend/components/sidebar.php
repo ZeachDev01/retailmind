@@ -5,6 +5,13 @@ $role = current_role();
 $notificationCount = 0;
 try {
     if (isset($pdo, $_SESSION['user_id'])) {
+        (new \App\Services\FiscalPeriodClosingReminder($pdo))->synchronize((int)$_SESSION['user_id'], $role);
+    }
+} catch (Throwable $e) {
+    error_log('Fiscal closing reminders unavailable: ' . $e->getMessage());
+}
+try {
+    if (isset($pdo, $_SESSION['user_id'])) {
         $notificationCount = get_notification_count($pdo, (int)$_SESSION['user_id']);
     }
 } catch (Throwable $e) {
@@ -544,6 +551,10 @@ cartWorkspace.bindNavigation();
 </script>
 <?php if ($role === 'cashier'): ?>
 <script src="<?= sidebar_e(app_url('assets/js/shift-reminder.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/shift-reminder.js')) ?>" data-endpoint="<?= sidebar_e(app_url('components/auth/shift_status.php')) ?>" data-close-url="<?= sidebar_e(app_url('components/cashier/shifts.php?tab=close')) ?>" data-cashier="<?= (int)$_SESSION['user_id'] ?>"></script>
+<?php endif; ?>
+
+<?php if (in_array($role, ['admin', 'cashier', 'inventory_manager'], true)): ?>
+<script src="<?= sidebar_e(app_url('assets/js/fiscal-closing-reminder.js') . '?v=' . filemtime(__DIR__ . '/../assets/js/fiscal-closing-reminder.js')) ?>" data-endpoint="<?= sidebar_e(app_url('components/auth/fiscal_closing_status.php')) ?>" data-tasks-url="<?= sidebar_e(app_url('components/notification/notifications.php?category=fiscal_period')) ?>" data-user="<?= (int)$_SESSION['user_id'] ?>" data-workspace="<?= sidebar_e($role) ?>"></script>
 <?php endif; ?>
 
 <link rel="stylesheet" href="<?= sidebar_e(app_url('assets/css/backup.css')) ?>">

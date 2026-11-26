@@ -14,16 +14,16 @@ final class AttentionNotificationService
     }
 
     /** @param AttentionItem[] $items */
-    public function synchronize(int $userId, array $items, bool $createInApp = true, string $scope = ''): AttentionRefreshResult
+    public function synchronize(int $userId, array $items, bool $createInApp = true, string $scope = '', bool $queueEmail = true): AttentionRefreshResult
     {
         if ($this->pdo->inTransaction()) {
-            return $this->synchronizeInTransaction($userId, $items, $createInApp, $scope);
+            return $this->synchronizeInTransaction($userId, $items, $createInApp, $scope, $queueEmail);
         }
 
         for ($attempt = 0; $attempt < 2; $attempt++) {
             $this->pdo->beginTransaction();
             try {
-                $result = $this->synchronizeInTransaction($userId, $items, $createInApp, $scope);
+                $result = $this->synchronizeInTransaction($userId, $items, $createInApp, $scope, $queueEmail);
                 $this->pdo->commit();
                 return $result;
             } catch (Throwable $exception) {
@@ -41,7 +41,7 @@ final class AttentionNotificationService
     }
 
     /** @param AttentionItem[] $items */
-    private function synchronizeInTransaction(int $userId, array $items, bool $createInApp, string $scope): AttentionRefreshResult
+    private function synchronizeInTransaction(int $userId, array $items, bool $createInApp, string $scope, bool $queueEmail): AttentionRefreshResult
     {
         $currentKeys = [];
         $dashboardItems = [];
@@ -59,7 +59,7 @@ final class AttentionNotificationService
                 || $dashboardItem->notificationLevel() > (int)$state['notification_level'];
 
             if ($shouldNotify) {
-                $this->notify($userId, $dashboardItem, $createInApp || $item->required);
+                $this->notify($userId, $dashboardItem, $createInApp || $item->required, $queueEmail);
                 $newItems[] = $dashboardItem;
             }
             $this->activate($userId, $dashboardItem, $fingerprint, $state);
@@ -81,13 +81,13 @@ final class AttentionNotificationService
         return $state ?: null;
     }
 
-    private function notify(int $userId, AttentionItem $item, bool $inApp): void
+    private function notify(int $userId, AttentionItem $item, bool $inApp, bool $queueEmail): void
     {
         $statement = $this->pdo->prepare(
             'INSERT INTO notifications
                 (user_id, type, title, message, reference_id, reference_type, attention_key,
                  attention_severity, attention_count, attention_destination, is_read, created_at, workspace, inapp_enabled, email_pending)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 1)'
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)'
         );
         $statement->execute([
             $userId,
@@ -103,6 +103,7 @@ final class AttentionNotificationService
             $this->clock->now()->format('Y-m-d H:i:s'),
             self::workspace($item->key),
             (int)$inApp,
+            (int)$queueEmail,
         ]);
     }
 
@@ -144,7 +145,7 @@ final class AttentionNotificationService
         // Resolved conditions are no longer new or escalated, so their queued daily email is dropped.
         $unsend = $this->pdo->prepare(
             "UPDATE notifications SET email_pending = 0,
-                resolved_at = CASE WHEN type IN ('low_stock', 'expiring_stock', 'expired_stock')
+                resolved_at = CASE WHEN type IN ('low_stock', 'expiring_stock', 'expired_stock', 'fiscal_period')
                     THEN COALESCE(resolved_at, ?) ELSE resolved_at END
              WHERE user_id = ? AND attention_key = ?"
         );

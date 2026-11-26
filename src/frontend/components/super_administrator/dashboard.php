@@ -84,11 +84,6 @@ $warningAttentionCount = count(array_filter(
     $attentionItems,
     static fn(array $item): bool => ($item['severity'] ?? '') === 'warning'
 ));
-$continuityIssueCount = count(array_filter(
-    $dashboard['continuity'] ?? [],
-    static fn(array $item): bool => !($item['ok'] ?? false) && ($item['status'] ?? '') !== 'info'
-));
-$storeNotStarted = ($dashboard['continuity']['sales_flowing']['status'] ?? '') === 'info';
 
 $backup = $dashboard['headline']['latest_backup'] ?? ['status' => 'warning', 'value' => 'Not available'];
 $backupDate = $backup['value'] === 'Not available' ? 'No backup yet' : $formatDate((string)$backup['value']);
@@ -311,9 +306,6 @@ foreach (['platform_health', 'ml_health'] as $serviceKey) {
                         <div class="panel-header-title">
                             <h2 id="status-heading">Platform status</h2>
                         </div>
-                        <span class="continuity-chip <?= $storeNotStarted ? 'is-info' : ($continuityIssueCount === 0 ? 'is-good' : 'is-warn') ?>">
-                            <?= $storeNotStarted ? 'Store not started' : ($continuityIssueCount === 0 ? 'Store continuity nominal' : $escape((string)$continuityIssueCount) . ' continuity gaps') ?>
-                        </span>
                     </div>
 
                     <div class="services-group">
@@ -357,22 +349,6 @@ foreach (['platform_health', 'ml_health'] as $serviceKey) {
                         </a>
                     </div>
 
-                    <?php if (!empty($dashboard['continuity'])): ?>
-                    <div class="continuity-section">
-                        <h3 class="record-section-title">Store continuity</h3>
-                        <div class="continuity-list">
-                            <?php foreach ($dashboard['continuity'] as $metric): ?>
-                                <div class="continuity-row <?= ($metric['status'] ?? '') === 'info' ? 'is-info' : (($metric['ok'] ?? false) ? 'is-ok' : 'is-warn') ?>">
-                                    <span class="continuity-dot" aria-hidden="true"></span>
-                                    <div class="continuity-copy">
-                                        <strong><?= $escape($metric['label']) ?></strong>
-                                        <p><?= $escape($metric['detail'] ?? '') ?></p>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                    <?php endif; ?>
                 </section>
 
             </div>
