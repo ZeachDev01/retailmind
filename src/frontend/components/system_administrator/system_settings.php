@@ -11,6 +11,7 @@ $generatedTunnelBlock = '';
 $generatedTunnelBlockType = '';
 $dormancyPolicyService = new \App\Authorization\DormancyPolicyService($pdo);
 $scheduledBackupSettings = new \App\Backup\ScheduledBackupSettings($pdo);
+$canChooseBackupDestination = \App\Backup\BackupDestinationBrowser::isStorePcRequest($_SERVER);
 $appRoot = (string)(realpath(dirname(__DIR__, 4)) ?: dirname(__DIR__, 4));
 $localAppPort = 80;
 $appUrlPort = parse_url((string)env('APP_URL', ''), PHP_URL_PORT);
@@ -23,6 +24,22 @@ if (is_int($appUrlPort) && $appUrlPort > 0) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     $action = (string)($_POST['action'] ?? 'save');
+    if ($action === 'browse_backup_destination') {
+        header('Content-Type: application/json; charset=utf-8');
+        if (!$canChooseBackupDestination) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Choose the Backup Destination using localhost on the Store PC.']);
+            exit;
+        }
+        try {
+            echo json_encode(\App\Backup\BackupDestinationBrowser::listing(trim((string)($_POST['path'] ?? ''))), JSON_THROW_ON_ERROR);
+        } catch (Throwable $exception) {
+            http_response_code(422);
+            echo json_encode(['error' => $exception instanceof InvalidArgumentException
+                ? $exception->getMessage() : 'Store PC folders are unavailable. Try again.']);
+        }
+        exit;
+    }
     try {
         if ($action === 'save_dormancy') {
             $updates = [
@@ -34,10 +51,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'Dormancy Policy thresholds saved.';
             $messageClass = 'tag-success';
         } elseif ($action === 'save_backup_schedule') {
+            $destination = trim((string)($_POST['backup_destination_path'] ?? ''));
+            if (!$canChooseBackupDestination && $destination !== (string)$scheduledBackupSettings->get()['destination_configured']) {
+                http_response_code(403);
+                throw new InvalidArgumentException('Change the Backup Destination using localhost on the Store PC.');
+            }
             $updates = [
                 'weekday' => trim((string)($_POST['backup_schedule_weekday'] ?? '')),
                 'time' => trim((string)($_POST['backup_schedule_time'] ?? '')),
-                'destination' => trim((string)($_POST['backup_destination_path'] ?? '')),
+                'destination' => $destination,
             ];
             $scheduledBackupSettings->update((string)current_role(), $updates, (int)$_SESSION['user_id']);
             log_activity($pdo, (int)$_SESSION['user_id'], 'Scheduled backup settings updated', 'Platform Settings', null, null, $updates);
@@ -390,7 +412,7 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
                     <span class="settings-meta-value"><span class="tag <?= htmlspecialchars(\App\Backup\ScheduledBackupSettings::outcomeClass((string)$backupSchedule['last_outcome'])) ?>"><?= htmlspecialchars(\App\Backup\ScheduledBackupSettings::outcomeLabel((string)$backupSchedule['last_outcome'])) ?></span></span>
                 </div>
             </div>
-            <form method="post">
+            <form method="post" id="backup-schedule-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="save_backup_schedule">
                 <div class="form-grid">
@@ -408,14 +430,45 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
                     </div>
                     <div class="form-group">
                         <label for="backup_destination_path">Backup Destination</label>
-                        <input type="text" id="backup_destination_path" name="backup_destination_path" spellcheck="false" autocomplete="off" value="<?= htmlspecialchars((string)$backupSchedule['destination_configured']) ?>" placeholder="<?= htmlspecialchars((string)$backupSchedule['destination']) ?>">
-                        <span class="backup-hint">Use an absolute folder outside the application and web root. Leave blank to use the private recovery store.</span>
+                        <div class="backup-destination-control">
+                            <input type="text" id="backup_destination_path" name="backup_destination_path" spellcheck="false" autocomplete="off" value="<?= htmlspecialchars((string)$backupSchedule['destination_configured']) ?>" placeholder="<?= htmlspecialchars((string)$backupSchedule['destination']) ?>" aria-describedby="backup-destination-hint"<?= !$canChooseBackupDestination ? ' readonly' : '' ?>>
+                            <?php if ($canChooseBackupDestination): ?>
+                            <button type="button" class="btn btn-secondary" id="backup-choose-folder" aria-haspopup="dialog" aria-controls="backup-folder-dialog"><i class="bi bi-folder2-open" aria-hidden="true"></i> Choose folder</button>
+                            <?php endif; ?>
+                        </div>
+                        <span class="backup-hint" id="backup-destination-hint"><?= $canChooseBackupDestination ? 'Choose a folder on this Store PC outside the application and web root. Leave blank to use the private recovery store.' : 'Saved on the Store PC. To change this folder, open RetailMind through localhost on the Store PC.' ?></span>
                     </div>
                 </div>
                 <div class="form-actions u-mt-1">
                     <button type="submit" class="btn btn-primary"><i class="bi bi-calendar-check" aria-hidden="true"></i> Save schedule</button>
                 </div>
             </form>
+            <?php if ($canChooseBackupDestination): ?>
+            <dialog id="backup-folder-dialog" class="backup-folder-dialog" aria-labelledby="backup-folder-title" aria-describedby="backup-folder-description">
+                <div class="backup-folder-heading">
+                    <h3 id="backup-folder-title">Choose a folder on the Store PC</h3>
+                    <button type="button" class="btn btn-secondary" data-folder-close aria-label="Close folder selector"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                </div>
+                <p id="backup-folder-description">Weekly backups will be saved here. Click Save schedule after choosing.</p>
+                <form id="backup-folder-path-form" class="backup-folder-path-form">
+                    <label for="backup-folder-path">Store PC folder path</label>
+                    <div class="backup-destination-control">
+                        <input type="text" id="backup-folder-path" spellcheck="false" autocomplete="off" placeholder="Enter a folder path">
+                        <button type="submit" class="btn btn-secondary">Open</button>
+                    </div>
+                </form>
+                <div class="backup-folder-navigation">
+                    <button type="button" class="btn btn-secondary" id="backup-folder-drives">Drives</button>
+                    <button type="button" class="btn btn-secondary" id="backup-folder-up" disabled><i class="bi bi-arrow-up" aria-hidden="true"></i> Up</button>
+                </div>
+                <p id="backup-folder-status" role="status" aria-live="polite"></p>
+                <div id="backup-folder-list" class="backup-folder-list" aria-label="Store PC folders" aria-busy="false"></div>
+                <div class="backup-folder-actions">
+                    <button type="button" class="btn btn-secondary" data-folder-close>Cancel</button>
+                    <button type="button" class="btn btn-primary" id="backup-folder-use" disabled>Use this folder</button>
+                </div>
+            </dialog>
+            <?php endif; ?>
         </section>
 
         <section class="dashboard-section" data-platform-section="email" aria-labelledby="email-heading"<?= $activePlatformSection !== 'email' ? ' hidden' : '' ?>>
@@ -705,5 +758,6 @@ if (!isset($platformSections[$activePlatformSection])) $activePlatformSection = 
 ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES) ?></script>
 <script src="<?= htmlspecialchars(theme_url('assets/js/remote-access-toggle.js')) ?>"></script>
 <script src="<?= htmlspecialchars(theme_url('assets/js/info-tooltip.js')) ?>"></script>
+<script src="<?= htmlspecialchars(theme_url('assets/js/backup-destination-picker.js')) ?>"></script>
 </body>
 </html>

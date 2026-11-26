@@ -521,6 +521,10 @@ unset($_SESSION['_login_username']);
     <script src="<?= htmlspecialchars(landing_app_url('assets/vendor/sweetalert2/sweetalert2.all.min.js'), ENT_QUOTES, 'UTF-8') ?>" defer></script>
     <script>window.RM_DEBUG = <?= !empty($GLOBALS['app']['debug']) ? 'true' : 'false' ?>;</script>
     <script src="<?= htmlspecialchars(landing_app_url('assets/js/ui.js?v=' . filemtime(__DIR__ . '/assets/js/ui.js')), ENT_QUOTES, 'UTF-8') ?>" defer></script>
+    <?php if (($_GET['session'] ?? '') === 'replaced'): ?>
+    <script src="<?= htmlspecialchars(landing_app_url('assets/js/session-replaced.js?v=' . filemtime(__DIR__ . '/assets/js/session-replaced.js')), ENT_QUOTES, 'UTF-8') ?>"
+        data-login="<?= $loginUrl ?>" data-recovery="<?= $forgotPasswordUrl ?>" defer></script>
+    <?php endif; ?>
     <script src="<?= htmlspecialchars(landing_app_url('assets/js/landing-motion.js?v=' . filemtime(__DIR__ . '/assets/js/landing-motion.js')), ENT_QUOTES, 'UTF-8') ?>" defer></script>
     <script>
         (function() {
@@ -966,6 +970,13 @@ unset($_SESSION['_login_username']);
             }
         })();
     </script>
+    <?php if (isset($_SESSION['_cashier_login_pending'])): ?>
+    <script id="rm-cashier-login" type="application/json"><?= json_encode([
+        'endpoint' => landing_app_url('components/auth/cashier_login.php'),
+        'csrf' => csrf_token(),
+    ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+    <script src="<?= htmlspecialchars(landing_app_url('assets/js/cashier-login.js?v=' . filemtime(__DIR__ . '/assets/js/cashier-login.js')), ENT_QUOTES, 'UTF-8') ?>"></script>
+    <?php endif; ?>
     <script src="<?= htmlspecialchars(landing_app_url('assets/js/sw-register.js'), ENT_QUOTES, 'UTF-8') ?>" data-sw="<?= htmlspecialchars(landing_app_url('sw.js'), ENT_QUOTES, 'UTF-8') ?>" data-scope="<?= htmlspecialchars(landing_app_url('/'), ENT_QUOTES, 'UTF-8') ?>" defer></script>
 </body>
 

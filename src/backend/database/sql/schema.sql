@@ -2177,6 +2177,17 @@ INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180002_
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180003_product_sku_provenance','Record whether a Product SKU follows its Individual Item barcode') ON DUPLICATE KEY UPDATE description=VALUES(description);
 INSERT INTO schema_migrations (migration_key,description) VALUES ('202611180005_product_image_source','Keep attribution for saved Open Food Facts Product photos') ON DUPLICATE KEY UPDATE description=VALUES(description);
 
+CREATE TABLE `cashier_login_sessions` (
+  `user_id` INT PRIMARY KEY,
+  `owner_hash` VARCHAR(64) NOT NULL,
+  `session_version` INT NOT NULL,
+  `authenticated_at` BIGINT NOT NULL,
+  `last_activity` BIGINT NOT NULL,
+  `pending_hash` VARCHAR(64) NULL,
+  `pending_until` BIGINT NULL,
+  `approved` INT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `refund_return_condition_corrections` (
   `correction_id` INT AUTO_INCREMENT PRIMARY KEY,
   `refund_item_id` INT NOT NULL,

@@ -43,9 +43,14 @@ try {
     eval($roleNamesCode);
     eval($loginCode);
     eval($errorCode);
+    foreach (['current_role', 'current_roles', 'current_workspace_roles', 'complete_staff_login'] as $dependency) {
+        eval($extract($dependency));
+    }
 
     $pdo = new PDO('sqlite::memory:');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $migration = require __DIR__ . '/../database/migrations/202611260001_cashier_login_sessions.php';
+    $migration['up']($pdo);
     $pdo->exec("CREATE TABLE branches (
         branch_id INTEGER PRIMARY KEY AUTOINCREMENT,
         branch_name TEXT NOT NULL UNIQUE,
@@ -62,7 +67,11 @@ try {
     )");
     $pdo->exec("CREATE TABLE users (
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        full_name TEXT NOT NULL,
+        full_name TEXT NULL,
+        first_name TEXT NULL,
+        last_name TEXT NULL,
+        display_name TEXT NULL,
+        last_workspace_role TEXT NULL,
         username TEXT NOT NULL UNIQUE,
         email TEXT NULL UNIQUE,
         profile_image TEXT NULL,
@@ -111,8 +120,8 @@ try {
     };
     $cashierRole = $roleId('cashier');
     $insertUser = static function (string $fullName, string $username, ?string $email, string $password, string $status = 'active') use ($pdo, $cashierRole): int {
-        $stmt = $pdo->prepare("INSERT INTO users (full_name, username, email, password_hash, role_id, status, must_change_password) VALUES (?, ?, ?, ?, ?, ?, 0)");
-        $stmt->execute([$fullName, $username, $email, password_hash($password, PASSWORD_DEFAULT), $cashierRole, $status]);
+        $stmt = $pdo->prepare("INSERT INTO users (full_name, display_name, username, email, password_hash, role_id, status, must_change_password) VALUES (?, ?, ?, ?, ?, ?, ?, 0)");
+        $stmt->execute([$fullName, $fullName, $username, $email, password_hash($password, PASSWORD_DEFAULT), $cashierRole, $status]);
         return (int)$pdo->lastInsertId();
     };
 
@@ -132,7 +141,8 @@ try {
     $recovery->activate('offline-activation-secret-0001');
     $pdo->prepare('UPDATE users SET email = ? WHERE user_id = ?')->execute(['Recovery@Store.test', $recoveryId]);
 
-    $resetSession = static function (): void {
+    $resetSession = static function () use ($pdo): void {
+        $pdo->exec('DELETE FROM cashier_login_sessions');
         $_SESSION = [];
     };
     $lastAudit = static function () use ($pdo): array {
@@ -271,7 +281,7 @@ try {
     // correct autocomplete hint, typed value kept on failure.
     $landing = (string)@file_get_contents($root . '/src/frontend/index.php');
     $assert(str_contains($landing, '<label for="landing-login-username">Username or email</label>'), 'Login box must be labelled "Username or email"');
-    $assert(str_contains($landing, 'placeholder="Enter your username or email"'), 'Login box must hint both identifiers in its placeholder');
+    $assert((bool)preg_match('/placeholder="[^\"]*username or email[^\"]*"/i', $landing), 'Login box must hint both identifiers in its placeholder');
     $assert(str_contains($landing, 'name="username"'), 'Login box must keep the same POST key to avoid handler churn');
     $assert(str_contains($landing, 'autocomplete="username"'), 'Login box must keep the username autocomplete hint');
     $assert(str_contains($landing, '$_SESSION[\'_login_username\']'), 'Typed Login Identifier must be stored for failure repopulation');

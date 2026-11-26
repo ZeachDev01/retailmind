@@ -242,6 +242,7 @@ function user_role_names(PDO $pdo, int $userId, ?string $fallbackRole = null): a
 function login_user(PDO $pdo, string $identifier, string $password): bool
 {
     unset($_SESSION['_flash_login_success']);
+    unset($_SESSION['_cashier_login_pending']);
     $identifier = trim($identifier);
 
     $resolved = resolve_login_user($pdo, $identifier);
@@ -284,6 +285,68 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
     }
 
     if ($valid) {
+        $assignedRoles = user_role_names($pdo, (int)$user['user_id'], (string)$user['role_name']);
+        if ($user['role_name'] !== 'super_admin' && in_array('cashier', $assignedRoles, true)) {
+            $token = bin2hex(random_bytes(32));
+            $state = (new App\Services\CashierLoginService($pdo))->request(
+                (int)$user['user_id'], (int)$user['session_version'], $token
+            );
+            if ($state !== 'ready') {
+                if ($state === 'waiting') {
+                    App\Core\Session::regenerate();
+                    $_SESSION['_cashier_login_pending'] = [
+                        'user_id' => (int)$user['user_id'], 'username' => $user['username'],
+                        'version' => (int)$user['session_version'], 'token' => $token,
+                        'until' => time() + 300,
+                    ];
+                }
+                $_SESSION['_login_error'] = $state === 'waiting'
+                    ? 'Confirm this login on your other device. This request expires in 5 minutes.'
+                    : 'Another login request is already waiting. Please try again shortly.';
+                return false;
+            }
+            $_SESSION['_cashier_login_token'] = $token;
+        }
+        return complete_staff_login($pdo, $user, $identifierType);
+    }
+
+    if ($user && $passwordMatches && $user['status'] !== 'active') {
+        $_SESSION['_login_error'] = 'This account has been disabled.';
+    } else {
+        $_SESSION['_login_error'] = 'Invalid username or password.';
+    }
+
+    log_activity(
+        $pdo,
+        $user ? (int)$user['user_id'] : null,
+        'Login failure',
+        'Authentication',
+        $user ? (int)$user['user_id'] : null,
+        null,
+        [
+            'username' => $identifier,
+            'identifier_type' => $identifierType,
+            'reason' => $user && $passwordMatches && $user['status'] !== 'active' ? 'inactive_account' : 'invalid_credentials',
+        ]
+    );
+    return false;
+}
+
+function complete_staff_login(PDO $pdo, array $user, string $identifierType): bool
+{
+    $singleSession = $user['role_name'] === 'super_admin';
+    if ($singleSession) {
+        $pdo->beginTransaction();
+    }
+    try {
+        if ($singleSession) {
+            // Publish the issued version and its login audit together across simultaneous logins.
+            $pdo->prepare('UPDATE users SET session_version = session_version + 1 WHERE user_id = ?')
+                ->execute([(int)$user['user_id']]);
+            $version = $pdo->prepare('SELECT session_version FROM users WHERE user_id = ?');
+            $version->execute([(int)$user['user_id']]);
+            $user['session_version'] = (int)$version->fetchColumn();
+        }
         if ((bool)$user['is_recovery_account']) {
             (new App\Services\RecoveryAccountService($pdo))->recordUse(
                 (int)$user['user_id'],
@@ -334,32 +397,28 @@ function login_user(PDO $pdo, string $identifier, string $password): bool
             'Authentication',
             (int)$user['user_id'],
             null,
-            ['username' => $user['username'], 'role' => $user['role_name'], 'action' => 'success', 'identifier_type' => $identifierType]
+            ['username' => $user['username'], 'role' => $user['role_name'], 'session_version' => (int)$user['session_version'], 'action' => 'success', 'identifier_type' => $identifierType]
         );
+        if ($singleSession) {
+            $pdo->commit();
+        }
         $_SESSION['_flash_login_success'] = 'Login successful! Welcome, ' . $user['username'] . '!';
         return true;
+    } catch (Throwable $exception) {
+        if ($singleSession) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            App\Core\Session::destroy();
+        } elseif (isset($_SESSION['_cashier_login_token'])) {
+            try {
+                (new App\Services\CashierLoginService($pdo))->release((int)$user['user_id'], $_SESSION['_cashier_login_token']);
+            } finally {
+                App\Core\Session::destroy();
+            }
+        }
+        throw $exception;
     }
-
-    if ($user && $passwordMatches && $user['status'] !== 'active') {
-        $_SESSION['_login_error'] = 'This account has been disabled.';
-    } else {
-        $_SESSION['_login_error'] = 'Invalid username or password.';
-    }
-
-    log_activity(
-        $pdo,
-        $user ? (int)$user['user_id'] : null,
-        'Login failure',
-        'Authentication',
-        $user ? (int)$user['user_id'] : null,
-        null,
-        [
-            'username' => $identifier,
-            'identifier_type' => $identifierType,
-            'reason' => $user && $passwordMatches && $user['status'] !== 'active' ? 'inactive_account' : 'invalid_credentials',
-        ]
-    );
-    return false;
 }
 
 function validate_current_session(PDO $pdo): void
@@ -381,10 +440,42 @@ function validate_current_session(PDO $pdo): void
     $stmt->execute([(int)$_SESSION['user_id']]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
     $sessionVersion = (int)($_SESSION['session_version'] ?? 0);
-    if (!$user || $user['status'] !== 'active' || (int)$user['session_version'] !== $sessionVersion) {
+    $cashierReplaced = false;
+    if ($user && $user['status'] === 'active' && (int)$user['session_version'] === $sessionVersion) {
+        $assignedRoles = user_role_names($pdo, (int)$_SESSION['user_id'], (string)$user['role_name']);
+        if ($user['role_name'] !== 'super_admin' && in_array('cashier', $assignedRoles, true)) {
+            $cashierReplaced = empty($_SESSION['_cashier_login_token'])
+                || !(new App\Services\CashierLoginService($pdo))->owns(
+                    (int)$_SESSION['user_id'], (string)$_SESSION['_cashier_login_token'], (int)$_SESSION['_last_activity']
+                );
+        }
+    }
+    if (!$user || $user['status'] !== 'active' || (int)$user['session_version'] !== $sessionVersion || $cashierReplaced) {
+        $reason = 'session_invalid';
+        if ($user && $user['status'] === 'active' && $user['role_name'] === 'super_admin'
+            && (int)$user['session_version'] > $sessionVersion) {
+            // A password change or administrative revocation alone is not a replacement login.
+            try {
+                $login = $pdo->prepare("SELECT log_id FROM activity_log WHERE user_id = ? AND action = 'Login success'
+                    AND JSON_VALID(new_value) AND CAST(JSON_EXTRACT(new_value, '$.session_version') AS SIGNED) > ? LIMIT 1");
+                $login->execute([(int)$_SESSION['user_id'], $sessionVersion]);
+                if ($login->fetchColumn() !== false) {
+                    $reason = 'session_replaced';
+                }
+            } catch (PDOException $exception) {
+                error_log('Session replacement notice could not be resolved: ' . $exception->getMessage());
+            }
+        }
         App\Core\Session::destroy();
+        if (basename((string)($_SERVER['SCRIPT_NAME'] ?? '')) === 'session_activity.php') {
+            http_response_code(401);
+            header('Content-Type: application/json');
+            header('Cache-Control: no-store');
+            echo json_encode(['remaining' => 0, 'reason' => $reason]);
+            exit;
+        }
         if (!headers_sent()) {
-            header('Location: ' . app_url('?login=1&session=invalid'));
+            header('Location: ' . app_url('?login=1&session=' . ($reason === 'session_replaced' ? 'replaced' : 'invalid')));
         }
         exit;
     }
@@ -542,6 +633,10 @@ function store_product_scope(string $alias = 'p'): array
 
 function logout_user(): void
 {
+    global $pdo;
+    if (isset($_SESSION['user_id'], $_SESSION['_cashier_login_token'])) {
+        (new App\Services\CashierLoginService($pdo))->release((int)$_SESSION['user_id'], $_SESSION['_cashier_login_token']);
+    }
     App\Core\Session::destroy();
 }
 

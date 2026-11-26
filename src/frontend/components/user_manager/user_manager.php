@@ -12,8 +12,9 @@ $dormancyStatusTab = new DormancyStatusTab($pdo);
 $actorId = (int)$_SESSION['user_id'];
 $actorRole = (string)current_role();
 $pageTitle = $actorRole === 'super_admin' ? 'Users & Access' : 'Store Staff';
-$message = '';
-$messageClass = '';
+$message = (string)($_SESSION['_recovery_email_message'] ?? '');
+unset($_SESSION['_recovery_email_message']);
+$messageClass = $message === '' ? '' : 'tag-success';
 $createFormSubmitted = false;
 $createSucceeded = false;
 $createFormValues = ['first_name' => '', 'last_name' => '', 'username' => '', 'email' => '', 'role_ids' => []];
@@ -50,6 +51,36 @@ function role_names_for_ids(PDO $pdo, array $roleIds): array
 }
 
 $action = (string)($_POST['action'] ?? '');
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && in_array($action, ['request_recovery_email', 'verify_recovery_email'], true)) {
+    csrf_verify();
+    header('Content-Type: application/json; charset=UTF-8');
+    $_SESSION['_superadmin_email_challenge'] ??= [];
+    $challenge = &$_SESSION['_superadmin_email_challenge'];
+    try {
+        if ((int)($_POST['user_id'] ?? 0) !== $actorId) {
+            throw new DomainException('You can set only your own recovery email.');
+        }
+        if ($action === 'request_recovery_email') {
+            $lifecycle->requestRecoveryEmail($actorId, $actorRole, (string)($_POST['email'] ?? ''), (string)($_POST['current_password'] ?? ''), $challenge,
+                static function (string $email, string $code): bool {
+                    $body = "Your RetailMind recovery email verification code is: {$code}\n\nThis code expires in 15 minutes. After verification, this email address cannot be changed.\n\nIf you did not request this, do not share this code.";
+                    return send_email_notification($email, 'RetailMind recovery email verification', $body);
+                });
+            echo json_encode(['message' => 'Code sent. Enter it below to save and permanently lock this email.', 'email' => $challenge['email']]);
+        } else {
+            $lifecycle->verifyRecoveryEmail($actorId, $actorRole, trim((string)($_POST['code'] ?? '')), $challenge);
+            $_SESSION['_recovery_email_message'] = 'Recovery email verified and saved. This email cannot be changed.';
+            echo json_encode(['verified' => true]);
+        }
+    } catch (InvalidArgumentException | DomainException $exception) {
+        http_response_code(422);
+        echo json_encode(['error' => $exception->getMessage()]);
+    } catch (Throwable $exception) {
+        http_response_code(500);
+        echo json_encode(['error' => \App\Support\OperatorAlert::message($exception, 'The recovery email could not be saved or sent. Check email settings and try again.')]);
+    }
+    exit;
+}
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && (string)($_GET['action'] ?? '') === 'availability') {
     header('Content-Type: application/json; charset=UTF-8');
     try {
@@ -534,6 +565,19 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('userDrawerMeta').textContent = '@' + (button.dataset.username || '');
         const isSelf = button.dataset.isSelf === '1';
         const isSuper = button.dataset.isSuperAdmin === '1';
+        const canSetRecoveryEmail = isSelf && isSuper && <?= json_encode($actorRole === 'super_admin') ?> && !(button.dataset.email || '').trim();
+        const recoveryEmailSetup = document.getElementById('drawerRecoveryEmailSetup');
+        document.getElementById('drawerEmail').readOnly = !canSetRecoveryEmail;
+        document.getElementById('drawerEmailHelp').textContent = canSetRecoveryEmail
+            ? 'Optional. Verify below to save; this email cannot be changed afterward.'
+            : 'Email cannot be changed after the account is created.';
+        if (recoveryEmailSetup) {
+            recoveryEmailSetup.hidden = !canSetRecoveryEmail;
+            document.getElementById('drawerEmailCurrentPassword').value = '';
+            document.getElementById('drawerEmailCode').value = '';
+            document.getElementById('drawerEmailCodeGroup').hidden = true;
+            document.getElementById('drawerEmailFeedback').textContent = '';
+        }
         const isLastAdministrator = button.dataset.isLastAdministrator === '1';
         const accountLocked = button.dataset.accountLocked === '1';
         document.getElementById('drawerAdministratorMinimumHelp').hidden = !isLastAdministrator;
@@ -573,6 +617,68 @@ document.addEventListener('DOMContentLoaded', function () {
     }));
 
 
+
+    document.getElementById('drawerEmail')?.addEventListener('input', function () {
+        const group = document.getElementById('drawerEmailCodeGroup');
+        if (group) {
+            group.hidden = true;
+            document.getElementById('drawerEmailCode').value = '';
+            document.getElementById('drawerEmailFeedback').textContent = '';
+        }
+    });
+    ['drawerEmail', 'drawerEmailCurrentPassword', 'drawerEmailCode'].forEach(id => {
+        document.getElementById(id)?.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter' || document.getElementById('drawerRecoveryEmailSetup')?.hidden !== false) return;
+            event.preventDefault();
+            const action = id === 'drawerEmailCode' ? 'verify_recovery_email' : 'request_recovery_email';
+            document.querySelector('[data-recovery-email-action="' + action + '"]').click();
+        });
+    });
+    document.querySelectorAll('[data-recovery-email-action]').forEach(button => button.addEventListener('click', async function () {
+        const email = document.getElementById('drawerEmail');
+        const password = document.getElementById('drawerEmailCurrentPassword');
+        const code = document.getElementById('drawerEmailCode');
+        const feedback = document.getElementById('drawerEmailFeedback');
+        const requesting = button.dataset.recoveryEmailAction === 'request_recovery_email';
+        if (requesting && (!email.value.trim() || !email.reportValidity() || !password.value)) {
+            feedback.textContent = 'Enter a valid email and your current password.';
+            (email.value.trim() ? password : email).focus();
+            return;
+        }
+        if (!requesting && !/^[0-9]{6}$/.test(code.value.trim())) {
+            feedback.textContent = 'Enter the 6-digit verification code.';
+            code.focus();
+            return;
+        }
+        const data = new FormData();
+        const form = document.getElementById('userDrawerForm');
+        const token = form.querySelector('input[name="csrf_token"]');
+        data.set('csrf_token', token.value);
+        data.set('action', button.dataset.recoveryEmailAction);
+        data.set('user_id', document.getElementById('drawerUserId').value);
+        data.set('email', email.value.trim());
+        data.set('current_password', password.value);
+        data.set('code', code.value.trim());
+        const controls = document.querySelectorAll('[data-recovery-email-action]');
+        controls.forEach(control => { control.disabled = true; });
+        feedback.textContent = requesting ? 'Sending verification code…' : 'Verifying email…';
+        try {
+            const response = await fetch(window.location.pathname, {method: 'POST', body: data});
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Unable to verify email. Try again.');
+            password.value = '';
+            if (result.verified) { window.location.reload(); return; }
+            email.value = result.email;
+            document.getElementById('drawerEmailCodeGroup').hidden = false;
+            document.getElementById('drawerEmailPendingAddress').textContent = 'Code sent to ' + result.email + '. Expires in 15 minutes.';
+            feedback.textContent = result.message;
+            code.focus();
+        } catch (error) {
+            feedback.textContent = error.message;
+        } finally {
+            controls.forEach(control => { control.disabled = false; });
+        }
+    }));
 
     document.querySelectorAll('[data-password-toggle]').forEach(button => button.addEventListener('click', function () {
         const input = document.getElementById(button.dataset.passwordToggle);

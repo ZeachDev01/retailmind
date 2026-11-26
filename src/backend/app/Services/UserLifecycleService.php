@@ -201,6 +201,83 @@ final class UserLifecycleService
         });
     }
 
+    public function requestRecoveryEmail(int $actorId, string $actorRole, string $email, string $password, array &$challenge, callable $deliver): void
+    {
+        $user = $this->get($actorId);
+        $this->requireRecoveryEmailSetup($actorRole, $user);
+        $now = time();
+        if (($challenge['sent_at'] ?? 0) > $now - 60) {
+            throw new InvalidArgumentException('Please wait 60 seconds before requesting another code.');
+        }
+        // Throttle password guesses and failed deliveries as well as successful requests.
+        $challenge = ['sent_at' => $now];
+        if (!password_verify($password, (string)$user['password_hash'])) {
+            throw new InvalidArgumentException('Current password is incorrect.');
+        }
+        $email = trim($email);
+        if (strlen($email) > 100 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new InvalidArgumentException('Enter a valid email address of at most 100 characters.');
+        }
+        if ($this->existsByColumn('email', $email)) {
+            throw new InvalidArgumentException('This email address already belongs to an account.');
+        }
+        $code = (string)random_int(100000, 999999);
+        if (!$deliver($email, $code)) {
+            throw new \RuntimeException('The verification email could not be sent. Check email settings and try again.');
+        }
+        $challenge += [
+            'user_id' => $actorId,
+            'email' => $email,
+            'code_hash' => hash('sha256', $code),
+            'password_fingerprint' => hash('sha256', (string)$user['password_hash']),
+            'session_version' => (int)$user['session_version'],
+            'expires_at' => $now + 900,
+            'attempts' => 0,
+        ];
+    }
+
+    public function verifyRecoveryEmail(int $actorId, string $actorRole, string $code, array &$challenge): array
+    {
+        if (($challenge['user_id'] ?? 0) !== $actorId || ($challenge['expires_at'] ?? 0) <= time()
+            || ($challenge['attempts'] ?? 0) >= 5 || !isset($challenge['code_hash'])) {
+            throw new InvalidArgumentException('Request a new email verification code. The previous code has expired or reached its attempt limit.');
+        }
+        $challenge['attempts']++;
+        if (!preg_match('/^[0-9]{6}$/D', $code) || !hash_equals($challenge['code_hash'], hash('sha256', $code))) {
+            throw new InvalidArgumentException('Incorrect verification code. Check your inbox or request a new code.');
+        }
+        $after = $this->transaction(function () use ($actorId, $actorRole, $challenge): array {
+            $user = $this->get($actorId, true);
+            $this->requireRecoveryEmailSetup($actorRole, $user);
+            if (!hash_equals($challenge['password_fingerprint'], hash('sha256', (string)$user['password_hash']))
+                || $challenge['session_version'] !== (int)$user['session_version']) {
+                throw new InvalidArgumentException('Your account security changed. Request a new verification code.');
+            }
+            $statement = $this->pdo->prepare("UPDATE users SET email = ? WHERE user_id = ? AND (email IS NULL OR TRIM(email) = '')");
+            $statement->execute([$challenge['email'], $actorId]);
+            if ($statement->rowCount() !== 1) {
+                throw new DomainException('This account already has an email address. It cannot be changed.');
+            }
+            $after = $this->get($actorId);
+            $this->audit($actorId, $actorRole, 'Super Administrator recovery email verified', $actorId,
+                ['email' => $user['email']], ['email' => $after['email'], 'role' => 'super_admin']);
+            return $after;
+        });
+        $challenge = [];
+        return $after;
+    }
+
+    private function requireRecoveryEmailSetup(string $actorRole, array $user): void
+    {
+        if ($actorRole !== 'super_admin' || $user['role_name'] !== 'super_admin'
+            || (bool)$user['is_recovery_account'] || $user['status'] !== 'active') {
+            throw new DomainException('Only the primary Super Administrator can set its own recovery email.');
+        }
+        if (trim((string)$user['email']) !== '') {
+            throw new DomainException('This account already has an email address. It cannot be changed.');
+        }
+    }
+
     public function setStatus(int $actorId, string $actorRole, int $userId, string $status): array
     {
         if (!in_array($status, ['active', 'disabled'], true)) {

@@ -282,7 +282,7 @@ $checks = [
         'forbidden' => ['embed=1', 'data-embedded-close', 'fiscal-periods-embedded', "app_url('assets/css/fiscal-periods.css')"],
     ],
     'Fiscal periods use direct sidebar navigation' => [
-        'file' => 'src/frontend/components/administrator/store_configuration_nav.php',
+        'file' => 'src/frontend/components/sidebar.php',
         'needles' => ['components/system_administrator/fiscal_periods.php'],
         'forbidden' => ['data-fiscal-periods-open', 'fiscalPeriodsOverlay', 'fiscalPeriodsFrame'],
     ],

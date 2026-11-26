@@ -4,7 +4,6 @@ $storeConfigurationLinks = [
     ['checkout-stations', 'Checkout Stations', 'self_service_kiosk', 'components/administrator/registers.php'],
     ['attention-thresholds', 'Attention thresholds', 'high_priority', 'components/administrator/store_settings.php?section=attention-thresholds'],
     ['shift-reminders', 'Shift reminders', 'planner', 'components/administrator/store_settings.php?section=shift-reminders'],
-    ['fiscal-periods', 'Fiscal Periods', 'planner', 'components/system_administrator/fiscal_periods.php'],
     ['remote-access', 'Remote Access', 'deployment', 'components/administrator/store_settings.php?section=remote-access'],
     ['operational-audit', 'Operational Audit', 'inspection', 'components/system_administrator/audit_logs.php'],
     ['database-backup', 'Database Backup', 'data_backup', 'components/administrator/database_backup.php'],

@@ -285,6 +285,7 @@ $administratorSections = [
             ['path' => 'components/administrator/dashboard.php', 'icon' => 'shop', 'label' => 'Store Overview'],
             ['path' => 'components/administrator/gcash_overview.php', 'image' => 'assets/img/gcash-brandmark.svg', 'label' => 'GCash Overview'],
             ['path' => 'components/administrator/store_calendar.php', 'icon' => 'calendar', 'label' => 'Store Calendar'],
+            ['path' => 'components/system_administrator/fiscal_periods.php', 'icon' => 'planner', 'label' => 'Fiscal Periods'],
             ['icon' => 'business', 'label' => 'Store Management', 'items' => $administratorSystemItems],
             ['path' => 'components/inventory_management/promotions.php', 'icon' => 'advertising', 'label' => 'Promotions'],
             ['icon' => 'positive_dynamic', 'label' => 'Forecasting', 'items' => $administratorForecastingItems],

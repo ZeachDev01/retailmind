@@ -55,6 +55,13 @@ const fixture = action => {
             assert(await page.locator('body').evaluate(node => node.classList.contains('sidebar-collapsed')), role + ' collapsed');
 
             if (role === 'admin') {
+                const calendar = page.locator('.sidebar-nav a[href$="administrator/store_calendar.php"]');
+                const nextLink = await calendar.evaluate(node => {
+                    const next = node.nextElementSibling;
+                    return next ? {label: next.textContent.trim(), href: next.getAttribute('href')} : null;
+                });
+                assert.equal(nextLink?.label, 'Fiscal Periods', 'Fiscal Periods follows Store Calendar in the main sidebar');
+                assert.match(nextLink.href, /\/components\/system_administrator\/fiscal_periods\.php$/);
                 await page.goto('/components/administrator/store_settings.php');
                 for (const section of ['remote-access', 'attention-thresholds', 'store-receipts']) {
                     const sectionLink = section === 'store-receipts'
@@ -102,7 +109,9 @@ const fixture = action => {
                 await page.waitForURL('**/registers.php');
                 await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') !== 'true');
                 await collapseSidebar('Checkout Stations');
-                await page.locator('.settings-sidebar a[href*="fiscal_periods.php"]').click();
+                assert.equal(await page.locator('.settings-sidebar a[href*="fiscal_periods.php"]').count(), 0,
+                    'Fiscal Periods is moved out of Store Configuration');
+                await page.locator('.sidebar-nav a[href$="system_administrator/fiscal_periods.php"]').click();
                 await page.waitForURL('**/fiscal_periods.php');
                 await page.waitForFunction(() => document.querySelector('.main-content')?.getAttribute('aria-busy') !== 'true');
                 await collapseSidebar('Fiscal Periods');

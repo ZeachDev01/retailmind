@@ -454,3 +454,28 @@ html[data-theme="dark"] .remote-access-section .remote-mark[data-mark="ngrok"] s
         width: 100%;
     }
 }
+.backup-destination-control { display: flex; align-items: stretch; gap: .5rem; }
+.backup-destination-control input { min-width: 0; flex: 1; }
+.backup-destination-control .btn { flex: 0 0 auto; white-space: nowrap; }
+.backup-folder-dialog { width: min(580px, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); box-sizing: border-box; margin: auto; padding: 1.25rem; border: 0; border-radius: 18px; background: var(--card-bg); color: var(--text); box-shadow: 0 24px 64px rgba(15, 23, 42, .24); }
+.backup-folder-dialog::backdrop { background: rgba(15, 23, 42, .55); }
+.backup-folder-heading, .backup-folder-actions, .backup-folder-navigation { display: flex; align-items: center; gap: .5rem; }
+.backup-folder-heading { justify-content: space-between; }
+.backup-folder-heading h3 { margin: 0; font-size: 1.05rem; }
+.backup-folder-dialog p { margin: .75rem 0; font-size: .9rem; }
+.backup-folder-path-form label { display: block; margin-bottom: .35rem; }
+.backup-folder-path-form input { width: 100%; min-height: 44px; padding: .65rem .75rem; border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); color: var(--text); font: inherit; }
+.backup-folder-path-form input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.backup-folder-navigation { margin-top: .75rem; }
+.backup-folder-list { max-height: min(280px, 32dvh); min-height: 80px; overflow: auto; border-block: 1px solid var(--border); }
+.backup-folder-entry { display: flex; align-items: center; gap: .6rem; width: 100%; min-height: 44px; padding: .65rem .5rem; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.backup-folder-entry span { overflow-wrap: anywhere; }
+.backup-folder-entry:hover { background: var(--surface-soft); }
+.backup-folder-entry:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.backup-folder-actions { justify-content: flex-end; margin-top: 1rem; }
+@media (max-width: 640px) {
+    .backup-destination-control { flex-wrap: wrap; }
+    .backup-destination-control input { flex-basis: 100%; }
+    .backup-folder-actions { flex-wrap: wrap; }
+    .backup-folder-actions .btn { flex: 1; }
+}

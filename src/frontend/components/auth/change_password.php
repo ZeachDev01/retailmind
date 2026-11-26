@@ -57,11 +57,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $remembered['confirm_password'] = '';
     } else {
         try {
-            $newVersion = (int)$user['session_version'] + 1;
+            $pdo->beginTransaction();
             $pdo->prepare(
-                'UPDATE users SET password_hash = ?, password_changed_at = NOW(), must_change_password = 0, session_version = ?, failed_login_attempts = 0, locked_until = NULL WHERE user_id = ?'
-            )->execute([password_hash($newPassword, PASSWORD_DEFAULT), $newVersion, (int)$_SESSION['user_id']]);
+                'UPDATE users SET password_hash = ?, password_changed_at = NOW(), must_change_password = 0, session_version = session_version + 1, failed_login_attempts = 0, locked_until = NULL WHERE user_id = ?'
+            )->execute([password_hash($newPassword, PASSWORD_DEFAULT), (int)$_SESSION['user_id']]);
+            $version = $pdo->prepare('SELECT session_version FROM users WHERE user_id = ?');
+            $version->execute([(int)$_SESSION['user_id']]);
+            $newVersion = (int)$version->fetchColumn();
 
+            if (isset($_SESSION['_cashier_login_token'])) {
+                $pdo->prepare('UPDATE cashier_login_sessions SET session_version = ?, pending_hash = NULL, pending_until = NULL, approved = 0
+                    WHERE user_id = ? AND owner_hash = ?')->execute([
+                        $newVersion, (int)$_SESSION['user_id'], hash('sha256', $_SESSION['_cashier_login_token']),
+                    ]);
+            }
+            $pdo->commit();
             $_SESSION['session_version'] = $newVersion;
             $_SESSION['must_change_password'] = false;
             $_SESSION['_flash_success'] = 'Password changed successfully.';
@@ -81,6 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ['status' => 'completed', 'mode' => $isMandatory ? 'mandatory' : 'voluntary']
             );
         } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
             $message = \App\Support\OperatorAlert::message($exception, 'Your password could not be changed. Check your connection and try again. Tell your Administrator if this keeps happening.');
         }
         if ($message === '') {

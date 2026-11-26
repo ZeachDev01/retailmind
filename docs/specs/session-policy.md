@@ -22,6 +22,18 @@ Expiry destroys authenticated access only. It does not close, reconcile, or rele
 
 Validation: public `Session::start()` expiry/activity tests, activity endpoint HTTP checks (including invalid CSRF and expired renewal), browser typing/polling/expiry checks, and existing cashier shift/logout checks. Browser timers may be delayed when a tab is suspended or the device sleeps; the next server request still enforces expiry before permitting access. Production environment settings have not been checked.
 
+## Cashier device confirmation (2026-11-26)
+
+Staff Accounts assigned the Cashier Workspace have one active browser login, including Multi-role Accounts while using another Workspace. A separate browser or private window counts as a separate login; ordinary tabs sharing its session remain together. The separate Super Administrator replacement policy remains in effect.
+
+After valid credentials on another device, that device waits without authenticated access. The existing login receives an "Is this you?" confirmation through its normal session checks, approximately every thirty seconds on an active online page. Approval ends its access and lets the waiting device authenticate; rejection keeps the existing login. There is one pending request per account, valid for five minutes. Expired or rejected requests require another login attempt.
+
+The existing one-hour inactivity and twelve-hour absolute expiry rules remain authoritative. Activity is recorded on the server; background polling does not renew it. An offline or broken device needs no confirmation once its login expires. Logging out releases ownership immediately. Expiry, logout and transfer leave Cashier Shift and register ownership unchanged. Unsaved browser work is not copied to the other device; finish or hold work before approving. Stock protections still apply across separate cashier accounts.
+
+The database migration creates `cashier_login_sessions`. Account-row locking serializes competing first logins, and protected requests verify ownership. Pending requests contain no saved passwords and require matching session version, active account, CSRF-protected approval and a short-lived random token. Password changes invalidate pending approval while keeping the changing device's ownership. Backup packages omit these transient rows. Cashier sessions issued before rollout must sign in again. No new account-recovery flow is introduced.
+
+Local checks: `cashier_login_service_test.php`, `cashier_login_mysql_test.php`, `cashier_concurrent_login_http_test.js`, `cashier_concurrent_login_browser_test.js`, and existing session/login checks. Local migration applied; production deployment has not been checked.
+
 ## Reference
 
 [OWASP Session Management guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#automatic-session-expiration) distinguishes inactivity limits from maximum login duration.

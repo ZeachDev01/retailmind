@@ -97,7 +97,7 @@ final class DatabaseBackupService implements ScheduledBackupRunner
             }
             $capture = (new DatabaseSnapshotWriter($this->pdo, static function () use ($coordinator, $operationKey): void {
                 $coordinator->heartbeat($operationKey);
-            }))->write($sqlPath, StorePackageFormat::MAX_CONTENT_BYTES, ['backup_operations', 'store_write_gate', 'schema_migrations']);
+            }))->write($sqlPath, StorePackageFormat::MAX_CONTENT_BYTES, ['backup_operations', 'store_write_gate', 'schema_migrations', 'cashier_login_sessions']);
             $available = disk_free_space(dirname($sqlPath));
             if ($available === false || $available < 2 * StorePackageFormat::MAX_BYTES) {
                 throw new DomainException('Private backup storage needs at least 96 MB of free disk space.');

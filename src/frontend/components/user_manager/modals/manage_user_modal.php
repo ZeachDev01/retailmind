@@ -70,6 +70,26 @@
                             <input type="email" id="drawerEmail" name="email" autocomplete="email" spellcheck="false" placeholder="user@store.com" readonly aria-describedby="drawerEmailHelp">
                             <small class="field-help" id="drawerEmailHelp">Email cannot be changed after the account is created.</small>
                         </div>
+                        <?php if ($actorRole === 'super_admin'): ?>
+                        <div id="drawerRecoveryEmailSetup" hidden>
+                            <div class="form-group">
+                                <label for="drawerEmailCurrentPassword">Current password</label>
+                                <input type="password" id="drawerEmailCurrentPassword" autocomplete="current-password" aria-describedby="drawerEmailHelp">
+                            </div>
+                            <div class="form-group">
+                                <button type="button" class="btn btn-secondary btn-small" data-recovery-email-action="request_recovery_email">Send verification code</button>
+                            </div>
+                            <div id="drawerEmailCodeGroup" hidden>
+                                <div class="form-group">
+                                    <label for="drawerEmailCode">Email verification code</label>
+                                    <input id="drawerEmailCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-describedby="drawerEmailPendingAddress" placeholder="6-digit code">
+                                    <small class="field-help" id="drawerEmailPendingAddress"></small>
+                                </div>
+                                <button type="button" class="btn btn-primary btn-small" data-recovery-email-action="verify_recovery_email">Verify and lock email</button>
+                            </div>
+                            <p class="field-help" id="drawerEmailFeedback" role="status" aria-live="polite"></p>
+                        </div>
+                        <?php endif; ?>
                     </div>
 
                     <div class="drawer-card">

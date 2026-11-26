@@ -8,6 +8,10 @@ Core domain model and language for RetailMind single-store retail operations and
 The single platform-governance account responsible for creating and maintaining ordinary Administrator accounts. It holds one Workspace and never takes store operational Workspaces.
 _Avoid_: Super admin, main admin, owner account
 
+**Super Administrator Recovery Email**:
+The Super Administrator's verified account email address used to recover access when the login password is forgotten.
+_Avoid_: Recovery Account, Recovery Key, store email
+
 **Administrator**:
 The ordinary account that governs one Store, including creating Staff Accounts and assigning their Workspaces.
 _Avoid_: Admin user, store manager, super admin

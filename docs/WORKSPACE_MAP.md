@@ -157,6 +157,7 @@ Defined in [`RoleWorkspaceRouter.php`](../src/backend/app/Authorization/RoleWork
   - Landing & Login Modal: `src/frontend/index.php` (CSS: `landing.css`, Hero Asset: `assets/img/retailmind-landing-hero.jpg`)
   - Change Password (Mandatory/Voluntary Dual-Mode): `src/frontend/components/auth/change_password.php` (Contracts: `src/backend/tests/password_change_modes_contract.php`, `password_policy_contract.php`)
   - Profile & Account Info: `src/frontend/components/auth/user_info.php` (CSS: `user-info.css`)
+  - Cashier device confirmation: `App\Services\CashierLoginService`, `src/frontend/components/auth/cashier_login.php`, `cashier-login.js`, and shell `session-activity.js`. One active login across assigned Workspaces; old-device approval transfers access, while one-hour inactivity expiry releases it without approval. See `docs/specs/session-policy.md`; checks: `cashier_login_service_test.php`, `cashier_login_mysql_test.php`, `cashier_concurrent_login_http_test.js`, `cashier_concurrent_login_browser_test.js`.
 - **Navigation & Layout**:
   - Shell view: `src/frontend/components/sidebar.php` (sidebar navigation, breadcrumbs, session context)
   - Layout JS: `src/frontend/assets/js/sidebar-loader.js` (DOM shell loader), `ui.js` (smart tables `initSmartTables()`, modals, alerts)

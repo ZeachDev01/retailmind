@@ -273,6 +273,8 @@ try {
         file_put_contents($uploadRoot . '/' . $reference, $image);
     }
     $fullBackups = new DatabaseBackupService($full, $policy, $private . '/full-downloads', $full, $uploadRoot);
+    $full->prepare('INSERT INTO cashier_login_sessions (user_id,owner_hash,session_version,authenticated_at,last_activity) VALUES(?,?,1,?,?)')
+        ->execute([$fullActor, hash('sha256', 'transient-login-fixture'), time(), time()]);
     $fullBackup = $fullBackups->create($fullActor, 'super_admin');
     $full->prepare('UPDATE users SET display_name=? WHERE user_id=?')->execute(['Changed since snapshot', $fullActor]);
     $fullRestorer = new DatabaseRestoreService($full, $policy, $fullBackups);
@@ -285,6 +287,7 @@ try {
     $assert($full->query('SELECT display_name FROM users WHERE user_id=' . $fullActor)->fetchColumn() === 'Changed since snapshot', 'Complete migrated schema preflight leaves destination unchanged');
     $fullDecoded = StorePackageFormat::decode((string)file_get_contents($fullBackup['path']), SqlBackupFormat::schema($full));
     $assert($fullDecoded['rows']['schema_migrations'] === [], 'Captured packages exclude the source migration ledger rows');
+    $assert($fullDecoded['rows']['cashier_login_sessions'] === [], 'Captured packages exclude live device ownership and pending approvals');
     $assert($fullDecoded['compatibility']['status'] === 'current', 'A current package classifies as current');
     // A backup older than this installation (newer destination columns only)
     // must stay restorable instead of demanding a migration that already ran.

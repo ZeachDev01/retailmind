@@ -238,12 +238,6 @@ $scheduledHint = static function (array $period) use ($statusCounts, $today, $op
     }
     return 'An earlier scheduled period opens first';
 };
-$hasStoreConfigurationNav = current_role() === 'admin';
-if ($hasStoreConfigurationNav) {
-    require_once __DIR__ . '/../../../backend/app/Services/CloudflareTunnelService.php';
-    $activeStoreConfigurationSection = 'fiscal-periods';
-    $remoteAccessStatus = (string)((new \App\Services\CloudflareTunnelService())->getStatus()['status'] ?? 'offline');
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -253,16 +247,11 @@ if ($hasStoreConfigurationNav) {
     <title>Fiscal Periods</title>
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/style.css')) ?>">
     <link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/fiscal-periods.css')) ?>">
-    <?php if ($hasStoreConfigurationNav): ?><link rel="stylesheet" href="<?= htmlspecialchars(theme_url('assets/css/store-settings.css')) ?>"><?php endif; ?>
 </head>
-<body class="fiscal-period-page<?= $hasStoreConfigurationNav ? ' store-configuration-nav' : '' ?>">
+<body class="fiscal-period-page">
     <div class="app-shell">
         <?php include __DIR__ . '/../sidebar.php'; ?>
         <main class="main-content">
-            <?php if ($hasStoreConfigurationNav): ?>
-                <?php require __DIR__ . '/../administrator/store_configuration_nav.php'; ?>
-                <div class="fiscal-period-page-content">
-            <?php endif; ?>
             <header class="topbar fiscal-topbar">
                 <div>
                     <h1>Fiscal Periods</h1>
@@ -508,7 +497,6 @@ if ($hasStoreConfigurationNav) {
                     </div>
                 <?php endif; ?>
             </section>
-            <?php if ($hasStoreConfigurationNav): ?></div><?php endif; ?>
         </main>
     </div>
     <script src="<?= htmlspecialchars(app_url('assets/js/info-tooltip.js') . '?v=' . filemtime(__DIR__ . '/../../assets/js/info-tooltip.js')) ?>" defer></script>

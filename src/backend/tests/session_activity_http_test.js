@@ -16,7 +16,7 @@ $_ENV['SESSION_SECURE_COOKIE']='false';
 $_SERVER['SCRIPT_NAME']=isset($_GET['fiscal']) ? '/components/auth/fiscal_closing_status.php' : (isset($_GET['shift']) ? '/components/auth/shift_status.php' : '/components/auth/session_activity.php');
 if (isset($_GET['seed'])) {
  App\\Core\\Session::start();
- $_SESSION=['user_id'=>1,'role'=>'cashier','session_version'=>1,'csrf_token'=>'fixture-csrf',
+ $_SESSION=['user_id'=>1,'role'=>'cashier','session_version'=>1,'csrf_token'=>'fixture-csrf','_cashier_login_token'=>'fixture-owner',
  '_authenticated_at'=>time()-(int)($_GET['age']??100), '_last_activity'=>time()-(int)($_GET['idle']??50),
  '_restore_epoch'=>App\\Backup\\RecoveryStore::epoch()];
  echo json_encode($_SESSION); exit;
@@ -27,6 +27,10 @@ $pdo->exec("CREATE TABLE roles (role_id INTEGER, role_name TEXT); INSERT INTO ro
  CREATE TABLE users(user_id INTEGER,role_id INTEGER,status TEXT,session_version INTEGER,display_name TEXT,profile_image TEXT,must_change_password INTEGER,is_recovery_account INTEGER);
  INSERT INTO users VALUES(1,1,'active',1,'Cashier',NULL,1,0);
  CREATE TABLE user_roles(user_id INTEGER,role_id INTEGER,is_primary INTEGER); INSERT INTO user_roles VALUES(1,1,1);");
+$migration = require ${phpPath('../database/migrations/202611260001_cashier_login_sessions.php')};
+$migration['up']($pdo);
+$pdo->prepare('INSERT INTO cashier_login_sessions (user_id,owner_hash,session_version,authenticated_at,last_activity) VALUES(1,?,1,?,?)')
+ ->execute([hash('sha256','fixture-owner'),time(),time()]);
 (new ReflectionProperty(App\\Core\\Database::class,'connection'))->setValue(null,$pdo);
 require ${phpPath('../../frontend/components/auth/session_activity.php')};
 `);

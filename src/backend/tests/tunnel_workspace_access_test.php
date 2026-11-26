@@ -50,6 +50,8 @@ foreach ($functions[0] as $function) {
 }
 
 $pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$migration = require __DIR__ . '/../database/migrations/202611260001_cashier_login_sessions.php';
+$migration['up']($pdo);
 $pdo->exec("CREATE TABLE roles (role_id INTEGER PRIMARY KEY, role_name TEXT);
     CREATE TABLE user_roles (user_id INTEGER, role_id INTEGER, is_primary INTEGER);
     CREATE TABLE users (
